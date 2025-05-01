@@ -1,7 +1,8 @@
 import logging
 import random
 import os
-from telegram import Update, ParseMode # Added ParseMode
+from telegram import Update
+from telegram.constants import ParseMode # Correct import path for v20+
 from telegram.ext import Application, CommandHandler, ContextTypes
 
 logging.basicConfig(
@@ -127,7 +128,7 @@ async def send_random_text(update: Update, context: ContextTypes.DEFAULT_TYPE, t
         return
 
     chosen_text = random.choice(text_list)
-    # Use reply_html by default for potential formatting, although not strictly needed here
+    # Use reply_html by default for potential formatting
     await update.message.reply_html(chosen_text)
 
 async def meow(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -165,7 +166,6 @@ async def attack(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     # Priority 1: Replied message
     if update.message.reply_to_message:
         target_user = update.message.reply_to_message.from_user
-        # mention_html creates a clickable link if user has username, otherwise uses first name
         target_mention = target_user.mention_html()
     # Priority 2: Argument starting with @
     elif context.args and context.args[0].startswith('@'):
@@ -173,16 +173,15 @@ async def attack(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     # Priority 3: Self-attack
     else:
         target_user = update.effective_user
-        target_mention = target_user.mention_html() # Mention self
+        target_mention = target_user.mention_html()
 
     if target_mention:
         chosen_template = random.choice(ATTACK_TEXTS)
-        # Format the template with the determined target mention
         message_text = chosen_template.format(target=target_mention)
         # Send as HTML to properly render the mention if mention_html() was used
+        # Make sure ParseMode is imported correctly from telegram.constants
         await update.message.reply_html(message_text, parse_mode=ParseMode.HTML)
     else:
-        # This case should theoretically not happen with the logic above, but as a fallback:
         await update.message.reply_text("Who should I attack? Reply to someone or use /attack @username")
 
 
