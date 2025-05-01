@@ -394,7 +394,7 @@ CANT_TARGET_SELF_TEXTS = [
 OWNER_ONLY_REFUSAL = [ # Needed for /status and /say
     "Meeeow! Sorry, only my designated Human can use that command. ⛔",
     "Access denied! This command requires special privileges (and possibly a secret handshake involving treats). 🤝🎁",
-    "Hiss! You are not the Boss of Meow! Only <code>{OWNER_ID}</code> is! 👑", # Example using OWNER_ID
+    "Hiss! You are not the Boss of Meow! Only {owner_mention} is! 👑",
     "Purrrhaps you should ask my Owner to run this command for you? 🙏",
 ]
 
@@ -443,8 +443,9 @@ Meeeow! 🐾 Here are the commands you can use:
 /bite [reply/@user] - Take a playful bite! 😬
 
 <i>(Note: Owner cannot be targeted by attack/kill/punch/slap/bite)</i>
-Owner Only Commands (Hidden): 
-/status, /say <message>
+Owner Only Commands (Hidden):
+  /status - Show bot status.
+  /say [target_chat_id] <message> - Send message as bot (target_chat_id is optional).
 """
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -453,7 +454,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_html(f"Meow {user.mention_html()}! I'm the Meow Bot. 🐾\nUse /help to see available commands!")
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Displays the help message."""
-    await update.message.reply_html(HELP_TEXT)
+    await update.message.reply_html(HELP_TEXT, disable_web_page_preview=True) # Disable preview for clarity
 async def github(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Sends the link to the GitHub repository."""
     github_link = "https://github.com/R0Xofficial/MyCatbot"; await update.message.reply_text(f"Meeeow! I'm open source! 💻 Find my code:\n{github_link}", disable_web_page_preview=True)
@@ -468,13 +469,13 @@ async def owner_info(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
         except TelegramError as e: logger.warning(f"Could not fetch owner info for ID {OWNER_ID}: {e}. Using ID.")
         except Exception as e: logger.error(f"Unexpected error fetching owner info for {OWNER_ID}: {e}", exc_info=True)
         message = (f"My designated human, the bringer of treats 🎁 and head scratches ❤️, is:\n👤 <b>{owner_name}</b> ({owner_mention})\nThey hold the secret to the treat jar! ✨")
-        # Use parse_mode explicitly for clarity, although reply_html implies it
-        await update.message.reply_html(message, parse_mode=constants.ParseMode.HTML)
+        await update.message.reply_html(message, parse_mode=constants.ParseMode.HTML) # Explicitly use HTML parse mode
     else: logger.error("Owner info cmd called, but OWNER_ID not set!"); await update.message.reply_text("Meow? Can't find owner info!")
 
 async def send_random_text(update: Update, context: ContextTypes.DEFAULT_TYPE, text_list: list[str], list_name: str) -> None:
     """Sends a random text from the provided list."""
     if not text_list: logger.warning(f"List '{list_name}' empty!"); await update.message.reply_text("Oops! List empty."); return
+    # Using reply_html implicitly parses HTML
     await update.message.reply_html(random.choice(text_list))
 
 # Simple Text Command Definitions
@@ -554,45 +555,31 @@ async def bite(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 # --- GIF and Photo Commands ---
 async def gif(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Fetches and sends a random cat GIF."""
-    API_URL = "https://api.thecatapi.com/v1/images/search?mime_types=gif&limit=1"
-    headers = {} # Add API key here if you have one
+    API_URL = "https://api.thecatapi.com/v1/images/search?mime_types=gif&limit=1"; headers = {}
     logger.info("Fetching random cat GIF...")
     try:
-        response = requests.get(API_URL, headers=headers, timeout=10)
-        response.raise_for_status()
-        data = response.json()
+        response = requests.get(API_URL, headers=headers, timeout=10); response.raise_for_status(); data = response.json()
         if data and isinstance(data, list) and len(data) > 0 and 'url' in data[0]:
-            gif_url = data[0]['url']
-            logger.info(f"Found GIF: {gif_url}")
+            gif_url = data[0]['url']; logger.info(f"Found GIF: {gif_url}")
             await update.message.reply_animation(animation=gif_url, caption="Meow! A random GIF for you! 🐾🖼️")
-        else:
-            logger.warning("No GIF URL found in TheCatAPI response: %s", data)
-            await update.message.reply_text("Meow? Couldn't find a GIF now. Try later! 😿")
-    except requests.exceptions.Timeout: logger.error("Timeout fetching GIF"); await update.message.reply_text("Hiss! GIF source is slow. Try later. ⏳")
+        else: logger.warning("No GIF URL found: %s", data); await update.message.reply_text("Meow? Couldn't find a GIF now. 😿")
+    except requests.exceptions.Timeout: logger.error("Timeout fetching GIF"); await update.message.reply_text("Hiss! GIF source is slow. ⏳")
     except requests.exceptions.RequestException as e: logger.error(f"Error fetching GIF: {e}"); await update.message.reply_text("Hiss! Couldn't connect to GIF source. 😿")
-    except (IndexError, KeyError, TypeError, ValueError) as e: logger.error(f"Error parsing GIF API response: {e}"); await update.message.reply_text("Mrow! Weird GIF data. 😵‍💫")
-    except Exception as e: logger.error(f"Unexpected /gif error: {e}", exc_info=True); await update.message.reply_text("Oops! Unexpected GIF error. 🙀")
+    except Exception as e: logger.error(f"Error processing GIF: {e}", exc_info=True); await update.message.reply_text("Mrow! Weird GIF data. 😵‍💫")
 
 async def photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Fetches and sends a random cat photo."""
-    API_URL = "https://api.thecatapi.com/v1/images/search?limit=1&mime_types=jpg,png"
-    headers = {} # Add API key here if you have one
+    API_URL = "https://api.thecatapi.com/v1/images/search?limit=1&mime_types=jpg,png"; headers = {}
     logger.info("Fetching random cat photo...")
     try:
-        response = requests.get(API_URL, headers=headers, timeout=10)
-        response.raise_for_status()
-        data = response.json()
+        response = requests.get(API_URL, headers=headers, timeout=10); response.raise_for_status(); data = response.json()
         if data and isinstance(data, list) and len(data) > 0 and 'url' in data[0]:
-            photo_url = data[0]['url']
-            logger.info(f"Found Photo: {photo_url}")
+            photo_url = data[0]['url']; logger.info(f"Found Photo: {photo_url}")
             await update.message.reply_photo(photo=photo_url, caption="Purrfect! A random photo for you! 🐾📷")
-        else:
-            logger.warning("No photo URL found in TheCatAPI response: %s", data)
-            await update.message.reply_text("Meow? Couldn't find a photo now. Try later! 😿")
-    except requests.exceptions.Timeout: logger.error("Timeout fetching photo"); await update.message.reply_text("Hiss! Photo source is slow. Try later. ⏳")
+        else: logger.warning("No photo URL found: %s", data); await update.message.reply_text("Meow? Couldn't find a photo now. 😿")
+    except requests.exceptions.Timeout: logger.error("Timeout fetching photo"); await update.message.reply_text("Hiss! Photo source is slow. ⏳")
     except requests.exceptions.RequestException as e: logger.error(f"Error fetching photo: {e}"); await update.message.reply_text("Hiss! Couldn't connect to photo source. 😿")
-    except (IndexError, KeyError, TypeError, ValueError) as e: logger.error(f"Error parsing photo API response: {e}"); await update.message.reply_text("Mrow! Weird photo data. 😵‍💫")
-    except Exception as e: logger.error(f"Unexpected /photo error: {e}", exc_info=True); await update.message.reply_text("Oops! Unexpected photo error. 🙀")
+    except Exception as e: logger.error(f"Error processing photo: {e}", exc_info=True); await update.message.reply_text("Mrow! Weird photo data. 😵‍💫")
 
 # --- Owner Only Functionality ---
 async def status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -612,9 +599,8 @@ async def status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         refusal_text = random.choice(OWNER_ONLY_REFUSAL).format(OWNER_ID=OWNER_ID)
         await update.message.reply_html(refusal_text)
 
-# ADDED SAY COMMAND (Owner Only)
 async def say(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Sends a message as the bot (owner only)."""
+    """Sends a message as the bot (owner only). Can target specific chat ID."""
     user = update.effective_user
     if user.id != OWNER_ID:
         logger.warning(f"Unauthorized /say attempt by user {user.id}.")
@@ -622,27 +608,55 @@ async def say(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await update.message.reply_html(refusal_text)
         return
 
-    if not context.args:
-        await update.message.reply_text("Mrow? What should I say? Usage: /say <your message>")
+    args = context.args
+    if not args:
+        await update.message.reply_text("Usage: /say [optional_chat_id] <your message>")
         return
 
-    message_to_say = ' '.join(context.args)
-    logger.info(f"Owner ({user.id}) is using /say in chat {update.effective_chat.id}")
+    target_chat_id = update.effective_chat.id # Default to current chat
+    message_to_say_list = args
+    is_remote_send = False
+
+    # Try to parse the first argument as a chat ID
     try:
-        # Send message to the same chat where the command was issued
-        await context.bot.send_message(chat_id=update.effective_chat.id, text=message_to_say)
-        # Optionally, delete the owner's original /say command for cleaner appearance
-        # try:
-        #     await update.message.delete()
-        #     logger.info("Deleted owner's /say command.")
-        # except TelegramError as del_err:
-        #     logger.warning(f"Could not delete owner's /say command: {del_err}")
+        potential_chat_id = int(args[0])
+        # Basic check: IDs are usually long or negative
+        if len(args[0]) > 4 or potential_chat_id < 0:
+            # Check if there's a message after the ID
+            if len(args) > 1:
+                target_chat_id = potential_chat_id
+                message_to_say_list = args[1:] # Message starts from the second arg
+                is_remote_send = True
+                logger.info(f"Owner intends remote send to chat ID: {target_chat_id}")
+            else:
+                # ID provided but no message
+                await update.message.reply_text("Mrow? You provided an ID but no message to send!")
+                return
+        # else: first arg is a number but likely part of the message, treat all as message
+    except (ValueError, IndexError):
+        # First arg is not an integer, treat all args as message
+        logger.info("No valid target chat ID detected, sending to current chat.")
+        # target_chat_id remains default
+        # message_to_say_list remains args
+
+    message_to_say = ' '.join(message_to_say_list)
+
+    logger.info(f"Owner ({user.id}) using /say. Target: {target_chat_id}. Message: '{message_to_say[:50]}...'")
+
+    try:
+        await context.bot.send_message(chat_id=target_chat_id, text=message_to_say)
+        if is_remote_send:
+            # Give feedback to the owner in the original chat
+            await update.message.reply_text(f"✅ Message sent successfully to chat ID <code>{target_chat_id}</code>.", parse_mode=constants.ParseMode.HTML, quote=False)
+        # Optional: Delete owner's command
+        # try: await update.message.delete(); logger.info("Deleted owner's /say command.")
+        # except Exception as del_err: logger.warning(f"Could not delete owner's /say command: {del_err}")
     except TelegramError as e:
-        logger.error(f"Failed to send message via /say: {e}")
-        await update.message.reply_text(f"Meow! Couldn't send the message: {e}")
+        logger.error(f"Failed to send message via /say to {target_chat_id}: {e}")
+        await update.message.reply_text(f"Meow! 😿 Couldn't send message to <code>{target_chat_id}</code>: {e}", parse_mode=constants.ParseMode.HTML)
     except Exception as e:
-        logger.error(f"Unexpected error in /say: {e}", exc_info=True)
-        await update.message.reply_text("Oops! Something went wrong with /say.")
+         logger.error(f"Unexpected error in /say: {e}", exc_info=True)
+         await update.message.reply_text("Oops! Something unexpected went wrong with /say.")
 
 
 # --- Main Function ---
@@ -662,7 +676,7 @@ def main() -> None:
     application.add_handler(CommandHandler("github", github))
     application.add_handler(CommandHandler("owner", owner_info))
     application.add_handler(CommandHandler("gif", gif))
-    application.add_handler(CommandHandler("photo", photo)) # Added photo handler
+    application.add_handler(CommandHandler("photo", photo))
     application.add_handler(CommandHandler("meow", meow))
     application.add_handler(CommandHandler("nap", nap))
     application.add_handler(CommandHandler("play", play))
@@ -675,7 +689,7 @@ def main() -> None:
     application.add_handler(CommandHandler("punch", punch))   # Public simulation
     application.add_handler(CommandHandler("slap", slap))     # Public simulation
     application.add_handler(CommandHandler("bite", bite))     # Public simulation
-    application.add_handler(CommandHandler("say", say))       # Added say handler (owner check inside)
+    application.add_handler(CommandHandler("say", say))       # Owner check inside function
 
     # --- Start the Bot ---
     logger.info(f"Bot starting polling... Owner ID: {OWNER_ID}")
