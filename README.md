@@ -11,20 +11,35 @@ Meet **MyCatBot**, the playful and quirky cat-themed Telegram bot that will make
 
 ## Commands
 /start - Shows the welcome message. ✨
+
 /help - Shows this help message. ❓
+
 /github - Get the link to my source code! 💻
+
 /owner - Info about my designated human! ❤️
+
 /gif - Get a random cat GIF! 🖼️
+
 /meow - Get a random cat sound or phrase. 🔊
+
 /nap - What's on a cat's mind during naptime? 😴
+
 /play - Random playful cat actions. 🧶
+
 /treat - Demand treats! 🎁
+
 /zoomies - Witness sudden bursts of cat energy! 💥
+
 /judge - Get judged by a superior feline. 🧐
+
 /attack [reply/@user] - Launch a playful attack! ⚔️
+
 /kill [reply/@user] - Metaphorically eliminate someone! 💀
+
 /punch [reply/@user] - Deliver a textual punch! 👊
+
 /slap [reply/@user] - Administer a swift slap! 👋
+
 /bite [reply/@user] - Take a playful bite! 😬
 
 (Note: Owner cannot be targeted by attack/kill/punch/slap/bite)
