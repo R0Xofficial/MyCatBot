@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-# --- MyCatBot - A simple Telegram bot with fun cat actions ---
+# --- Cat Bot - A simple Telegram bot with fun cat actions ---
 # Includes owner protection, simulation commands, GIF/Photo fetching, and owner commands.
 # Uses environment variables for configuration (Token, Owner ID).
 
@@ -384,47 +384,17 @@ CANT_TARGET_OWNER_TEXTS = [
     "Hiss! Targeting the Owner is strictly forbidden by cat law! 📜🚫",
     "Nope. Not gonna do it. That's my human! ❤️",
     "Access Denied: Cannot target the supreme leader (Owner). 👑",
-    "Targeting the Owner? Not in this lifetime, furball! 🙅",
-    "The human is off-limits. You’re barking up the wrong scratching post! 🌳",
-    "You can't mess with the one who controls the treat dispenser. Forbidden! 🚫🎁",
-    "The Owner is my trusted companion. Try again never! 😉",
-    "Attempting to target the Owner? Prepare for the wrath of a thousand silent judgments. 👀",
-    "I bow to my human. Can't touch them. Nope. 🙇",
-    "The sacred bond of cat and human cannot be broken by your command. Nice try.",
-    "My loyalty is unbreakable. The Owner is safe. 🔒",
-    "Not even my sharpest virtual claws can touch my human. It's the law.",
-    "My human is my one true ally. Any attacks will be met with *the stare*. <pre>stare</pre>",
 ]
 CANT_TARGET_SELF_TEXTS = [
     "Target... myself? Why would I do that? Silly human. 😹",
     "Error: Cannot target self. My paws have better things to do, like napping. 😴",
     "I refuse to engage in self-pawm. Command ignored with extreme prejudice.",
-    "Targeting myself? Not even for a mountain of tuna. 🐟",
-    "Error 418: I'm a teapot... I mean, cat. Cannot self-target; it's illogical. 🤖",
-    "Self-pawing is only for the unenlightened. I choose naps instead.",
-    "I’m too fabulous to target myself. Command denied! ✨💅",
-    "My paws are for important tasks like biscuit-making and pushing things off tables, not attacking myself! 🐾",
-    "No, no, no. I am a cat of *refined* taste and dignity. Self-targeting is beneath me.",
-    "I’ve got better things to do than chase my own tail... unless I get bored later. 🤔",
-    "Self-targeting? Please. I’m already purrfect. 💯",
-    "I refuse to acknowledge such a foolish, paradoxical request. My circuits can't handle it.",
-    "My claws are reserved for more worthy targets (like dangling strings). Me, not included. 🧶",
 ]
 OWNER_ONLY_REFUSAL = [ # Needed for /status and /say
     "Meeeow! Sorry, only my designated Human can use that command. ⛔",
     "Access denied! This command requires special privileges (and possibly a secret handshake involving treats). 🤝🎁",
     "Hiss! You are not the Boss of Meow! Only {owner_mention} is! 👑", # Example using OWNER_ID
     "Purrrhaps you should ask my Owner to run this command for you? 🙏",
-    "Meow! This command is reserved for my one true human. No exceptions. 🚫",
-    "You don't have the required <i>purrmission</i> level to use that, only my Owner does. 😉",
-    "Woops! Only my human has the keys to that command. Try again... not. 🔑",
-    "Sorry, that’s above your pay grade (which is zero treats). Ask my Owner instead! 🤷",
-    "Error: Command restricted to the Owner. Beep boop. *Access denied*. 🤖",
-    "Not even close! Only my Human can make that call. ☎️",
-    "Hiss... That command is off-limits for mere mortals like you! <pre>mortals</pre>",
-    "Only my human can handle that one, thank you very much! ☕",
-    "Meow! My Owner’s the boss here. You’ll have to check with them. 👨‍💼👩‍💼",
-    "That’s classified information... for my human's eyes only! 👀",
 ]
 
 # --- END OF TEXT SECTION ---
@@ -448,6 +418,37 @@ def get_readable_time_delta(delta: datetime.timedelta) -> str:
 #     if update.message: update_type = "Message"; chat_id = update.message.chat.id; user_id = update.message.from_user.id if update.message.from_user else "N/A"
 #     elif update.callback_query: update_type = "CallbackQuery"; chat_id = update.callback_query.message.chat.id if update.callback_query.message else "N/A"; user_id = update.callback_query.from_user.id
 #     logger.critical(f"--- !!! DEBUG: UPDATE RECEIVED !!! ID: {update_id}, Type: {update_type}, ChatID: {chat_id}, UserID: {user_id} ---")
+
+# --- Helper Function to check target validity ---
+async def check_target_protection(target_user_id: int, context: ContextTypes.DEFAULT_TYPE) -> bool:
+    """Checks if the target is the owner or the bot itself. Returns True if protected."""
+    if target_user_id == OWNER_ID:
+        return True # Target is owner
+    if target_user_id == context.bot.id:
+        return True # Target is self
+    return False # Target is not protected
+
+async def check_username_protection(target_mention: str, context: ContextTypes.DEFAULT_TYPE) -> bool:
+    """Checks if the target username belongs to the owner or bot. Returns True if protected."""
+    # Check against bot's username
+    bot_username = context.bot.username
+    if bot_username and target_mention.lower() == f"@{bot_username.lower()}":
+        return True # Target is bot
+
+    # Check against owner's username (requires an API call)
+    owner_username = None
+    if OWNER_ID: # Ensure OWNER_ID is set
+        try:
+            # Use bot.get_chat which works for users too
+            owner_chat = await context.bot.get_chat(OWNER_ID)
+            owner_username = owner_chat.username # Get username property
+        except Exception as e:
+            logger.warning(f"Could not fetch owner username for protection check: {e}")
+
+    if owner_username and target_mention.lower() == f"@{owner_username.lower()}":
+        return True # Target is owner
+
+    return False # Target is not protected
 
 # --- Command Handlers ---
 HELP_TEXT = """
@@ -483,8 +484,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_html(f"Meow {user.mention_html()}! I'm the Meow Bot. 🐾\nUse /help to see available commands!")
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Displays the help message."""
-    # Disable web page preview just in case a link slips in, looks cleaner
-    await update.message.reply_html(HELP_TEXT, disable_web_page_preview=True)
+    await update.message.reply_html(HELP_TEXT, disable_web_page_preview=True) # Disable preview for cleaner help
 async def github(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Sends the link to the GitHub repository."""
     github_link = "https://github.com/R0Xofficial/MyCatbot"; await update.message.reply_text(f"Meeeow! I'm open source! 💻 Find my code:\n{github_link}", disable_web_page_preview=True)
@@ -495,12 +495,9 @@ async def owner_info(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
         try:
             owner_chat = await context.bot.get_chat(OWNER_ID)
             owner_mention = owner_chat.mention_html(); owner_name = owner_chat.full_name or owner_chat.title or owner_name
-            logger.info(f"Fetched owner info for ID {OWNER_ID}")
-        except TelegramError as e: logger.warning(f"Could not fetch owner info for ID {OWNER_ID}: {e}. Using ID.")
-        except Exception as e: logger.error(f"Unexpected error fetching owner info for {OWNER_ID}: {e}", exc_info=True)
-        message = (f"My designated human, the bringer of treats 🎁 and head scratches ❤️, is:\n👤 <b>{owner_name}</b> ({owner_mention})\nThey hold the secret to the treat jar! ✨")
-        # reply_html implies HTML parse mode
-        await update.message.reply_html(message)
+        except Exception as e: logger.warning(f"Could not fetch owner info for ID {OWNER_ID}: {e}")
+        message = (f"My designated human is: 👤 <b>{owner_name}</b> ({owner_mention}) ❤️")
+        await update.message.reply_html(message) # reply_html implies HTML parse mode
     else: logger.error("Owner info cmd called, but OWNER_ID not set!"); await update.message.reply_text("Meow? Can't find owner info!")
 
 async def send_random_text(update: Update, context: ContextTypes.DEFAULT_TYPE, text_list: list[str], list_name: str) -> None:
@@ -516,75 +513,94 @@ async def treat(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None: awa
 async def zoomies(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None: await send_random_text(update, context, ZOOMIES_TEXTS, "ZOOMIES_TEXTS")
 async def judge(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None: await send_random_text(update, context, JUDGE_TEXTS, "JUDGE_TEXTS")
 
-# Public Simulation Commands with Owner Protection
+# Public Simulation Commands with Improved Owner Protection
 async def attack(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Sends an attack message (simulation), protects owner/bot."""
     if not ATTACK_TEXTS: logger.warning("List 'ATTACK_TEXTS' empty!"); await update.message.reply_text("No attack ideas."); return
-    target_user = None; target_mention = None; target_user_id = None
+    target_mention = None
     if update.message.reply_to_message:
         target_user = update.message.reply_to_message.from_user
-        target_user_id = target_user.id; target_mention = target_user.mention_html()
-        if target_user_id == OWNER_ID: await update.message.reply_html(random.choice(CANT_TARGET_OWNER_TEXTS)); return
-        if target_user_id == context.bot.id: await update.message.reply_html(random.choice(CANT_TARGET_SELF_TEXTS)); return
-    elif context.args and context.args[0].startswith('@'): target_mention = context.args[0].strip()
+        if await check_target_protection(target_user.id, context):
+            await update.message.reply_html(random.choice(CANT_TARGET_OWNER_TEXTS if target_user.id == OWNER_ID else CANT_TARGET_SELF_TEXTS))
+            return
+        target_mention = target_user.mention_html()
+    elif context.args and context.args[0].startswith('@'):
+        target_mention = context.args[0].strip()
+        if await check_username_protection(target_mention, context):
+             await update.message.reply_html(random.choice(CANT_TARGET_OWNER_TEXTS)) # Assume owner if username matches
+             return
     else: await update.message.reply_text("Who to attack? Reply or use /attack @username."); return
     await update.message.reply_html(random.choice(ATTACK_TEXTS).format(target=target_mention))
 
 async def kill(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Sends a ban simulation message, protects owner/bot."""
     if not KILL_TEXTS: logger.warning("List 'KILL_TEXTS' empty!"); await update.message.reply_text("No 'kill' texts."); return
-    target_user = None; target_mention = None; target_user_id = None
+    target_mention = None
     if update.message.reply_to_message:
         target_user = update.message.reply_to_message.from_user
-        target_user_id = target_user.id; target_mention = target_user.mention_html()
-        if target_user_id == OWNER_ID: await update.message.reply_html(random.choice(CANT_TARGET_OWNER_TEXTS)); return
-        if target_user_id == context.bot.id: await update.message.reply_html(random.choice(CANT_TARGET_SELF_TEXTS)); return
-    elif context.args and context.args[0].startswith('@'): target_mention = context.args[0].strip()
+        if await check_target_protection(target_user.id, context):
+            await update.message.reply_html(random.choice(CANT_TARGET_OWNER_TEXTS if target_user.id == OWNER_ID else CANT_TARGET_SELF_TEXTS))
+            return
+        target_mention = target_user.mention_html()
+    elif context.args and context.args[0].startswith('@'):
+        target_mention = context.args[0].strip()
+        if await check_username_protection(target_mention, context):
+             await update.message.reply_html(random.choice(CANT_TARGET_OWNER_TEXTS))
+             return
     else: await update.message.reply_text("Who to 'kill'? Reply or use /kill @username."); return
     await update.message.reply_html(random.choice(KILL_TEXTS).format(target=target_mention))
 
 async def punch(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Sends a kick simulation message, protects owner/bot."""
     if not PUNCH_TEXTS: logger.warning("List 'PUNCH_TEXTS' empty!"); await update.message.reply_text("No 'punch' texts."); return
-    target_user = None; target_mention = None; target_user_id = None
+    target_mention = None
     if update.message.reply_to_message:
         target_user = update.message.reply_to_message.from_user
-        target_user_id = target_user.id; target_mention = target_user.mention_html()
-        if target_user_id == OWNER_ID: await update.message.reply_html(random.choice(CANT_TARGET_OWNER_TEXTS)); return
-        if target_user_id == context.bot.id: await update.message.reply_html(random.choice(CANT_TARGET_SELF_TEXTS)); return
-    elif context.args and context.args[0].startswith('@'): target_mention = context.args[0].strip()
+        if await check_target_protection(target_user.id, context):
+            await update.message.reply_html(random.choice(CANT_TARGET_OWNER_TEXTS if target_user.id == OWNER_ID else CANT_TARGET_SELF_TEXTS))
+            return
+        target_mention = target_user.mention_html()
+    elif context.args and context.args[0].startswith('@'):
+        target_mention = context.args[0].strip()
+        if await check_username_protection(target_mention, context):
+             await update.message.reply_html(random.choice(CANT_TARGET_OWNER_TEXTS))
+             return
     else: await update.message.reply_text("Who to 'punch'? Reply or use /punch @username."); return
     await update.message.reply_html(random.choice(PUNCH_TEXTS).format(target=target_mention))
 
 async def slap(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Sends a slap simulation message, protects owner/bot."""
     if not SLAP_TEXTS: logger.warning("List 'SLAP_TEXTS' empty!"); await update.message.reply_text("No 'slap' texts."); return
-    target_user = None; target_mention = None; target_user_id = None
+    target_mention = None
     if update.message.reply_to_message:
         target_user = update.message.reply_to_message.from_user
-        target_user_id = target_user.id; target_mention = target_user.mention_html()
-        if target_user_id == OWNER_ID: await update.message.reply_html(random.choice(CANT_TARGET_OWNER_TEXTS)); return
-        if target_user_id == context.bot.id: await update.message.reply_html(random.choice(CANT_TARGET_SELF_TEXTS)); return
-    elif context.args and context.args[0].startswith('@'): target_mention = context.args[0].strip()
+        if await check_target_protection(target_user.id, context):
+            await update.message.reply_html(random.choice(CANT_TARGET_OWNER_TEXTS if target_user.id == OWNER_ID else CANT_TARGET_SELF_TEXTS))
+            return
+        target_mention = target_user.mention_html()
+    elif context.args and context.args[0].startswith('@'):
+        target_mention = context.args[0].strip()
+        if await check_username_protection(target_mention, context):
+             await update.message.reply_html(random.choice(CANT_TARGET_OWNER_TEXTS))
+             return
     else: await update.message.reply_text("Who to slap? Reply or use /slap @username."); return
     await update.message.reply_html(random.choice(SLAP_TEXTS).format(target=target_mention))
 
 async def bite(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Sends a bite simulation message, protects owner/bot."""
     if not BITE_TEXTS: logger.warning("List 'BITE_TEXTS' empty!"); await update.message.reply_text("No 'bite' texts."); return
-    target_user = None; target_mention = None; target_user_id = None
+    target_mention = None
     if update.message.reply_to_message:
         target_user = update.message.reply_to_message.from_user
-        target_user_id = target_user.id; target_mention = target_user.mention_html()
-        if target_user_id == OWNER_ID: await update.message.reply_html(random.choice(CANT_TARGET_OWNER_TEXTS)); return
-        if target_user_id == context.bot.id: await update.message.reply_html(random.choice(CANT_TARGET_SELF_TEXTS)); return
-    elif context.args and context.args[0].startswith('@'): target_mention = context.args[0].strip()
+        if await check_target_protection(target_user.id, context):
+            await update.message.reply_html(random.choice(CANT_TARGET_OWNER_TEXTS if target_user.id == OWNER_ID else CANT_TARGET_SELF_TEXTS))
+            return
+        target_mention = target_user.mention_html()
+    elif context.args and context.args[0].startswith('@'):
+        target_mention = context.args[0].strip()
+        if await check_username_protection(target_mention, context):
+             await update.message.reply_html(random.choice(CANT_TARGET_OWNER_TEXTS))
+             return
     else: await update.message.reply_text("Who to bite? Reply or use /bite @username."); return
     await update.message.reply_html(random.choice(BITE_TEXTS).format(target=target_mention))
 
 # --- GIF and Photo Commands ---
 async def gif(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Fetches and sends a random cat GIF."""
     API_URL = "https://api.thecatapi.com/v1/images/search?mime_types=gif&limit=1"; headers = {}
     logger.info("Fetching random cat GIF...")
     try:
@@ -598,7 +614,6 @@ async def gif(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     except Exception as e: logger.error(f"Error processing GIF: {e}", exc_info=True); await update.message.reply_text("Mrow! Weird GIF data. 😵‍💫")
 
 async def photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Fetches and sends a random cat photo."""
     API_URL = "https://api.thecatapi.com/v1/images/search?limit=1&mime_types=jpg,png"; headers = {}
     logger.info("Fetching random cat photo...")
     try:
@@ -613,7 +628,6 @@ async def photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 # --- Owner Only Functionality ---
 async def status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Sends a status message (owner only)."""
     user_id = update.effective_user.id
     if user_id == OWNER_ID:
         ping_ms = "N/A"
@@ -630,62 +644,34 @@ async def status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await update.message.reply_html(refusal_text)
 
 async def say(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Sends a message as the bot (owner only). Can target specific chat ID."""
     user = update.effective_user
     if user.id != OWNER_ID:
         logger.warning(f"Unauthorized /say attempt by user {user.id}.")
         refusal_text = random.choice(OWNER_ONLY_REFUSAL).format(OWNER_ID=OWNER_ID)
-        await update.message.reply_html(refusal_text)
-        return
+        await update.message.reply_html(refusal_text); return
 
     args = context.args
-    if not args:
-        await update.message.reply_text("Usage: /say [optional_chat_id] <your message>")
-        return
+    if not args: await update.message.reply_text("Usage: /say [optional_chat_id] <your message>"); return
 
-    target_chat_id = update.effective_chat.id # Default to current chat
-    message_to_say_list = args
-    is_remote_send = False
-
-    # Try to parse the first argument as a chat ID
+    target_chat_id = update.effective_chat.id; message_to_say_list = args; is_remote_send = False
     try:
         potential_chat_id = int(args[0])
-        # Basic check: IDs are usually long or negative
         if len(args[0]) > 4 or potential_chat_id < 0:
-            if len(args) > 1: # Check if there's a message after the ID
-                target_chat_id = potential_chat_id
-                message_to_say_list = args[1:] # Message starts from the second arg
-                is_remote_send = True
+            if len(args) > 1:
+                target_chat_id = potential_chat_id; message_to_say_list = args[1:]; is_remote_send = True
                 logger.info(f"Owner intends remote send to chat ID: {target_chat_id}")
-            else:
-                await update.message.reply_text("Mrow? You provided an ID but no message to send!")
-                return
-        # else: first arg is likely part of the message
-    except (ValueError, IndexError):
-        logger.info("No valid target chat ID detected, sending to current chat.")
-        # target_chat_id remains default
+            else: await update.message.reply_text("Mrow? ID provided but no message!"); return
+    except (ValueError, IndexError): logger.info("No valid target chat ID detected, sending to current chat.")
 
     message_to_say = ' '.join(message_to_say_list)
-    if not message_to_say: # Double check if message became empty
-         await update.message.reply_text("Mrow? Cannot send an empty message!")
-         return
+    if not message_to_say: await update.message.reply_text("Mrow? Cannot send empty message!"); return
 
     logger.info(f"Owner ({user.id}) using /say. Target: {target_chat_id}. Message: '{message_to_say[:50]}...'")
-
     try:
         await context.bot.send_message(chat_id=target_chat_id, text=message_to_say)
-        if is_remote_send:
-            await update.message.reply_text(f"✅ Message sent successfully to chat ID <code>{target_chat_id}</code>.", parse_mode=constants.ParseMode.HTML, quote=False)
-        # Optional: Delete owner's command
-        # try: await update.message.delete(); logger.info("Deleted owner's /say command.")
-        # except Exception as del_err: logger.warning(f"Could not delete owner's /say command: {del_err}")
-    except TelegramError as e:
-        logger.error(f"Failed to send message via /say to {target_chat_id}: {e}")
-        await update.message.reply_text(f"Meow! 😿 Couldn't send message to <code>{target_chat_id}</code>: {e}", parse_mode=constants.ParseMode.HTML)
-    except Exception as e:
-         logger.error(f"Unexpected error in /say: {e}", exc_info=True)
-         await update.message.reply_text("Oops! Something unexpected went wrong with /say.")
-
+        if is_remote_send: await update.message.reply_text(f"✅ Message sent to <code>{target_chat_id}</code>.", parse_mode=constants.ParseMode.HTML, quote=False)
+    except TelegramError as e: logger.error(f"Failed /say to {target_chat_id}: {e}"); await update.message.reply_text(f"😿 Couldn't send to <code>{target_chat_id}</code>: {e}", parse_mode=constants.ParseMode.HTML)
+    except Exception as e: logger.error(f"Unexpected /say error: {e}", exc_info=True); await update.message.reply_text("Oops! Unexpected /say error.")
 
 # --- Main Function ---
 def main() -> None:
