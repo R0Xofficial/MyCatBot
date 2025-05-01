@@ -46,6 +46,7 @@ Meet **MyCatBot**, the playful and quirky cat-themed Telegram bot that will make
 
 (Note: Owner cannot be targeted by attack/kill/punch/slap/bite)
 Owner Only Commands (Hidden):
+
   /status - Show bot status.
   
   /say [target_chat_id] [your text] - Send message as bot [target_chat_id is optional].
