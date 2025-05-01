@@ -377,6 +377,24 @@ BITE_TEXTS = [
     "<code>OM NOM NOM</code> {target} <code>NOM</code>",
 ]
 
+# /hug texts - uses {target} placeholder
+HUG_TEXTS = [
+    "Wraps paws around {target} for a big, fluffy hug! 🤗",
+    "Offering {target} a warm, purring hug. ❤️",
+    "A gentle head boop and a hug for {target}! 😽",
+    "Sending virtual feline cuddles to {target}. Group hug!",
+    "Come here, {target}! You get a hug, whether you like it or not! 😉",
+    "Hugs {target} tightly! <i>Purrrrrrr...</i>",
+    "Needed a hug, so I'm giving one to {target}! 🥰",
+    "A soft, comforting hug for {target}. Everything will be okay. 💖",
+    "You look like you need a hug, {target}. Here you go! 🫂",
+    "Sharing some cat warmth with {target}. *Hug*",
+    "Initiating cuddle protocol with {target}. 🤗",
+    "A big bear hug (cat version) for {target}! 🐻➡️🐱",
+    "Squeezing {target} in a friendly hug! 😊",
+    "Consider yourself hugged by a very soft cat, {target}.",
+    "Reaching out with fluffy paws to hug {target}! ✨",
+]
 
 # Refusal texts
 CANT_TARGET_OWNER_TEXTS = [
@@ -390,10 +408,20 @@ CANT_TARGET_SELF_TEXTS = [
     "Error: Cannot target self. My paws have better things to do, like napping. 😴",
     "I refuse to engage in self-pawm. Command ignored with extreme prejudice.",
 ]
+CANT_TARGET_OWNER_HUG_TEXTS = [
+    "Aww, I *always* hug my Owner! But you use the command on someone else. 🤗❤️",
+    "Hugging the Owner is my default state! No command needed for that. 😉",
+    "I reserve my best hugs for the Owner! Can't use the command on them. 🥰",
+]
+CANT_TARGET_SELF_HUG_TEXTS = [
+    "Hug... myself? I suppose I could try... *awkwardly wraps paws around self* Okay, did it. Now hug someone else! 😂",
+    "I love myself, but a self-hug command seems redundant. I'm always hugging me! 🤔",
+    "Can't target myself for a hug command, but I appreciate the self-love sentiment! ❤️",
+]
 OWNER_ONLY_REFUSAL = [ # Needed for /status and /say
     "Meeeow! Sorry, only my designated Human can use that command. ⛔",
     "Access denied! This command requires special privileges (and possibly a secret handshake involving treats). 🤝🎁",
-    "Hiss! You are not the Boss of Meow! Only my owner is! 👑",
+    "Hiss! You are not the Boss of Meow! Only <code>{OWNER_ID}</code> is! 👑", # Example using OWNER_ID
     "Purrrhaps you should ask my Owner to run this command for you? 🙏",
 ]
 
@@ -428,27 +456,33 @@ async def check_target_protection(target_user_id: int, context: ContextTypes.DEF
         return True # Target is self
     return False # Target is not protected
 
-async def check_username_protection(target_mention: str, context: ContextTypes.DEFAULT_TYPE) -> bool:
-    """Checks if the target username belongs to the owner or bot. Returns True if protected."""
+async def check_username_protection(target_mention: str, context: ContextTypes.DEFAULT_TYPE) -> tuple[bool, bool]:
+    """
+    Checks if the target username belongs to the owner or bot.
+    Returns a tuple: (is_protected, is_owner).
+    """
+    is_protected = False
+    is_owner_match = False
+
     # Check against bot's username
     bot_username = context.bot.username
     if bot_username and target_mention.lower() == f"@{bot_username.lower()}":
-        return True # Target is bot
+        is_protected = True # Target is bot
 
-    # Check against owner's username (requires an API call)
-    owner_username = None
-    if OWNER_ID: # Ensure OWNER_ID is set
+    # Check against owner's username
+    if not is_protected and OWNER_ID: # Only check owner if not already matched bot
+        owner_username = None
         try:
-            # Use bot.get_chat which works for users too
             owner_chat = await context.bot.get_chat(OWNER_ID)
-            owner_username = owner_chat.username # Get username property
+            owner_username = owner_chat.username
         except Exception as e:
             logger.warning(f"Could not fetch owner username for protection check: {e}")
 
-    if owner_username and target_mention.lower() == f"@{owner_username.lower()}":
-        return True # Target is owner
+        if owner_username and target_mention.lower() == f"@{owner_username.lower()}":
+            is_protected = True
+            is_owner_match = True # Specifically the owner
 
-    return False # Target is not protected
+    return is_protected, is_owner_match
 
 # --- Command Handlers ---
 HELP_TEXT = """
@@ -471,25 +505,20 @@ Meeeow! 🐾 Here are the commands you can use:
 /punch [reply/@user] - Deliver a textual punch! 👊
 /slap [reply/@user] - Administer a swift slap! 👋
 /bite [reply/@user] - Take a playful bite! 😬
+/hug [reply/@user] - Offer a comforting hug! 🤗
 
-<i>(Note: Owner cannot be targeted by attack/kill/punch/slap/bite)</i>
+<i>(Note: Owner cannot be targeted by attack/kill/punch/slap/bite/hug)</i>
 Owner Only Commands (Hidden):
   /status - Show bot status.
   /say [target_chat_id] [your text] - Send message as bot [target_chat_id is optional].
 """
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Sends the welcome message."""
-    user = update.effective_user
-    await update.message.reply_html(f"Meow {user.mention_html()}! I'm the Meow Bot. 🐾\nUse /help to see available commands!")
-async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Displays the help message."""
-    await update.message.reply_html(HELP_TEXT, disable_web_page_preview=True) # Disable preview for cleaner help
+    user = update.effective_user; await update.message.reply_html(f"Meow {user.mention_html()}! I'm the Meow Bot. 🐾\nUse /help to see available commands!")
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None: await update.message.reply_html(HELP_TEXT, disable_web_page_preview=True)
 async def github(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Sends the link to the GitHub repository."""
-    github_link = "https://github.com/R0Xofficial/MyCatbot"; await update.message.reply_text(f"Meeeow! I'm open source! 💻 Here my code: {github_link}", disable_web_page_preview=True)
+    github_link = "https://github.com/R0Xofficial/MyCatbot"; await update.message.reply_text(f"Meeeow! I'm open source! 💻 Find my code: {github_link}", disable_web_page_preview=True)
 async def owner_info(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Displays information about the bot's owner."""
     if OWNER_ID:
         owner_mention = f"<code>{OWNER_ID}</code>"; owner_name = "My Esteemed Human"
         try:
@@ -497,11 +526,10 @@ async def owner_info(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
             owner_mention = owner_chat.mention_html(); owner_name = owner_chat.full_name or owner_chat.title or owner_name
         except Exception as e: logger.warning(f"Could not fetch owner info for ID {OWNER_ID}: {e}")
         message = (f"My designated human, the bringer of treats 🎁 and head scratches ❤️, is:\n👤 <b>{owner_name}</b> ({owner_mention})\nThey hold the secret to the treat jar! ✨")
-        await update.message.reply_html(message) # reply_html implies HTML parse mode
+        await update.message.reply_html(message)
     else: logger.error("Owner info cmd called, but OWNER_ID not set!"); await update.message.reply_text("Meow? Can't find owner info!")
 
 async def send_random_text(update: Update, context: ContextTypes.DEFAULT_TYPE, text_list: list[str], list_name: str) -> None:
-    """Sends a random text from the provided list."""
     if not text_list: logger.warning(f"List '{list_name}' empty!"); await update.message.reply_text("Oops! List empty."); return
     await update.message.reply_html(random.choice(text_list))
 
@@ -516,88 +544,93 @@ async def judge(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None: awa
 # Public Simulation Commands with Improved Owner Protection
 async def attack(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not ATTACK_TEXTS: logger.warning("List 'ATTACK_TEXTS' empty!"); await update.message.reply_text("No attack ideas."); return
-    target_mention = None
+    target_mention = None; is_protected = False; is_owner = False
     if update.message.reply_to_message:
         target_user = update.message.reply_to_message.from_user
-        if await check_target_protection(target_user.id, context):
-            await update.message.reply_html(random.choice(CANT_TARGET_OWNER_TEXTS if target_user.id == OWNER_ID else CANT_TARGET_SELF_TEXTS))
-            return
+        is_protected = await check_target_protection(target_user.id, context); is_owner = (target_user.id == OWNER_ID)
+        if is_protected: await update.message.reply_html(random.choice(CANT_TARGET_OWNER_TEXTS if is_owner else CANT_TARGET_SELF_TEXTS)); return
         target_mention = target_user.mention_html()
     elif context.args and context.args[0].startswith('@'):
         target_mention = context.args[0].strip()
-        if await check_username_protection(target_mention, context):
-             await update.message.reply_html(random.choice(CANT_TARGET_OWNER_TEXTS)) # Assume owner if username matches
-             return
+        is_protected, is_owner = await check_username_protection(target_mention, context)
+        if is_protected: await update.message.reply_html(random.choice(CANT_TARGET_OWNER_TEXTS if is_owner else CANT_TARGET_SELF_TEXTS)); return
     else: await update.message.reply_text("Who to attack? Reply or use /attack @username."); return
     await update.message.reply_html(random.choice(ATTACK_TEXTS).format(target=target_mention))
 
 async def kill(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not KILL_TEXTS: logger.warning("List 'KILL_TEXTS' empty!"); await update.message.reply_text("No 'kill' texts."); return
-    target_mention = None
+    target_mention = None; is_protected = False; is_owner = False
     if update.message.reply_to_message:
         target_user = update.message.reply_to_message.from_user
-        if await check_target_protection(target_user.id, context):
-            await update.message.reply_html(random.choice(CANT_TARGET_OWNER_TEXTS if target_user.id == OWNER_ID else CANT_TARGET_SELF_TEXTS))
-            return
+        is_protected = await check_target_protection(target_user.id, context); is_owner = (target_user.id == OWNER_ID)
+        if is_protected: await update.message.reply_html(random.choice(CANT_TARGET_OWNER_TEXTS if is_owner else CANT_TARGET_SELF_TEXTS)); return
         target_mention = target_user.mention_html()
     elif context.args and context.args[0].startswith('@'):
         target_mention = context.args[0].strip()
-        if await check_username_protection(target_mention, context):
-             await update.message.reply_html(random.choice(CANT_TARGET_OWNER_TEXTS))
-             return
+        is_protected, is_owner = await check_username_protection(target_mention, context)
+        if is_protected: await update.message.reply_html(random.choice(CANT_TARGET_OWNER_TEXTS if is_owner else CANT_TARGET_SELF_TEXTS)); return
     else: await update.message.reply_text("Who to 'kill'? Reply or use /kill @username."); return
     await update.message.reply_html(random.choice(KILL_TEXTS).format(target=target_mention))
 
 async def punch(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not PUNCH_TEXTS: logger.warning("List 'PUNCH_TEXTS' empty!"); await update.message.reply_text("No 'punch' texts."); return
-    target_mention = None
+    target_mention = None; is_protected = False; is_owner = False
     if update.message.reply_to_message:
         target_user = update.message.reply_to_message.from_user
-        if await check_target_protection(target_user.id, context):
-            await update.message.reply_html(random.choice(CANT_TARGET_OWNER_TEXTS if target_user.id == OWNER_ID else CANT_TARGET_SELF_TEXTS))
-            return
+        is_protected = await check_target_protection(target_user.id, context); is_owner = (target_user.id == OWNER_ID)
+        if is_protected: await update.message.reply_html(random.choice(CANT_TARGET_OWNER_TEXTS if is_owner else CANT_TARGET_SELF_TEXTS)); return
         target_mention = target_user.mention_html()
     elif context.args and context.args[0].startswith('@'):
         target_mention = context.args[0].strip()
-        if await check_username_protection(target_mention, context):
-             await update.message.reply_html(random.choice(CANT_TARGET_OWNER_TEXTS))
-             return
+        is_protected, is_owner = await check_username_protection(target_mention, context)
+        if is_protected: await update.message.reply_html(random.choice(CANT_TARGET_OWNER_TEXTS if is_owner else CANT_TARGET_SELF_TEXTS)); return
     else: await update.message.reply_text("Who to 'punch'? Reply or use /punch @username."); return
     await update.message.reply_html(random.choice(PUNCH_TEXTS).format(target=target_mention))
 
 async def slap(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not SLAP_TEXTS: logger.warning("List 'SLAP_TEXTS' empty!"); await update.message.reply_text("No 'slap' texts."); return
-    target_mention = None
+    target_mention = None; is_protected = False; is_owner = False
     if update.message.reply_to_message:
         target_user = update.message.reply_to_message.from_user
-        if await check_target_protection(target_user.id, context):
-            await update.message.reply_html(random.choice(CANT_TARGET_OWNER_TEXTS if target_user.id == OWNER_ID else CANT_TARGET_SELF_TEXTS))
-            return
+        is_protected = await check_target_protection(target_user.id, context); is_owner = (target_user.id == OWNER_ID)
+        if is_protected: await update.message.reply_html(random.choice(CANT_TARGET_OWNER_TEXTS if is_owner else CANT_TARGET_SELF_TEXTS)); return
         target_mention = target_user.mention_html()
     elif context.args and context.args[0].startswith('@'):
         target_mention = context.args[0].strip()
-        if await check_username_protection(target_mention, context):
-             await update.message.reply_html(random.choice(CANT_TARGET_OWNER_TEXTS))
-             return
+        is_protected, is_owner = await check_username_protection(target_mention, context)
+        if is_protected: await update.message.reply_html(random.choice(CANT_TARGET_OWNER_TEXTS if is_owner else CANT_TARGET_SELF_TEXTS)); return
     else: await update.message.reply_text("Who to slap? Reply or use /slap @username."); return
     await update.message.reply_html(random.choice(SLAP_TEXTS).format(target=target_mention))
 
 async def bite(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not BITE_TEXTS: logger.warning("List 'BITE_TEXTS' empty!"); await update.message.reply_text("No 'bite' texts."); return
-    target_mention = None
+    target_mention = None; is_protected = False; is_owner = False
     if update.message.reply_to_message:
         target_user = update.message.reply_to_message.from_user
-        if await check_target_protection(target_user.id, context):
-            await update.message.reply_html(random.choice(CANT_TARGET_OWNER_TEXTS if target_user.id == OWNER_ID else CANT_TARGET_SELF_TEXTS))
-            return
+        is_protected = await check_target_protection(target_user.id, context); is_owner = (target_user.id == OWNER_ID)
+        if is_protected: await update.message.reply_html(random.choice(CANT_TARGET_OWNER_TEXTS if is_owner else CANT_TARGET_SELF_TEXTS)); return
         target_mention = target_user.mention_html()
     elif context.args and context.args[0].startswith('@'):
         target_mention = context.args[0].strip()
-        if await check_username_protection(target_mention, context):
-             await update.message.reply_html(random.choice(CANT_TARGET_OWNER_TEXTS))
-             return
+        is_protected, is_owner = await check_username_protection(target_mention, context)
+        if is_protected: await update.message.reply_html(random.choice(CANT_TARGET_OWNER_TEXTS if is_owner else CANT_TARGET_SELF_TEXTS)); return
     else: await update.message.reply_text("Who to bite? Reply or use /bite @username."); return
     await update.message.reply_html(random.choice(BITE_TEXTS).format(target=target_mention))
+
+async def hug(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not HUG_TEXTS: logger.warning("List 'HUG_TEXTS' empty!"); await update.message.reply_text("No 'hug' texts."); return
+    target_mention = None; is_protected = False; is_owner = False
+    if update.message.reply_to_message:
+        target_user = update.message.reply_to_message.from_user
+        is_protected = await check_target_protection(target_user.id, context); is_owner = (target_user.id == OWNER_ID)
+        if is_protected: await update.message.reply_html(random.choice(CANT_TARGET_OWNER_HUG_TEXTS if is_owner else CANT_TARGET_SELF_HUG_TEXTS)); return
+        target_mention = target_user.mention_html()
+    elif context.args and context.args[0].startswith('@'):
+        target_mention = context.args[0].strip()
+        is_protected, is_owner = await check_username_protection(target_mention, context)
+        if is_protected: await update.message.reply_html(random.choice(CANT_TARGET_OWNER_HUG_TEXTS if is_owner else CANT_TARGET_SELF_HUG_TEXTS)); return
+    else: await update.message.reply_text("Who to hug? Reply or use /hug @username."); return
+    await update.message.reply_html(random.choice(HUG_TEXTS).format(target=target_mention))
 
 # --- GIF and Photo Commands ---
 async def gif(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -703,6 +736,7 @@ def main() -> None:
     application.add_handler(CommandHandler("punch", punch))   # Public simulation
     application.add_handler(CommandHandler("slap", slap))     # Public simulation
     application.add_handler(CommandHandler("bite", bite))     # Public simulation
+    application.add_handler(CommandHandler("hug", hug))       # Public simulation
     application.add_handler(CommandHandler("say", say))       # Owner check inside function
 
     # --- Start the Bot ---
