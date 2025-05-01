@@ -461,14 +461,15 @@ Meeeow! 🐾 Here are the commands you can use:
 /treat - Demand treats! 🎁
 /zoomies - Witness sudden bursts of cat energy! 💥
 /judge - Get judged by a superior feline. 🧐
-/attack [reply/@user] - Launch a playful attack! ⚔️ (Sim)
-/kill [reply/@user] - Metaphorically eliminate someone! 💀 (Sim)
-/punch [reply/@user] - Deliver a textual punch! 👊 (Sim)
-/slap [reply/@user] - Administer a swift slap! 👋 (Sim)
-/bite [reply/@user] - Take a playful bite! 😬 (Sim)
+/attack [reply/@user] - Launch a playful attack! ⚔️
+/kill [reply/@user] - Metaphorically eliminate someone! 💀
+/punch [reply/@user] - Deliver a textual punch! 👊
+/slap [reply/@user] - Administer a swift slap! 👋
+/bite [reply/@user] - Take a playful bite! 😬
 
 <i>(Note: Owner cannot be targeted by attack/kill/punch/slap/bite)</i>
-Owner Only Commands (Hidden): /status
+Owner Only Commands (Hidden): 
+/status
 """
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -584,7 +585,7 @@ async def status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             try: now_utc = datetime.datetime.now(datetime.timezone.utc); msg_utc = update.message.date.astimezone(datetime.timezone.utc); ping_ms = int((now_utc - msg_utc).total_seconds() * 1000)
             except Exception as e: logger.error(f"Error calculating ping: {e}"); ping_ms = "Error"
         uptime_delta = datetime.datetime.now() - BOT_START_TIME; readable_uptime = get_readable_time_delta(uptime_delta)
-        status_msg = (f"<b>Purrrr! Bot Status:</b> ✨\n— Uptime: {readable_uptime} 🕰️\n— Ping: {ping_ms} ms 📶\n— Owner: <code>{OWNER_ID}</code> 👑\n— Status: Ready & Purring! 🐾")
+        status_msg = (f"<b>Purrrr! Bot Status:</b> ✨\n— Uptime: {readable_uptime} 🕰️\n— Ping: {ping_ms} ms 📶\n— Owner ID: <code>{OWNER_ID}</code> 👑\n— Status: Ready & Purring! 🐾")
         logger.info(f"Owner ({user_id}) requested status.")
         await update.message.reply_html(status_msg)
     else:
