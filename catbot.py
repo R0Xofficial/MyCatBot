@@ -496,7 +496,7 @@ async def owner_info(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
             owner_chat = await context.bot.get_chat(OWNER_ID)
             owner_mention = owner_chat.mention_html(); owner_name = owner_chat.full_name or owner_chat.title or owner_name
         except Exception as e: logger.warning(f"Could not fetch owner info for ID {OWNER_ID}: {e}")
-        message = (f"My designated human is: 👤 <b>{owner_name}</b> ({owner_mention}) ❤️")
+        message = (f"My designated human, the bringer of treats 🎁 and head scratches ❤️, is:\n👤 <b>{owner_name}</b> ({owner_mention})\nThey hold the secret to the treat jar! ✨")
         await update.message.reply_html(message) # reply_html implies HTML parse mode
     else: logger.error("Owner info cmd called, but OWNER_ID not set!"); await update.message.reply_text("Meow? Can't find owner info!")
 
