@@ -487,7 +487,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     await update.message.reply_html(HELP_TEXT, disable_web_page_preview=True) # Disable preview for cleaner help
 async def github(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Sends the link to the GitHub repository."""
-    github_link = "https://github.com/R0Xofficial/MyCatbot"; await update.message.reply_text(f"Meeeow! I'm open source! 💻 Here my code:\n{github_link}", disable_web_page_preview=True)
+    github_link = "https://github.com/R0Xofficial/MyCatbot"; await update.message.reply_text(f"Meeeow! I'm open source! 💻 Here my code: {github_link}", disable_web_page_preview=True)
 async def owner_info(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Displays information about the bot's owner."""
     if OWNER_ID:
