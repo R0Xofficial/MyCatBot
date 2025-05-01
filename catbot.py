@@ -7,9 +7,9 @@
 
 import logging
 import random
-import os
-import datetime
-from telegram import Update, constants # Added constants for ParseMode
+import os       # Required for os.getenv()
+import datetime # Required for uptime/ping
+from telegram import Update, constants # Import constants (though ParseMode not strictly needed for reply_html)
 from telegram.ext import Application, CommandHandler, ContextTypes
 # Optional Debug Imports (currently commented out)
 # from telegram.ext import MessageHandler, filters, ApplicationHandlerStop
@@ -19,41 +19,53 @@ from telegram.error import TelegramError # To catch potential errors in get_chat
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
 )
+# Reduce log noise from underlying libraries
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("telegram.vendor.ptb_urllib3.urllib3").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 # --- Owner ID Configuration & Bot Start Time ---
 OWNER_ID = None
-BOT_START_TIME = datetime.datetime.now()
+BOT_START_TIME = datetime.datetime.now() # Record bot start time
 
+# --- Load configuration from environment variables ---
+# This is the SECURE way to handle sensitive data.
+# Make sure you set the variables using 'export' in the terminal!
 try:
+    # Load Owner ID
     owner_id_str = os.getenv("TELEGRAM_OWNER_ID")
+    # Explanation: os.getenv looks for an environment variable with the given name.
+    # If it doesn't exist (because you didn't 'export' it), it returns None.
+
     if owner_id_str:
         OWNER_ID = int(owner_id_str)
         logger.info(f"Owner ID loaded: {OWNER_ID}")
     else:
+        # Critical error if the variable is not set
         logger.critical("CRITICAL: TELEGRAM_OWNER_ID environment variable not set!")
         print("\n--- FATAL ERROR ---")
         print("Environment variable TELEGRAM_OWNER_ID is not set.")
-        exit(1)
+        print("Set it to your numeric Telegram User ID before starting the bot.")
+        exit(1) # Exit with a non-zero code indicates an error
 except ValueError:
     logger.critical(f"CRITICAL: Invalid TELEGRAM_OWNER_ID: '{owner_id_str}'. Must be an integer.")
     print("\n--- FATAL ERROR ---")
     print(f"Invalid TELEGRAM_OWNER_ID: '{owner_id_str}'. Must be an integer.")
-    exit(1)
+    exit(1) # Exit with a non-zero code indicates an error
 except Exception as e:
     logger.critical(f"CRITICAL: Unexpected error loading OWNER_ID: {e}")
     print(f"\n--- FATAL ERROR --- \n{e}")
     exit(1)
 
+# Load Bot Token (also via os.getenv)
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 if not BOT_TOKEN:
     logger.critical("CRITICAL: TELEGRAM_BOT_TOKEN environment variable not set!")
     print("\n--- FATAL ERROR ---")
     print("Environment variable TELEGRAM_BOT_TOKEN is not set.")
+    print("Set it using 'export' before running the bot.")
     exit(1)
-# logger.debug(f"DEBUG: Read token fragment: '{BOT_TOKEN[:6]}...{BOT_TOKEN[-4:]}'")
+# logger.debug(f"DEBUG: Read token fragment: '{BOT_TOKEN[:6]}...{BOT_TOKEN[-4:]}'") # Uncomment to debug token
 
 # --- CAT TEXTS SECTION ---
 
@@ -339,6 +351,32 @@ SLAP_TEXTS = [
     "That's a paddlin'. Or in this case, a slappin', {target}. 🛶➡️👋",
 ]
 
+# /bite (simulation only) texts - uses {target} placeholder
+BITE_TEXTS = [
+    "Took a playful nibble out of {target}! 😬 Nom nom.",
+    "Chomp! {target} looked too chewable.",
+    "My teefs are sharp! {target} just found out. 🦷",
+    "Consider {target} affectionately (or not so affectionately) bitten.",
+    "It started as a lick, but ended as a bite. Sorry, {target}! 🤷",
+    "A love bite for {target}... maybe with a *little* too much enthusiasm. ❤️‍🔥",
+    "Those fingers looked like sausages, {target}! Couldn't resist. 🌭",
+    "Warning: May bite when overstimulated. {target} learned this lesson.",
+    "Just testing my bite strength on {target}. For science! 🧪",
+    "Ankle-biter reporting for duty! Target: {target}'s ankle! 🦶",
+    "Gotcha, {target}! A quick bite to keep you on your toes.",
+    "Is that... skin? Must bite! Sorry {target}.",
+    "My teeth said 'hello' to {target}. 👋🦷",
+    "Sometimes biting is the only way to express complex feline emotions, {target}.",
+    "I bite because I care... or because you moved too fast, {target}. 🤔",
+    "The forbidden chomp was deployed on {target}!",
+    "A small price to pay ({target}'s skin) for my amusement.",
+    "Vampire cat mode activated! 🧛 Biting {target}!",
+    "Consider this a warning bite, {target}. The next one might draw... more text.",
+    "My teeth: pointy. Your existence, {target}: biteable. Logic is sound.",
+    "Tasting the world one bite at a time, starting with {target}.",
+    "<code>OM NOM NOM</code> {target} <code>NOM</code>",
+]
+
 
 # Refusal texts
 CANT_TARGET_OWNER_TEXTS = [
@@ -355,7 +393,7 @@ CANT_TARGET_OWNER_TEXTS = [
     "The sacred bond of cat and human cannot be broken by your command. Nice try.",
     "My loyalty is unbreakable. The Owner is safe. 🔒",
     "Not even my sharpest virtual claws can touch my human. It's the law.",
-    "My human is my one true ally. Any attacks will be met with *the stare*.  stare",
+    "My human is my one true ally. Any attacks will be met with *the stare*. <pre>stare</pre>",
 ]
 CANT_TARGET_SELF_TEXTS = [
     "Target... myself? Why would I do that? Silly human. 😹",
@@ -383,11 +421,12 @@ OWNER_ONLY_REFUSAL = [ # Needed for /status
     "Sorry, that’s above your pay grade (which is zero treats). Ask my Owner instead! 🤷",
     "Error: Command restricted to the Owner. Beep boop. *Access denied*. 🤖",
     "Not even close! Only my Human can make that call. ☎️",
-    "Hiss... That command is off-limits for mere mortals like you!  mortals",
+    "Hiss... That command is off-limits for mere mortals like you! <pre>mortals</pre>",
     "Only my human can handle that one, thank you very much! ☕",
     "Meow! My Owner’s the boss here. You’ll have to check with them. 👨‍💼👩‍💼",
     "That’s classified information... for my human's eyes only! 👀",
 ]
+
 
 # --- END OF TEXT SECTION ---
 
@@ -414,7 +453,7 @@ Meeeow! 🐾 Here are the commands you can use:
 
 /start - Shows the welcome message. ✨
 /help - Shows this help message. ❓
-/github - Get the link to my source code! 💻 (I'm open source!)
+/github - Get the link to my source code! 💻
 /owner - Info about my designated human! ❤️
 /meow - Get a random cat sound or phrase. 🔊
 /nap - What's on a cat's mind during naptime? 😴
@@ -426,49 +465,39 @@ Meeeow! 🐾 Here are the commands you can use:
 /kill [reply/@user] - Metaphorically eliminate someone! 💀
 /punch [reply/@user] - Deliver a textual punch! 👊
 /slap [reply/@user] - Administer a swift slap! 👋
+/bite [reply/@user] - Take a playful bite! 😬
 
-<i>(Note: Owner cannot be targeted by attack/kill/punch/slap)</i>
+<i>(Note: Owner cannot be targeted by attack/kill/punch/slap/bite)</i>
 Owner Only Commands (Hidden): 
 /status
 """
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    user = update.effective_user; await update.message.reply_html(f"Meow {user.mention_html()}! I'm the Meow Bot. 🐾\nUse /help to see available commands!")
-async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None: await update.message.reply_html(HELP_TEXT)
+    """Sends the welcome message."""
+    user = update.effective_user
+    await update.message.reply_html(f"Meow {user.mention_html()}! I'm the Meow Bot. 🐾\nUse /help to see available commands!")
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Displays the help message."""
+    await update.message.reply_html(HELP_TEXT)
 async def github(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    github_link = "https://github.com/R0Xofficial/MyCatbot"
-    await update.message.reply_text(f"Meeeow! I'm open source! 💻 You can find my code here:\n{github_link}", disable_web_page_preview=True)
-
-# ADDED OWNER INFO COMMAND
+    """Sends the link to the GitHub repository."""
+    github_link = "https://github.com/R0Xofficial/MyCatbot"; await update.message.reply_text(f"Meeeow! I'm open source! 💻 Find my code:\n{github_link}", disable_web_page_preview=True)
 async def owner_info(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Displays information about the bot's owner."""
     if OWNER_ID:
-        owner_mention = f"<code>{OWNER_ID}</code>" # Fallback to ID
-        owner_name = "My Esteemed Human"
+        owner_mention = f"<code>{OWNER_ID}</code>"; owner_name = "My Esteemed Human"
         try:
-            # Attempt to get chat info for the owner
             owner_chat = await context.bot.get_chat(OWNER_ID)
-            owner_mention = owner_chat.mention_html() # Use mention if possible
-            owner_name = owner_chat.full_name or owner_chat.title or owner_name # Use actual name if available
-            logger.info(f"Successfully fetched owner info for ID {OWNER_ID}")
-        except TelegramError as e:
-            logger.warning(f"Could not fetch owner info for ID {OWNER_ID}: {e}. Using ID only.")
-        except Exception as e:
-            logger.error(f"Unexpected error fetching owner info for {OWNER_ID}: {e}", exc_info=True)
-
-        message = (
-            f"My designated human, the bringer of treats and head scratches, is:\n"
-            f"👤 <b>{owner_name}</b> ({owner_mention})\n"
-            f"They hold the secret to the treat jar! 🎁❤️"
-        )
+            owner_mention = owner_chat.mention_html(); owner_name = owner_chat.full_name or owner_chat.title or owner_name
+            logger.info(f"Fetched owner info for ID {OWNER_ID}")
+        except TelegramError as e: logger.warning(f"Could not fetch owner info for ID {OWNER_ID}: {e}. Using ID.")
+        except Exception as e: logger.error(f"Unexpected error fetching owner info for {OWNER_ID}: {e}", exc_info=True)
+        message = (f"My designated human, the bringer of treats 🎁 and head scratches ❤️, is:\n👤 <b>{owner_name}</b> ({owner_mention})\nThey hold the secret to the treat jar! ✨")
         await update.message.reply_html(message)
-    else:
-        # Should not happen due to startup checks, but as a fallback
-        logger.error("Owner info command called, but OWNER_ID is not set!")
-        await update.message.reply_text("Meow? Something's wrong, I don't know who my owner is!")
-
+    else: logger.error("Owner info cmd called, but OWNER_ID not set!"); await update.message.reply_text("Meow? Can't find owner info!")
 
 async def send_random_text(update: Update, context: ContextTypes.DEFAULT_TYPE, text_list: list[str], list_name: str) -> None:
+    """Sends a random text from the provided list."""
     if not text_list: logger.warning(f"List '{list_name}' empty!"); await update.message.reply_text("Oops! List empty."); return
     await update.message.reply_html(random.choice(text_list))
 
@@ -482,6 +511,7 @@ async def judge(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None: awa
 
 # Public Simulation Commands with Owner Protection
 async def attack(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Sends an attack message (simulation), protects owner/bot."""
     if not ATTACK_TEXTS: logger.warning("List 'ATTACK_TEXTS' empty!"); await update.message.reply_text("No attack ideas."); return
     target_user = None; target_mention = None; target_user_id = None
     if update.message.reply_to_message:
@@ -494,6 +524,7 @@ async def attack(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_html(random.choice(ATTACK_TEXTS).format(target=target_mention))
 
 async def kill(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Sends a ban simulation message, protects owner/bot."""
     if not KILL_TEXTS: logger.warning("List 'KILL_TEXTS' empty!"); await update.message.reply_text("No 'kill' texts."); return
     target_user = None; target_mention = None; target_user_id = None
     if update.message.reply_to_message:
@@ -506,6 +537,7 @@ async def kill(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_html(random.choice(KILL_TEXTS).format(target=target_mention))
 
 async def punch(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Sends a kick simulation message, protects owner/bot."""
     if not PUNCH_TEXTS: logger.warning("List 'PUNCH_TEXTS' empty!"); await update.message.reply_text("No 'punch' texts."); return
     target_user = None; target_mention = None; target_user_id = None
     if update.message.reply_to_message:
@@ -518,6 +550,7 @@ async def punch(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_html(random.choice(PUNCH_TEXTS).format(target=target_mention))
 
 async def slap(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Sends a slap simulation message, protects owner/bot."""
     if not SLAP_TEXTS: logger.warning("List 'SLAP_TEXTS' empty!"); await update.message.reply_text("No 'slap' texts."); return
     target_user = None; target_mention = None; target_user_id = None
     if update.message.reply_to_message:
@@ -529,6 +562,18 @@ async def slap(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     else: await update.message.reply_text("Who to slap? Reply or use /slap @username."); return
     await update.message.reply_html(random.choice(SLAP_TEXTS).format(target=target_mention))
 
+async def bite(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Sends a bite simulation message, protects owner/bot."""
+    if not BITE_TEXTS: logger.warning("List 'BITE_TEXTS' empty!"); await update.message.reply_text("No 'bite' texts."); return
+    target_user = None; target_mention = None; target_user_id = None
+    if update.message.reply_to_message:
+        target_user = update.message.reply_to_message.from_user
+        target_user_id = target_user.id; target_mention = target_user.mention_html()
+        if target_user_id == OWNER_ID: await update.message.reply_html(random.choice(CANT_TARGET_OWNER_TEXTS)); return
+        if target_user_id == context.bot.id: await update.message.reply_html(random.choice(CANT_TARGET_SELF_TEXTS)); return
+    elif context.args and context.args[0].startswith('@'): target_mention = context.args[0].strip()
+    else: await update.message.reply_text("Who to bite? Reply or use /bite @username."); return
+    await update.message.reply_html(random.choice(BITE_TEXTS).format(target=target_mention))
 
 # --- Owner Only Functionality ---
 async def status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -540,15 +585,14 @@ async def status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             try: now_utc = datetime.datetime.now(datetime.timezone.utc); msg_utc = update.message.date.astimezone(datetime.timezone.utc); ping_ms = int((now_utc - msg_utc).total_seconds() * 1000)
             except Exception as e: logger.error(f"Error calculating ping: {e}"); ping_ms = "Error"
         uptime_delta = datetime.datetime.now() - BOT_START_TIME; readable_uptime = get_readable_time_delta(uptime_delta)
-        status_msg = (f"<b>Purrrr! Bot Status:</b> ✨\n— Uptime: {readable_uptime} 🕰️\n— Ping: {ping_ms} ms 📶\n— Owner: <code>{OWNER_ID}</code> 👑\n— Status: Ready & Purring! 🐾")
+        status_msg = (f"<b>Purrrr! Bot Status:</b> ✨\n— Uptime: {readable_uptime} 🕰️\n— Ping: {ping_ms} ms 📶\n— Owner ID: <code>{OWNER_ID}</code> 👑\n— Status: Ready & Purring! 🐾")
         logger.info(f"Owner ({user_id}) requested status.")
         await update.message.reply_html(status_msg)
     else:
-        # Refuse if not the owner
         logger.warning(f"Unauthorized /status attempt by user {user_id}.")
-        # Format OWNER_ONLY_REFUSAL message possibly with OWNER_ID
-        refusal_text = random.choice(OWNER_ONLY_REFUSAL).format(OWNER_ID=OWNER_ID)
-        await update.message.reply_html(refusal_text) # Use reply_html for potential formatting
+        # Use OWNER_ONLY_REFUSAL with format - it might contain OWNER_ID placeholder
+        refusal_text = random.choice(OWNER_ONLY_REFUSAL).format(OWNER_ID=OWNER_ID) # Provide OWNER_ID for the format string
+        await update.message.reply_html(refusal_text)
 
 
 # --- Main Function ---
@@ -563,6 +607,7 @@ def main() -> None:
     # (Simple registration without groups, except optional debug)
 
     # Optional Debug Handler (uncomment imports and this line if needed)
+    # from telegram.ext import MessageHandler, filters, ApplicationHandlerStop # Add these imports too
     # application.add_handler(MessageHandler(filters.ALL, debug_receive_handler), group=-2)
 
     # Register all command handlers
@@ -577,24 +622,29 @@ def main() -> None:
     application.add_handler(CommandHandler("zoomies", zoomies))
     application.add_handler(CommandHandler("judge", judge))
     application.add_handler(CommandHandler("attack", attack))
-    application.add_handler(CommandHandler("status", status))
-    application.add_handler(CommandHandler("kill", kill))
-    application.add_handler(CommandHandler("punch", punch))
-    application.add_handler(CommandHandler("slap", slap))
+    application.add_handler(CommandHandler("status", status)) # Owner check inside function
+    application.add_handler(CommandHandler("kill", kill))     # Public simulation
+    application.add_handler(CommandHandler("punch", punch))   # Public simulation
+    application.add_handler(CommandHandler("slap", slap))     # Public simulation
+    application.add_handler(CommandHandler("bite", bite))     # Added bite handler
 
     # --- Start the Bot ---
     logger.info(f"Bot starting polling... Owner ID: {OWNER_ID}")
     try:
+        # run_polling blocks until stopped (e.g., by Ctrl+C)
         application.run_polling()
     except KeyboardInterrupt:
          logger.info("Bot stopped by user (Ctrl+C).")
     except Exception as e:
-        logger.critical(f"CRITICAL: Bot crashed during runtime: {e}", exc_info=True)
+        # Catch any other unexpected errors during runtime
+        logger.critical(f"CRITICAL: Bot crashed during runtime: {e}", exc_info=True) # Log traceback
         print(f"\n--- FATAL ERROR ---")
         print(f"Bot crashed: {e}")
         exit(1)
     finally:
+        # This block always executes after try/except finishes (e.g., after Ctrl+C)
         logger.info("Bot shutdown process initiated.")
+        # Potential cleanup code could go here
 
     logger.info("Bot stopped.")
 
