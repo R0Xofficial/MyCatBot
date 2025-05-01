@@ -421,7 +421,7 @@ CANT_TARGET_SELF_HUG_TEXTS = [
 OWNER_ONLY_REFUSAL = [ # Needed for /status and /say
     "Meeeow! Sorry, only my designated Human can use that command. ⛔",
     "Access denied! This command requires special privileges (and possibly a secret handshake involving treats). 🤝🎁",
-    "Hiss! You are not the Boss of Meow! Only <code>{OWNER_ID}</code> is! 👑", # Example using OWNER_ID
+    "Hiss! You are not the Boss of Meow! Only my owner is! 👑", # Example using OWNER_ID
     "Purrrhaps you should ask my Owner to run this command for you? 🙏",
 ]
 
