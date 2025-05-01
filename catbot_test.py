@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-# --- Cat Bot - A simple Telegram bot with fun cat actions ---
+# --- MyCatBot - A simple Telegram bot with fun cat actions ---
 # Includes owner protection, simulation commands, GIF/Photo fetching, and owner commands.
 # Uses environment variables for configuration (Token, Owner ID).
 
