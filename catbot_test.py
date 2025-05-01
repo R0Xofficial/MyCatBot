@@ -414,7 +414,16 @@ OWNER_ONLY_REFUSAL = [ # Needed for /status and /say
     "Hiss! You are not the Boss of Meow! Only {owner_mention} is! 👑", # Example using OWNER_ID
     "Purrrhaps you should ask my Owner to run this command for you? 🙏",
 ]
-
+CANT_TARGET_OWNER_HUG_TEXTS = [
+    "Aww, I *always* hug my Owner! But you use the command on someone else. 🤗❤️",
+    "Hugging the Owner is my default state! No command needed for that. 😉",
+    "I reserve my best hugs for the Owner! Can't use the command on them. 🥰",
+]
+CANT_TARGET_SELF_HUG_TEXTS = [
+    "Hug... myself? I suppose I could try... *awkwardly wraps paws around self* Okay, did it. Now hug someone else! 😂",
+    "I love myself, but a self-hug command seems redundant. I'm always hugging me! 🤔",
+    "Can't target myself for a hug command, but I appreciate the self-love sentiment! ❤️",
+]
 # --- END OF TEXT SECTION ---
 
 # --- Utility Functions ---
