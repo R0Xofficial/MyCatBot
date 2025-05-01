@@ -2,13 +2,14 @@
 # -*- coding: utf-8 -*-
 
 # --- Cat Bot - A simple Telegram bot with fun cat actions ---
-# Includes owner protection and simulation commands.
+# Includes owner protection, simulation commands, and GIF fetching.
 # Uses environment variables for configuration (Token, Owner ID).
 
 import logging
 import random
 import os       # Required for os.getenv()
 import datetime # Required for uptime/ping
+import requests # Required for /gif command
 from telegram import Update, constants # Import constants (though ParseMode not strictly needed for reply_html)
 from telegram.ext import Application, CommandHandler, ContextTypes
 # Optional Debug Imports (currently commented out)
@@ -22,6 +23,8 @@ logging.basicConfig(
 # Reduce log noise from underlying libraries
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("telegram.vendor.ptb_urllib3.urllib3").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING) # Added for httpx's dependency
+
 logger = logging.getLogger(__name__)
 
 # --- Owner ID Configuration & Bot Start Time ---
@@ -34,14 +37,10 @@ BOT_START_TIME = datetime.datetime.now() # Record bot start time
 try:
     # Load Owner ID
     owner_id_str = os.getenv("TELEGRAM_OWNER_ID")
-    # Explanation: os.getenv looks for an environment variable with the given name.
-    # If it doesn't exist (because you didn't 'export' it), it returns None.
-
     if owner_id_str:
         OWNER_ID = int(owner_id_str)
         logger.info(f"Owner ID loaded: {OWNER_ID}")
     else:
-        # Critical error if the variable is not set
         logger.critical("CRITICAL: TELEGRAM_OWNER_ID environment variable not set!")
         print("\n--- FATAL ERROR ---")
         print("Environment variable TELEGRAM_OWNER_ID is not set.")
@@ -88,7 +87,7 @@ MEOW_TEXTS = [
     "I rule this house. You just pay the bills. 🏰", "Laser pointer or sorcery? 🧙‍♂️",
     "Don't touch the tummy. Seriously. 🚫", "Did I just see another cat?! Intruder! ⚔️",
     "What's this button do? *boop* 🖱️", "I'll sit here. Right on your keyboard. ⌨️",
-    "No thoughts. Just meows. 텅 빈", "I meow, therefore I am. 🤔",
+    "No thoughts. Just meows. <pre>empty head</pre>", "I meow, therefore I am. 🤔",
     "That noise was suspicious. Panic mode engaged. 😨",
     "It's 3 AM. Let’s party! 🎉", "I bring chaos and fur. Deal with it. 😎",
     "Time to destroy the toilet paper. 🧻", "Window open? Instant birdwatching! 📺",
@@ -121,7 +120,7 @@ NAP_TEXTS = [
     "Out of order until further notice. 🚫", "Occupied: enter the nap zone at your own risk. ⚠️",
     "Cushion claimed. Do not attempt reclamation. 🚩", "I nap therefore I am. (Mostly nap).",
     "Nap goal: 16 hours achieved. Aiming for 20. 🥇", "Stretched once. Exhausting. Need another nap.",
-    "Curled like a perfect croissant. 🥐", "Horizontal and proud of it.  horizontale",
+    "Curled like a perfect croissant. 🥐", "Horizontal and proud of it. <pre>horizontal</pre>",
     "The world can wait. My nap cannot. ✋", "Entering low-power mode... 💤",
 ]
 
@@ -191,7 +190,7 @@ ZOOMIES_TEXTS = [
     "The floor is lava... and a racetrack! 🔥🏁", "Did a ghost just tickle me? <b>MUST RUN!</b> 👻",
     "Sudden burst of uncontrollable energy! 💥", "My ancestors were cheetahs, probably. 🐆",
     "Leaving a trail of chaos and displaced cushions in my wake.", "Skidded around the corner! <i>Drift King!</i> 🏎️",
-    "Ludicrous speed achieved! They've gone to plaid!  plaid", "Parkour! (over the furniture, under the table, through the legs).",
+    "Ludicrous speed achieved! They've gone to plaid! <pre>plaid</pre>", "Parkour! (over the furniture, under the table, through the legs).",
     "I don't know why I'm running, but the urge is <b>COMPULSORY</b>!", "This is better than catnip! (Maybe). 🌿",
     "I'm speed. Pure, unfiltered, chaotic speed. ⚡",
     "Floor traction: optional. Wall traction: engaged.",
@@ -427,7 +426,6 @@ OWNER_ONLY_REFUSAL = [ # Needed for /status
     "That’s classified information... for my human's eyes only! 👀",
 ]
 
-
 # --- END OF TEXT SECTION ---
 
 # --- Utility Functions ---
@@ -444,8 +442,11 @@ def get_readable_time_delta(delta: datetime.timedelta) -> str:
 
 # --- Debug Handler (Optional - uncomment if needed) ---
 # async def debug_receive_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-#     # ... (implementation as before) ...
-#     logger.critical(f"--- !!! DEBUG: UPDATE RECEIVED !!! ID: {update.update_id}, Type: ..., ChatID: ..., UserID: ... ---")
+#     """Logs any incoming update VERY early."""
+#     update_type = "Unknown"; chat_id = "N/A"; user_id = "N/A"; update_id = update.update_id
+#     if update.message: update_type = "Message"; chat_id = update.message.chat.id; user_id = update.message.from_user.id if update.message.from_user else "N/A"
+#     elif update.callback_query: update_type = "CallbackQuery"; chat_id = update.callback_query.message.chat.id if update.callback_query.message else "N/A"; user_id = update.callback_query.from_user.id
+#     logger.critical(f"--- !!! DEBUG: UPDATE RECEIVED !!! ID: {update_id}, Type: {update_type}, ChatID: {chat_id}, UserID: {user_id} ---")
 
 # --- Command Handlers ---
 HELP_TEXT = """
@@ -455,6 +456,7 @@ Meeeow! 🐾 Here are the commands you can use:
 /help - Shows this help message. ❓
 /github - Get the link to my source code! 💻
 /owner - Info about my designated human! ❤️
+/gif - Get a random cat GIF! 🖼️
 /meow - Get a random cat sound or phrase. 🔊
 /nap - What's on a cat's mind during naptime? 😴
 /play - Random playful cat actions. 🧶
@@ -493,12 +495,13 @@ async def owner_info(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
         except TelegramError as e: logger.warning(f"Could not fetch owner info for ID {OWNER_ID}: {e}. Using ID.")
         except Exception as e: logger.error(f"Unexpected error fetching owner info for {OWNER_ID}: {e}", exc_info=True)
         message = (f"My designated human, the bringer of treats 🎁 and head scratches ❤️, is:\n👤 <b>{owner_name}</b> ({owner_mention})\nThey hold the secret to the treat jar! ✨")
-        await update.message.reply_html(message)
+        await update.message.reply_html(message, parse_mode=constants.ParseMode.HTML) # Explicitly use HTML parse mode
     else: logger.error("Owner info cmd called, but OWNER_ID not set!"); await update.message.reply_text("Meow? Can't find owner info!")
 
 async def send_random_text(update: Update, context: ContextTypes.DEFAULT_TYPE, text_list: list[str], list_name: str) -> None:
     """Sends a random text from the provided list."""
     if not text_list: logger.warning(f"List '{list_name}' empty!"); await update.message.reply_text("Oops! List empty."); return
+    # Using reply_html implicitly parses HTML
     await update.message.reply_html(random.choice(text_list))
 
 # Simple Text Command Definitions
@@ -594,27 +597,61 @@ async def status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         refusal_text = random.choice(OWNER_ONLY_REFUSAL).format(OWNER_ID=OWNER_ID) # Provide OWNER_ID for the format string
         await update.message.reply_html(refusal_text)
 
+# --- GIF Command ---
+async def gif(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Fetches and sends a random cat GIF from TheCatAPI."""
+    API_URL = "https://api.thecatapi.com/v1/images/search?mime_types=gif&limit=1"
+    # Consider adding your TheCatAPI key here if you have one (register at thecatapi.com):
+    # API_KEY = os.getenv("THECATAPI_KEY")
+    # headers = {'x-api-key': API_KEY} if API_KEY else {}
+    headers = {} # Use empty headers if no key
+    logger.info("Fetching random cat GIF...")
+    try:
+        response = requests.get(API_URL, headers=headers, timeout=10) # Add timeout
+        response.raise_for_status() # Raise HTTPError for bad responses (4xx or 5xx)
+
+        data = response.json()
+
+        if data and isinstance(data, list) and len(data) > 0 and 'url' in data[0]:
+            gif_url = data[0]['url']
+            logger.info(f"Found GIF: {gif_url}")
+            # Send the animation via URL
+            await update.message.reply_animation(animation=gif_url, caption="Meow! Here's a random GIF for you! 🐾🖼️")
+        else:
+            logger.warning("No GIF URL found in TheCatAPI response or unexpected format: %s", data)
+            await update.message.reply_text("Meow? Couldn't find a suitable GIF right now. Try again later! 😿")
+
+    except requests.exceptions.Timeout:
+        logger.error("Timeout error fetching GIF from TheCatAPI.")
+        await update.message.reply_text("Hiss! The GIF source is slow to respond. Please try again later. ⏳")
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Error fetching GIF from TheCatAPI: {e}")
+        await update.message.reply_text("Hiss! Couldn't connect to the GIF source. Please try again later. 😿")
+    except (IndexError, KeyError, TypeError, ValueError) as e: # Added ValueError for json parsing errors
+        logger.error(f"Error parsing TheCatAPI response: {e}")
+        await update.message.reply_text("Mrow! The GIF data seems weird. Couldn't process it. 😵‍💫")
+    except Exception as e:
+        logger.error(f"Unexpected error in /gif command: {e}", exc_info=True)
+        await update.message.reply_text("Oops! Something unexpected went wrong while getting a GIF. 🙀")
+
 
 # --- Main Function ---
 def main() -> None:
     """Configures and runs the Telegram bot."""
-    # Token and Owner ID are already loaded globally.
-
     # Build Application
     application = Application.builder().token(BOT_TOKEN).build()
 
     # --- Handler Registration ---
-    # (Simple registration without groups, except optional debug)
-
-    # Optional Debug Handler (uncomment imports and this line if needed)
-    # from telegram.ext import MessageHandler, filters, ApplicationHandlerStop # Add these imports too
+    # Optional Debug Handler
+    # from telegram.ext import MessageHandler, filters, ApplicationHandlerStop
     # application.add_handler(MessageHandler(filters.ALL, debug_receive_handler), group=-2)
 
     # Register all command handlers
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CommandHandler("github", github))
-    application.add_handler(CommandHandler("owner", owner_info)) # Added owner info handler
+    application.add_handler(CommandHandler("owner", owner_info))
+    application.add_handler(CommandHandler("gif", gif)) # Added gif handler
     application.add_handler(CommandHandler("meow", meow))
     application.add_handler(CommandHandler("nap", nap))
     application.add_handler(CommandHandler("play", play))
@@ -626,28 +663,32 @@ def main() -> None:
     application.add_handler(CommandHandler("kill", kill))     # Public simulation
     application.add_handler(CommandHandler("punch", punch))   # Public simulation
     application.add_handler(CommandHandler("slap", slap))     # Public simulation
-    application.add_handler(CommandHandler("bite", bite))     # Added bite handler
+    application.add_handler(CommandHandler("bite", bite))     # Public simulation
 
     # --- Start the Bot ---
     logger.info(f"Bot starting polling... Owner ID: {OWNER_ID}")
     try:
-        # run_polling blocks until stopped (e.g., by Ctrl+C)
         application.run_polling()
     except KeyboardInterrupt:
          logger.info("Bot stopped by user (Ctrl+C).")
     except Exception as e:
-        # Catch any other unexpected errors during runtime
-        logger.critical(f"CRITICAL: Bot crashed during runtime: {e}", exc_info=True) # Log traceback
+        logger.critical(f"CRITICAL: Bot crashed during runtime: {e}", exc_info=True)
         print(f"\n--- FATAL ERROR ---")
         print(f"Bot crashed: {e}")
         exit(1)
     finally:
-        # This block always executes after try/except finishes (e.g., after Ctrl+C)
         logger.info("Bot shutdown process initiated.")
-        # Potential cleanup code could go here
 
     logger.info("Bot stopped.")
 
 # --- Script Execution ---
 if __name__ == "__main__":
+    # Check for requests library dependency for /gif command
+    try:
+        import requests
+    except ImportError:
+        print("\n--- DEPENDENCY ERROR ---")
+        print("The 'requests' library is required for the /gif command.")
+        print("Please install it using: pip install requests")
+        exit(1)
     main()
