@@ -44,6 +44,8 @@ Meet **MyCatBot**, the playful and quirky cat-themed Telegram bot that will make
 
 /bite [reply/@user] - Take a playful bite! 😬
 
+/hug [reply/@user] - Offer a comforting hug!🤗
+
 (Note: Owner cannot be targeted by attack/kill/punch/slap/bite)
 Owner Only Commands (Hidden):
 
