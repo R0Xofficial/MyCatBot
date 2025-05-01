@@ -422,13 +422,14 @@ Meeeow! 🐾 Here are the commands you can use:
 /treat - Demand treats! 🎁
 /zoomies - Witness sudden bursts of cat energy! 💥
 /judge - Get judged by a superior feline. 🧐
-/attack [reply/@user] - Launch a playful attack! ⚔️ (Sim)
-/kill [reply/@user] - Metaphorically eliminate someone! 💀 (Sim)
-/punch [reply/@user] - Deliver a textual punch! 👊 (Sim)
-/slap [reply/@user] - Administer a swift slap! 👋 (Sim)
+/attack [reply/@user] - Launch a playful attack! ⚔️
+/kill [reply/@user] - Metaphorically eliminate someone! 💀
+/punch [reply/@user] - Deliver a textual punch! 👊
+/slap [reply/@user] - Administer a swift slap! 👋
 
 <i>(Note: Owner cannot be targeted by attack/kill/punch/slap)</i>
-Owner Only Commands (Hidden): /status
+Owner Only Commands (Hidden): 
+/status
 """
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
