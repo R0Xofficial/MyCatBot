@@ -377,6 +377,7 @@ BITE_TEXTS = [
     "<code>OM NOM NOM</code> {target} <code>NOM</code>",
 ]
 
+
 # Refusal texts
 CANT_TARGET_OWNER_TEXTS = [
     "Meow! I can't target my Owner. They are protected by purr-power! ✨🛡️",
@@ -384,18 +385,46 @@ CANT_TARGET_OWNER_TEXTS = [
     "Nope. Not gonna do it. That's my human! ❤️",
     "Access Denied: Cannot target the supreme leader (Owner). 👑",
     "Targeting the Owner? Not in this lifetime, furball! 🙅",
+    "The human is off-limits. You’re barking up the wrong scratching post! 🌳",
+    "You can't mess with the one who controls the treat dispenser. Forbidden! 🚫🎁",
+    "The Owner is my trusted companion. Try again never! 😉",
+    "Attempting to target the Owner? Prepare for the wrath of a thousand silent judgments. 👀",
+    "I bow to my human. Can't touch them. Nope. 🙇",
+    "The sacred bond of cat and human cannot be broken by your command. Nice try.",
+    "My loyalty is unbreakable. The Owner is safe. 🔒",
+    "Not even my sharpest virtual claws can touch my human. It's the law.",
+    "My human is my one true ally. Any attacks will be met with *the stare*. <pre>stare</pre>",
 ]
 CANT_TARGET_SELF_TEXTS = [
     "Target... myself? Why would I do that? Silly human. 😹",
     "Error: Cannot target self. My paws have better things to do, like napping. 😴",
     "I refuse to engage in self-pawm. Command ignored with extreme prejudice.",
     "Targeting myself? Not even for a mountain of tuna. 🐟",
+    "Error 418: I'm a teapot... I mean, cat. Cannot self-target; it's illogical. 🤖",
+    "Self-pawing is only for the unenlightened. I choose naps instead.",
+    "I’m too fabulous to target myself. Command denied! ✨💅",
+    "My paws are for important tasks like biscuit-making and pushing things off tables, not attacking myself! 🐾",
+    "No, no, no. I am a cat of *refined* taste and dignity. Self-targeting is beneath me.",
+    "I’ve got better things to do than chase my own tail... unless I get bored later. 🤔",
+    "Self-targeting? Please. I’m already purrfect. 💯",
+    "I refuse to acknowledge such a foolish, paradoxical request. My circuits can't handle it.",
+    "My claws are reserved for more worthy targets (like dangling strings). Me, not included. 🧶",
 ]
 OWNER_ONLY_REFUSAL = [ # Needed for /status and /say
     "Meeeow! Sorry, only my designated Human can use that command. ⛔",
     "Access denied! This command requires special privileges (and possibly a secret handshake involving treats). 🤝🎁",
-    "Hiss! You are not the Boss of Meow! Only {owner_mention} is! 👑",
+    "Hiss! You are not the Boss of Meow! Only {owner_mention} is! 👑", # Example using OWNER_ID
     "Purrrhaps you should ask my Owner to run this command for you? 🙏",
+    "Meow! This command is reserved for my one true human. No exceptions. 🚫",
+    "You don't have the required <i>purrmission</i> level to use that, only my Owner does. 😉",
+    "Woops! Only my human has the keys to that command. Try again... not. 🔑",
+    "Sorry, that’s above your pay grade (which is zero treats). Ask my Owner instead! 🤷",
+    "Error: Command restricted to the Owner. Beep boop. *Access denied*. 🤖",
+    "Not even close! Only my Human can make that call. ☎️",
+    "Hiss... That command is off-limits for mere mortals like you! <pre>mortals</pre>",
+    "Only my human can handle that one, thank you very much! ☕",
+    "Meow! My Owner’s the boss here. You’ll have to check with them. 👨‍💼👩‍💼",
+    "That’s classified information... for my human's eyes only! 👀",
 ]
 
 # --- END OF TEXT SECTION ---
@@ -445,7 +474,7 @@ Meeeow! 🐾 Here are the commands you can use:
 <i>(Note: Owner cannot be targeted by attack/kill/punch/slap/bite)</i>
 Owner Only Commands (Hidden):
   /status - Show bot status.
-  /say [target_chat_id] <message> - Send message as bot (target_chat_id is optional).
+  /say [target_chat_id] <your text> - Send message as bot (target_chat_id is optional).
 """
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -454,7 +483,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_html(f"Meow {user.mention_html()}! I'm the Meow Bot. 🐾\nUse /help to see available commands!")
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Displays the help message."""
-    await update.message.reply_html(HELP_TEXT, disable_web_page_preview=True) # Disable preview for clarity
+    # Disable web page preview just in case a link slips in, looks cleaner
+    await update.message.reply_html(HELP_TEXT, disable_web_page_preview=True)
 async def github(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Sends the link to the GitHub repository."""
     github_link = "https://github.com/R0Xofficial/MyCatbot"; await update.message.reply_text(f"Meeeow! I'm open source! 💻 Find my code:\n{github_link}", disable_web_page_preview=True)
@@ -469,13 +499,13 @@ async def owner_info(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
         except TelegramError as e: logger.warning(f"Could not fetch owner info for ID {OWNER_ID}: {e}. Using ID.")
         except Exception as e: logger.error(f"Unexpected error fetching owner info for {OWNER_ID}: {e}", exc_info=True)
         message = (f"My designated human, the bringer of treats 🎁 and head scratches ❤️, is:\n👤 <b>{owner_name}</b> ({owner_mention})\nThey hold the secret to the treat jar! ✨")
-        await update.message.reply_html(message, parse_mode=constants.ParseMode.HTML) # Explicitly use HTML parse mode
+        # reply_html implies HTML parse mode
+        await update.message.reply_html(message)
     else: logger.error("Owner info cmd called, but OWNER_ID not set!"); await update.message.reply_text("Meow? Can't find owner info!")
 
 async def send_random_text(update: Update, context: ContextTypes.DEFAULT_TYPE, text_list: list[str], list_name: str) -> None:
     """Sends a random text from the provided list."""
     if not text_list: logger.warning(f"List '{list_name}' empty!"); await update.message.reply_text("Oops! List empty."); return
-    # Using reply_html implicitly parses HTML
     await update.message.reply_html(random.choice(text_list))
 
 # Simple Text Command Definitions
@@ -622,31 +652,29 @@ async def say(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         potential_chat_id = int(args[0])
         # Basic check: IDs are usually long or negative
         if len(args[0]) > 4 or potential_chat_id < 0:
-            # Check if there's a message after the ID
-            if len(args) > 1:
+            if len(args) > 1: # Check if there's a message after the ID
                 target_chat_id = potential_chat_id
                 message_to_say_list = args[1:] # Message starts from the second arg
                 is_remote_send = True
                 logger.info(f"Owner intends remote send to chat ID: {target_chat_id}")
             else:
-                # ID provided but no message
                 await update.message.reply_text("Mrow? You provided an ID but no message to send!")
                 return
-        # else: first arg is a number but likely part of the message, treat all as message
+        # else: first arg is likely part of the message
     except (ValueError, IndexError):
-        # First arg is not an integer, treat all args as message
         logger.info("No valid target chat ID detected, sending to current chat.")
         # target_chat_id remains default
-        # message_to_say_list remains args
 
     message_to_say = ' '.join(message_to_say_list)
+    if not message_to_say: # Double check if message became empty
+         await update.message.reply_text("Mrow? Cannot send an empty message!")
+         return
 
     logger.info(f"Owner ({user.id}) using /say. Target: {target_chat_id}. Message: '{message_to_say[:50]}...'")
 
     try:
         await context.bot.send_message(chat_id=target_chat_id, text=message_to_say)
         if is_remote_send:
-            # Give feedback to the owner in the original chat
             await update.message.reply_text(f"✅ Message sent successfully to chat ID <code>{target_chat_id}</code>.", parse_mode=constants.ParseMode.HTML, quote=False)
         # Optional: Delete owner's command
         # try: await update.message.delete(); logger.info("Deleted owner's /say command.")
