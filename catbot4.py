@@ -410,7 +410,7 @@ async def punch(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 def main() -> None:
     """Starts the bot."""
-    token = os.getenv("TELEGRAM_BOT_TOKEN")
+    token = ("TELEGRAM_BOT_TOKEN")
     if not token:
         logger.critical("CRITICAL: TELEGRAM_BOT_TOKEN environment variable not set!")
         print("\n--- ERROR ---")
