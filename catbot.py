@@ -36,14 +36,14 @@ CAT_TEXTS = [
 # --- TEXT SECTION END ---
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Wysyła wiadomość powitalną, gdy użytkownik wyda komendę /start."""
+    """Sends a welcome message when the user issues the /start command."""
     user = update.effective_user
     await update.message.reply_html(
         f"Hi {user.mention_html()}! I'm the Meow Bot. Use /meow to get a random cat sound or phrase!",
     )
 
 async def meow(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Wysyła losowy koci tekst, gdy użytkownik wyda komendę /meow."""
+    """Sends random cat text when user issues the /meow command."""
     if not CAT_TEXTS:
         await update.message.reply_text("Oops! The cat text list is empty.")
         return
@@ -52,10 +52,8 @@ async def meow(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(chosen_text)
 
 def main() -> None:
-    """Uruchamia bota."""
-    # Pobierz token bota ze zmiennej środowiskowej
-    # To bezpieczniejszy sposób niż wpisywanie tokenu bezpośrednio w kodzie
-    token = os.getenv("TELEGRAM_BOT_TOKEN")
+    """Starting bot."""
+    token = ("TELEGRAM_BOT_TOKEN")
     if not token:
         logger.error("Error: TELEGRAM_BOT_TOKEN environment variable not set!")
         print("\n--- ERROR ---")
@@ -63,14 +61,11 @@ def main() -> None:
         print("Set it before start catbot :]")
         return
 
-    # Stwórz obiekt Application
     application = Application.builder().token(token).build()
 
-    # Dodaj obsługę komend
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("meow", meow))
 
-    # Uruchom bota w trybie polling (nasłuchiwanie aktualizacji)
     logger.info("Starting bot...")
     application.run_polling()
     logger.info("Bot stopped.")
