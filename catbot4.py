@@ -1,59 +1,68 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+# --- Cat Bot - A simple Telegram bot with fun cat actions ---
+# This bot provides random cat sounds/phrases and simulates actions.
+# It uses environment variables for configuration (Token, Owner ID).
+
 import logging
 import random
-import os
-import datetime # Dodano do uptime/ping
+import os       # Required for os.getenv()
+import datetime # Required for uptime/ping
 from telegram import Update
-# Usunięto ParseMode, bo reply_html go nie potrzebuje
-from telegram.ext import Application, CommandHandler, ContextTypes # Usunięto MessageHandler, filters, ApplicationHandlerStop, bo nie używamy grup/filtra
-# Jeśli chcesz debugować, dodaj z powrotem: from telegram.ext import MessageHandler, filters, ApplicationHandlerStop
+# ParseMode is not needed when using reply_html
+from telegram.ext import Application, CommandHandler, ContextTypes
+# Imports for optional debug handler (currently commented out)
+# from telegram.ext import MessageHandler, filters, ApplicationHandlerStop
 
-# --- Konfiguracja Logowania ---
+# --- Logging Configuration ---
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
 )
+# Reduce log noise from underlying libraries
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("telegram.vendor.ptb_urllib3.urllib3").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
-# --- Konfiguracja ID Właściciela i Czasu Startu ---
+# --- Owner ID Configuration & Bot Start Time ---
 OWNER_ID = None
-BOT_START_TIME = datetime.datetime.now() # Zapis czasu startu bota
+BOT_START_TIME = datetime.datetime.now() # Record bot start time
 
-# --- Wczytywanie konfiguracji (POPRAWIONE!) ---
+# --- Load Configuration (Corrected!) ---
 try:
-    # POPRAWKA: Użycie os.getenv()
+    # CORRECTION: Use os.getenv()
     owner_id_str = os.getenv("TELEGRAM_OWNER_ID")
     if owner_id_str:
         OWNER_ID = int(owner_id_str)
         logger.info(f"Owner ID loaded: {OWNER_ID}")
     else:
+        # Critical error if the variable is not set
         logger.critical("CRITICAL: TELEGRAM_OWNER_ID environment variable not set!")
         print("\n--- FATAL ERROR ---")
         print("Environment variable TELEGRAM_OWNER_ID is not set.")
-        exit(1)
+        print("Set it to your numeric Telegram User ID before starting the bot.")
+        exit(1) # Exit with a non-zero code indicates an error
 except ValueError:
     logger.critical(f"CRITICAL: Invalid TELEGRAM_OWNER_ID: '{owner_id_str}'. Must be an integer.")
     print("\n--- FATAL ERROR ---")
     print(f"Invalid TELEGRAM_OWNER_ID: '{owner_id_str}'. Must be an integer.")
-    exit(1)
+    exit(1) # Exit with a non-zero code indicates an error
 except Exception as e:
     logger.critical(f"CRITICAL: Unexpected error loading OWNER_ID: {e}")
     print(f"\n--- FATAL ERROR --- \n{e}")
     exit(1)
 
-# POPRAWKA: Użycie os.getenv() dla tokenu
+# CORRECTION: Use os.getenv() for the token
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 if not BOT_TOKEN:
     logger.critical("CRITICAL: TELEGRAM_BOT_TOKEN environment variable not set!")
     print("\n--- FATAL ERROR ---")
     print("Environment variable TELEGRAM_BOT_TOKEN is not set.")
+    print("Set it using 'export' before running the bot.")
     exit(1)
-# logger.debug(f"DEBUG: Read token fragment: '{BOT_TOKEN[:6]}...{BOT_TOKEN[-4:]}'") # Odkomentuj do debugowania
+# logger.debug(f"DEBUG: Read token fragment: '{BOT_TOKEN[:6]}...{BOT_TOKEN[-4:]}'") # Uncomment to debug token
 
-# --- SEKCJA TEKSTÓW KOTA ---
+# --- CAT TEXTS SECTION ---
 
 # /meow texts
 MEOW_TEXTS = [
@@ -127,7 +136,7 @@ JUDGE_TEXTS = [
     "I could do that better... if I had thumbs and motivation.",
 ]
 
-# /attack texts - uses {target} as a placeholder (simulation only)
+# /attack texts - uses {target} placeholder (simulation only)
 ATTACK_TEXTS = [
     "Launched a sneak attack on {target}'s ankles! Got 'em!",
     "Performed the forbidden pounce onto {target}'s keyboard. Mwahaha!",
@@ -147,13 +156,13 @@ ATTACK_TEXTS = [
 ]
 
 # Refusal texts
-CANT_TARGET_OWNER_TEXTS = [
+CANT_TARGET_OWNER_TEXTS = [ # Renamed for clarity
     "Meow! I can't target my Owner. They are protected by purr-power!",
     "Hiss! Targeting the Owner is strictly forbidden by cat law!",
     "Nope. Not gonna do it. That's my human!",
     "Access Denied: Cannot target the supreme leader (Owner).",
 ]
-CANT_TARGET_SELF_TEXTS = [
+CANT_TARGET_SELF_TEXTS = [ # Renamed for clarity
     "Target... myself? Why would I do that? Silly human.",
     "Error: Cannot target self. My paws have better things to do.",
     "I refuse to engage in self-pawm. Command ignored.",
@@ -162,6 +171,7 @@ OWNER_ONLY_REFUSAL = [ # Needed for /status
     "Meeeow! Sorry, only my designated Human can use that command.",
     "Access denied! This command requires special privileges (and treats).",
     "Hiss! You are not the Boss of Meow!",
+    "Purrrhaps you should ask my Owner to do that?",
 ]
 
 # /kill (simulation only) texts - uses {target} placeholder
@@ -186,29 +196,32 @@ PUNCH_TEXTS = [
     "One text-punch was all it took. Bye bye, {target}!",
 ]
 
-# --- KONIEC SEKCJI TEKSTÓW ---
+# --- END OF TEXT SECTION ---
 
-# --- Funkcje Pomocnicze ---
+# --- Utility Functions ---
 def get_readable_time_delta(delta: datetime.timedelta) -> str:
-    """Konwertuje timedelta na czytelny ciąg znaków."""
+    """Converts a timedelta into a human-readable string."""
     total_seconds = int(delta.total_seconds()); days, rem = divmod(total_seconds, 86400); hours, rem = divmod(rem, 3600); minutes, seconds = divmod(rem, 60)
     parts = [];
     if days > 0: parts.append(f"{days}d")
     if hours > 0: parts.append(f"{hours}h")
     if minutes > 0: parts.append(f"{minutes}m")
+    # Show seconds if it's the only unit or >= 0
     if seconds >= 0 and not parts: parts.append(f"{seconds}s")
+    # Add seconds if > 0 and other units exist
     elif seconds > 0: parts.append(f"{seconds}s")
     return ", ".join(parts) if parts else "0s"
 
-# --- Handler Debugujący (Opcjonalny - odkomentuj jeśli potrzebny) ---
+# --- Debug Handler (Optional - uncomment if needed for debugging) ---
 # async def debug_receive_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-#     """Loguje każdą przychodzącą aktualizację BARDZO wcześnie."""
+#     """Logs any incoming update VERY early."""
 #     update_type = "Unknown"; chat_id = "N/A"; user_id = "N/A"; update_id = update.update_id
 #     if update.message: update_type = "Message"; chat_id = update.message.chat.id; user_id = update.message.from_user.id if update.message.from_user else "N/A"
 #     elif update.callback_query: update_type = "CallbackQuery"; chat_id = update.callback_query.message.chat.id if update.callback_query.message else "N/A"; user_id = update.callback_query.from_user.id
+#     # ... other update types can be added ...
 #     logger.critical(f"--- !!! DEBUG: UPDATE RECEIVED !!! ID: {update_id}, Type: {update_type}, ChatID: {chat_id}, UserID: {user_id} ---")
 
-# --- Handlery Komend ---
+# --- Command Handlers ---
 HELP_TEXT = """
 Meeeow! Here are the commands you can use:
 
@@ -220,22 +233,38 @@ Meeeow! Here are the commands you can use:
 /treat - Demand treats!
 /zoomies - Witness sudden bursts of cat energy!
 /judge - Get judged by a superior feline.
-/attack [reply/@user] - Launch a playful attack! (Sim)
-/kill [reply/@user] - Metaphorically eliminate someone! (Sim)
-/punch [reply/@user] - Deliver a textual punch! (Sim)
-
-(Note: Owner cannot be targeted by attack/kill/punch)
-Owner Only Commands (Hidden): /status
+/attack [reply/@user] - Launch a playful attack!
+/kill [reply/@user] - Metaphorically eliminate someone!
+/punch [reply/@user] - Deliver a textual punch!
+/status - Owner only
 """
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    user = update.effective_user; await update.message.reply_html(f"Meow {user.mention_html()}! I'm the Meow Bot.\nUse /help to see available commands!")
-async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None: await update.message.reply_html(HELP_TEXT)
-async def send_random_text(update: Update, context: ContextTypes.DEFAULT_TYPE, text_list: list[str], list_name: str) -> None:
-    if not text_list: logger.warning(f"List '{list_name}' empty!"); await update.message.reply_text("Oops! List empty."); return
-    await update.message.reply_html(random.choice(text_list))
+    """Sends the welcome message."""
+    user = update.effective_user
+    # Use reply_html for potential formatting in the mention
+    await update.message.reply_html(
+        f"Meow {user.mention_html()}! I'm the Meow Bot.\n"
+        f"Use /help to see available commands for feline fun!"
+    )
 
-# Definicje prostych komend tekstowych
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Displays the help message."""
+    # Use reply_html as HELP_TEXT might contain basic HTML in the future
+    await update.message.reply_html(HELP_TEXT)
+
+async def send_random_text(update: Update, context: ContextTypes.DEFAULT_TYPE, text_list: list[str], list_name: str) -> None:
+    """Sends a random text from the provided list."""
+    if not text_list:
+        logger.warning(f"Text list '{list_name}' is empty!")
+        # Send plain text for this error message
+        await update.message.reply_text("Oops! The text list is empty.")
+        return
+    chosen_text = random.choice(text_list)
+    # Use reply_html to allow potential simple formatting in texts (like *)
+    await update.message.reply_html(chosen_text)
+
+# --- Simple Text Command Definitions ---
 async def meow(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None: await send_random_text(update, context, MEOW_TEXTS, "MEOW_TEXTS")
 async def nap(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None: await send_random_text(update, context, NAP_TEXTS, "NAP_TEXTS")
 async def play(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None: await send_random_text(update, context, PLAY_TEXTS, "PLAY_TEXTS")
@@ -243,77 +272,143 @@ async def treat(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None: awa
 async def zoomies(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None: await send_random_text(update, context, ZOOMIES_TEXTS, "ZOOMIES_TEXTS")
 async def judge(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None: await send_random_text(update, context, JUDGE_TEXTS, "JUDGE_TEXTS")
 
-# Publiczne komendy symulacji z ochroną właściciela
+# --- Public Simulation Commands with Owner Protection ---
+
 async def attack(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Sends an attack message (simulation), protects owner/bot."""
     if not ATTACK_TEXTS: logger.warning("List 'ATTACK_TEXTS' empty!"); await update.message.reply_text("No attack ideas."); return
+
     target_user = None; target_mention = None; target_user_id = None
+
     if update.message.reply_to_message:
         target_user = update.message.reply_to_message.from_user
-        target_user_id = target_user.id; target_mention = target_user.mention_html()
+        target_user_id = target_user.id
+        target_mention = target_user.mention_html()
+
+        # Check owner/bot protection BEFORE sending
         if target_user_id == OWNER_ID: await update.message.reply_html(random.choice(CANT_TARGET_OWNER_TEXTS)); return
         if target_user_id == context.bot.id: await update.message.reply_html(random.choice(CANT_TARGET_SELF_TEXTS)); return
-    elif context.args and context.args[0].startswith('@'): target_mention = context.args[0].strip()
-    else: await update.message.reply_text("Who to attack? Reply or use /attack @username."); return
+
+    elif context.args and context.args[0].startswith('@'):
+        target_mention = context.args[0].strip()
+        # Cannot check Owner ID for @username, so protection doesn't apply here
+        logger.info(f"Attack on {target_mention} via @username. Owner protection not available for this method.")
+    else:
+        await update.message.reply_text("Who should I attack? Reply to a message or use /attack @username.")
+        return
+
+    # Send simulation
     await update.message.reply_html(random.choice(ATTACK_TEXTS).format(target=target_mention))
 
+
 async def kill(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Sends a ban simulation message, protects owner/bot."""
     if not KILL_TEXTS: logger.warning("List 'KILL_TEXTS' empty!"); await update.message.reply_text("No 'kill' texts."); return
+
     target_user = None; target_mention = None; target_user_id = None
+
     if update.message.reply_to_message:
         target_user = update.message.reply_to_message.from_user
-        target_user_id = target_user.id; target_mention = target_user.mention_html()
+        target_user_id = target_user.id
+        target_mention = target_user.mention_html()
+
+        # Check owner/bot protection BEFORE sending
         if target_user_id == OWNER_ID: await update.message.reply_html(random.choice(CANT_TARGET_OWNER_TEXTS)); return
         if target_user_id == context.bot.id: await update.message.reply_html(random.choice(CANT_TARGET_SELF_TEXTS)); return
-    elif context.args and context.args[0].startswith('@'): target_mention = context.args[0].strip()
-    else: await update.message.reply_text("Who to 'kill'? Reply or use /kill @username."); return
+
+    elif context.args and context.args[0].startswith('@'):
+        target_mention = context.args[0].strip()
+        logger.info(f"Simulated kill on {target_mention} via @username. Owner protection not available.")
+    else:
+        await update.message.reply_text("Who should I 'kill'? Reply to a message or use /kill @username.")
+        return
+
+    # Send simulation
     await update.message.reply_html(random.choice(KILL_TEXTS).format(target=target_mention))
 
+
 async def punch(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Sends a kick simulation message, protects owner/bot."""
     if not PUNCH_TEXTS: logger.warning("List 'PUNCH_TEXTS' empty!"); await update.message.reply_text("No 'punch' texts."); return
+
     target_user = None; target_mention = None; target_user_id = None
+
     if update.message.reply_to_message:
         target_user = update.message.reply_to_message.from_user
-        target_user_id = target_user.id; target_mention = target_user.mention_html()
+        target_user_id = target_user.id
+        target_mention = target_user.mention_html()
+
+        # Check owner/bot protection BEFORE sending
         if target_user_id == OWNER_ID: await update.message.reply_html(random.choice(CANT_TARGET_OWNER_TEXTS)); return
         if target_user_id == context.bot.id: await update.message.reply_html(random.choice(CANT_TARGET_SELF_TEXTS)); return
-    elif context.args and context.args[0].startswith('@'): target_mention = context.args[0].strip()
-    else: await update.message.reply_text("Who to 'punch'? Reply or use /punch @username."); return
+
+    elif context.args and context.args[0].startswith('@'):
+        target_mention = context.args[0].strip()
+        logger.info(f"Simulated punch on {target_mention} via @username. Owner protection not available.")
+    else:
+        await update.message.reply_text("Who should I 'punch'? Reply to a message or use /punch @username.")
+        return
+
+    # Send simulation
     await update.message.reply_html(random.choice(PUNCH_TEXTS).format(target=target_mention))
 
 
-# Komenda /status (tylko właściciel)
+# --- Owner Only Functionality ---
 async def status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Wysyła wiadomość statusu (tylko właściciel)."""
+    """Sends a status message (owner only)."""
+    # Check if the user invoking the command is the owner
     user_id = update.effective_user.id
     if user_id == OWNER_ID:
         ping_ms = "N/A"
         if update.message and update.message.date:
-            try: now_utc = datetime.datetime.now(datetime.timezone.utc); msg_utc = update.message.date.astimezone(datetime.timezone.utc); ping_ms = int((now_utc - msg_utc).total_seconds() * 1000)
-            except Exception as e: logger.error(f"Błąd pingu: {e}"); ping_ms = "Error"
-        uptime_delta = datetime.datetime.now() - BOT_START_TIME; readable_uptime = get_readable_time_delta(uptime_delta)
-        status_msg = (f"<b>Purrrr! Bot Status:</b>\n— Uptime: {readable_uptime}\n— Ping: {ping_ms} ms\n— Owner: {OWNER_ID}\n— Status: Ready!")
-        logger.info(f"Właściciel ({user_id}) zażądał statusu.")
+            try:
+                # Ensure timezone awareness for accurate calculation
+                now_utc = datetime.datetime.now(datetime.timezone.utc)
+                msg_utc = update.message.date.astimezone(datetime.timezone.utc)
+                ping_delta = now_utc - msg_utc
+                ping_ms = int(ping_delta.total_seconds() * 1000)
+            except Exception as e:
+                logger.error(f"Error calculating ping: {e}")
+                ping_ms = "Error"
+
+        # Uptime calculation
+        uptime_delta = datetime.datetime.now() - BOT_START_TIME
+        readable_uptime = get_readable_time_delta(uptime_delta)
+
+        status_msg = (
+            f"<b>Purrrr! Bot Status:</b>\n"
+            f"— Uptime: {readable_uptime}\n"
+            f"— Ping: {ping_ms} ms\n"
+            f"— Owner: {OWNER_ID}\n"
+            f"— Status: Ready!"
+        )
+        logger.info(f"Owner ({user_id}) requested status.")
+        # Use reply_html as status message contains HTML tags
         await update.message.reply_html(status_msg)
     else:
-        # Odmowa, jeśli nie właściciel
-        logger.warning(f"Nieautoryzowana próba /status przez {user_id}.")
+        # Refuse if not the owner
+        logger.warning(f"Unauthorized /status attempt by user {user_id}.")
+        # Send refusal as plain text
         await update.message.reply_text(random.choice(OWNER_ONLY_REFUSAL))
 
-# --- Główna Funkcja ---
-def main() -> None:
-    """Konfiguruje i uruchamia bota Telegram."""
-    # Token i Owner ID są już wczytane globalnie.
 
-    # Budowanie aplikacji
+# --- Main Function ---
+def main() -> None:
+    """Configures and runs the Telegram bot."""
+
+    # Token and Owner ID are already loaded globally.
+    # We use the BOT_TOKEN variable here.
+
+    # Build Application
     application = Application.builder().token(BOT_TOKEN).build()
 
-    # --- Rejestracja Handlerów ---
-    # (Prosta rejestracja bez grup, bo filtrowanie /status jest w funkcji)
+    # --- Handler Registration ---
+    # Simple registration without groups (except optional debug)
 
-    # Opcjonalny Debug Handler (jeśli potrzebujesz, odkomentuj importy i tę linię)
-    # application.add_handler(MessageHandler(filters.ALL, debug_receive_handler), group=-2) # group=-2 nada mu priorytet
+    # Optional Debug Handler (uncomment imports and this line if needed)
+    # application.add_handler(MessageHandler(filters.ALL, debug_receive_handler), group=-2) # group=-2 gives it priority
 
-    # Rejestracja wszystkich komend
+    # Register all command handlers
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CommandHandler("meow", meow))
@@ -322,27 +417,31 @@ def main() -> None:
     application.add_handler(CommandHandler("treat", treat))
     application.add_handler(CommandHandler("zoomies", zoomies))
     application.add_handler(CommandHandler("judge", judge))
-    application.add_handler(CommandHandler("attack", attack)) # Publiczna symulacja
-    application.add_handler(CommandHandler("status", status)) # Publiczny, ale sprawdza ID w środku
-    application.add_handler(CommandHandler("kill", kill))     # Publiczna symulacja
-    application.add_handler(CommandHandler("punch", punch))   # Publiczna symulacja
+    application.add_handler(CommandHandler("attack", attack)) # Public simulation
+    application.add_handler(CommandHandler("status", status)) # Public, but checks ID inside
+    application.add_handler(CommandHandler("kill", kill))     # Public simulation
+    application.add_handler(CommandHandler("punch", punch))   # Public simulation
 
-    # --- Uruchomienie Bota ---
-    logger.info(f"Bot rozpoczyna polling... Owner ID: {OWNER_ID}")
+    # --- Start the Bot ---
+    logger.info(f"Bot starting polling... Owner ID: {OWNER_ID}")
     try:
+        # run_polling blocks until stopped (e.g., by Ctrl+C)
         application.run_polling()
     except KeyboardInterrupt:
-         logger.info("Bot zatrzymany przez użytkownika (Ctrl+C).")
+         logger.info("Bot stopped by user (Ctrl+C).")
     except Exception as e:
-        logger.critical(f"KRYTYCZNY: Bot uległ awarii podczas działania: {e}", exc_info=True)
-        print(f"\n--- BŁĄD KRYTYCZNY ---")
-        print(f"Bot uległ awarii: {e}")
+        # Catch any other unexpected errors during runtime
+        logger.critical(f"CRITICAL: Bot crashed during runtime: {e}", exc_info=True) # Log traceback
+        print(f"\n--- FATAL ERROR ---")
+        print(f"Bot crashed: {e}")
         exit(1)
     finally:
-        logger.info("Proces zamykania bota zainicjowany.")
+        # This block always executes after try/except finishes (e.g., after Ctrl+C)
+        logger.info("Bot shutdown process initiated.")
+        # Potential cleanup code could go here
 
-    logger.info("Bot zatrzymany.")
+    logger.info("Bot stopped.")
 
-# --- Wykonanie Skryptu ---
+# --- Script Execution ---
 if __name__ == "__main__":
     main()
