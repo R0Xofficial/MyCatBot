@@ -10,6 +10,12 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# --- Notes on Group Usage ---
+# If the bot doesn't respond to commands in groups:
+# 1. Make sure the bot is an admin or has permission to read messages.
+# 2. Try disabling 'Group Privacy' mode in @BotFather -> Bot Settings.
+#    This allows the bot to see all messages, not just commands or mentions.
+
 # --- CAT TEXTS SECTION ---
 
 # /meow texts
@@ -105,20 +111,33 @@ ATTACK_TEXTS = [
 
 # --- TEXT SECTION END ---
 
+# Help message text
+HELP_TEXT = """
+Meeeow! Here are the commands you can use:
+
+/start - Shows the welcome message.
+/help - Shows this help message.
+/meow - Get a random cat sound or phrase.
+/nap - What's on a cat's mind during naptime?
+/play - Random playful cat actions.
+/treat - Demand treats!
+/zoomies - Witness sudden bursts of cat energy!
+/judge - Get judged by a superior feline.
+/attack [optional: @username or reply] - Launch a playful attack!
+"""
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Sends a welcome message when the /start command is issued."""
     user = update.effective_user
+    # Added /help to the start message
     await update.message.reply_html(
         f"Meow {user.mention_html()}! I'm the Meow Bot.\n"
-        f"Use these commands for feline fun:\n"
-        f"/meow - Random cat sound/phrase\n"
-        f"/nap - Thoughts during a nap\n"
-        f"/play - Cat's playful actions\n"
-        f"/treat - Feed me!\n"
-        f"/zoomies - Sudden bursts of energy\n"
-        f"/judge - Cat judgments\n"
-        f"/attack - Launch a playful attack!" # Added /attack description
+        f"Use /help to see all available commands for feline fun!"
     )
+
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Displays the help message."""
+    await update.message.reply_html(HELP_TEXT) # Use reply_html because HELP_TEXT might have formatting
 
 async def send_random_text(update: Update, context: ContextTypes.DEFAULT_TYPE, text_list: list[str], list_name: str) -> None:
     """Sends a random text from the provided list."""
@@ -129,6 +148,7 @@ async def send_random_text(update: Update, context: ContextTypes.DEFAULT_TYPE, t
 
     chosen_text = random.choice(text_list)
     # Use reply_html by default for potential formatting
+    # No parse_mode needed here either
     await update.message.reply_html(chosen_text)
 
 async def meow(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -169,7 +189,8 @@ async def attack(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         target_mention = target_user.mention_html()
     # Priority 2: Argument starting with @
     elif context.args and context.args[0].startswith('@'):
-        target_mention = context.args[0] # Use the provided username text
+        # Sanitize slightly - remove potential leading/trailing spaces
+        target_mention = context.args[0].strip()
     # Priority 3: Self-attack
     else:
         target_user = update.effective_user
@@ -178,10 +199,10 @@ async def attack(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if target_mention:
         chosen_template = random.choice(ATTACK_TEXTS)
         message_text = chosen_template.format(target=target_mention)
-        # Send as HTML to properly render the mention if mention_html() was used
-        # Make sure ParseMode is imported correctly from telegram.constants
-        await update.message.reply_html(message_text, parse_mode=ParseMode.HTML)
+        # *** FIX HERE: Removed parse_mode argument ***
+        await update.message.reply_html(message_text)
     else:
+        # Fallback if target couldn't be determined (shouldn't happen with current logic)
         await update.message.reply_text("Who should I attack? Reply to someone or use /attack @username")
 
 
@@ -199,13 +220,14 @@ def main() -> None:
 
     # Registering commands
     application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("help", help_command)) # Added help handler
     application.add_handler(CommandHandler("meow", meow))
     application.add_handler(CommandHandler("nap", nap))
     application.add_handler(CommandHandler("play", play))
     application.add_handler(CommandHandler("treat", treat))
     application.add_handler(CommandHandler("zoomies", zoomies))
     application.add_handler(CommandHandler("judge", judge))
-    application.add_handler(CommandHandler("attack", attack)) # Added attack handler
+    application.add_handler(CommandHandler("attack", attack))
 
     logger.info("Starting bot...")
     application.run_polling()
