@@ -20,6 +20,8 @@ Meet **MyCatBot**, the playful and quirky cat-themed Telegram bot that will make
 
 /gif - Get a random cat GIF! 🖼️
 
+/photo - Get a random cat photo! 📷
+
 /meow - Get a random cat sound or phrase. 🔊
 
 /nap - What's on a cat's mind during naptime? 😴
@@ -43,5 +45,7 @@ Meet **MyCatBot**, the playful and quirky cat-themed Telegram bot that will make
 /bite [reply/@user] - Take a playful bite! 😬
 
 (Note: Owner cannot be targeted by attack/kill/punch/slap/bite)
-Owner Only Commands (Hidden): 
-/status
+Owner Only Commands (Hidden):
+  /status - Show bot status.
+  
+  /say [target_chat_id] [your text] - Send message as bot [target_chat_id is optional].
