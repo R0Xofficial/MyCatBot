@@ -1,10 +1,11 @@
 import logging
 import random
 import os
-import datetime # Added for uptime and ping
+import datetime
 from telegram import Update
 from telegram.constants import ParseMode
-from telegram.ext import Application, CommandHandler, ContextTypes, ApplicationHandlerStop # Added ApplicationHandlerStop
+# Corrected import line:
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, ApplicationHandlerStop
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
@@ -409,7 +410,7 @@ async def punch(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 def main() -> None:
     """Starts the bot."""
-    token = ("TELEGRAM_BOT_TOKEN")
+    token = os.getenv("TELEGRAM_BOT_TOKEN")
     if not token:
         logger.critical("CRITICAL: TELEGRAM_BOT_TOKEN environment variable not set!")
         print("\n--- ERROR ---")
@@ -424,15 +425,19 @@ def main() -> None:
     # --- Owner Only Handlers Group ---
     # Use group 0 for owner checks, run before default group (-1)
     owner_handler_group = 0
+
+    # Add the filter *before* the owner commands in the same group.
+    # It will run first for any update potentially matching the commands in this group.
+    # This uses the CORRECTLY IMPORTED MessageHandler
+    application.add_handler(MessageHandler(filters.COMMAND, owner_only_filter), group=owner_handler_group)
+
+    # Owner commands will only be reached if the filter above doesn't raise ApplicationHandlerStop
     application.add_handler(CommandHandler("status", status), group=owner_handler_group)
     application.add_handler(CommandHandler("kill", kill), group=owner_handler_group)
     application.add_handler(CommandHandler("punch", punch), group=owner_handler_group)
-    # Add the filter *before* the owner commands in the same group
-    # It will run first for any update potentially matching the commands in this group.
-    application.add_handler(MessageHandler(filters.COMMAND, owner_only_filter), group=owner_handler_group)
-
 
     # --- Public Handlers Group (default group -1) ---
+    # These run after group 0 handlers
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CommandHandler("meow", meow))
@@ -448,6 +453,5 @@ def main() -> None:
     logger.info("Bot stopped.")
 
 if __name__ == "__main__":
-    # Need to import filters for the MessageHandler
-    from telegram.ext import filters # Moved import here as it's used in main()
+    # No longer need the separate import here as it's at the top
     main()
