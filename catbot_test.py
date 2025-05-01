@@ -2,19 +2,19 @@
 # -*- coding: utf-8 -*-
 
 # --- Cat Bot - A simple Telegram bot with fun cat actions ---
-# Includes owner protection, simulation commands, and GIF fetching.
+# Includes owner protection, simulation commands, GIF/Photo fetching, and owner commands.
 # Uses environment variables for configuration (Token, Owner ID).
 
 import logging
 import random
 import os       # Required for os.getenv()
 import datetime # Required for uptime/ping
-import requests # Required for /gif command
-from telegram import Update, constants # Import constants (though ParseMode not strictly needed for reply_html)
+import requests # Required for /gif and /photo
+from telegram import Update, constants # Import constants
 from telegram.ext import Application, CommandHandler, ContextTypes
-# Optional Debug Imports (currently commented out)
+# Optional Debug Imports
 # from telegram.ext import MessageHandler, filters, ApplicationHandlerStop
-from telegram.error import TelegramError # To catch potential errors in get_chat
+from telegram.error import TelegramError # To catch potential errors
 
 # --- Logging Configuration ---
 logging.basicConfig(
@@ -41,6 +41,7 @@ try:
         OWNER_ID = int(owner_id_str)
         logger.info(f"Owner ID loaded: {OWNER_ID}")
     else:
+        # Critical error if the variable is not set
         logger.critical("CRITICAL: TELEGRAM_OWNER_ID environment variable not set!")
         print("\n--- FATAL ERROR ---")
         print("Environment variable TELEGRAM_OWNER_ID is not set.")
@@ -376,7 +377,6 @@ BITE_TEXTS = [
     "<code>OM NOM NOM</code> {target} <code>NOM</code>",
 ]
 
-
 # Refusal texts
 CANT_TARGET_OWNER_TEXTS = [
     "Meow! I can't target my Owner. They are protected by purr-power! ✨🛡️",
@@ -384,46 +384,18 @@ CANT_TARGET_OWNER_TEXTS = [
     "Nope. Not gonna do it. That's my human! ❤️",
     "Access Denied: Cannot target the supreme leader (Owner). 👑",
     "Targeting the Owner? Not in this lifetime, furball! 🙅",
-    "The human is off-limits. You’re barking up the wrong scratching post! 🌳",
-    "You can't mess with the one who controls the treat dispenser. Forbidden! 🚫🎁",
-    "The Owner is my trusted companion. Try again never! 😉",
-    "Attempting to target the Owner? Prepare for the wrath of a thousand silent judgments. 👀",
-    "I bow to my human. Can't touch them. Nope. 🙇",
-    "The sacred bond of cat and human cannot be broken by your command. Nice try.",
-    "My loyalty is unbreakable. The Owner is safe. 🔒",
-    "Not even my sharpest virtual claws can touch my human. It's the law.",
-    "My human is my one true ally. Any attacks will be met with *the stare*. <pre>stare</pre>",
 ]
 CANT_TARGET_SELF_TEXTS = [
     "Target... myself? Why would I do that? Silly human. 😹",
     "Error: Cannot target self. My paws have better things to do, like napping. 😴",
     "I refuse to engage in self-pawm. Command ignored with extreme prejudice.",
     "Targeting myself? Not even for a mountain of tuna. 🐟",
-    "Error 418: I'm a teapot... I mean, cat. Cannot self-target; it's illogical. 🤖",
-    "Self-pawing is only for the unenlightened. I choose naps instead.",
-    "I’m too fabulous to target myself. Command denied! ✨💅",
-    "My paws are for important tasks like biscuit-making and pushing things off tables, not attacking myself! 🐾",
-    "No, no, no. I am a cat of *refined* taste and dignity. Self-targeting is beneath me.",
-    "I’ve got better things to do than chase my own tail... unless I get bored later. 🤔",
-    "Self-targeting? Please. I’m already purrfect. 💯",
-    "I refuse to acknowledge such a foolish, paradoxical request. My circuits can't handle it.",
-    "My claws are reserved for more worthy targets (like dangling strings). Me, not included. 🧶",
 ]
-OWNER_ONLY_REFUSAL = [ # Needed for /status
+OWNER_ONLY_REFUSAL = [ # Needed for /status and /say
     "Meeeow! Sorry, only my designated Human can use that command. ⛔",
     "Access denied! This command requires special privileges (and possibly a secret handshake involving treats). 🤝🎁",
     "Hiss! You are not the Boss of Meow! Only <code>{OWNER_ID}</code> is! 👑", # Example using OWNER_ID
     "Purrrhaps you should ask my Owner to run this command for you? 🙏",
-    "Meow! This command is reserved for my one true human. No exceptions. 🚫",
-    "You don't have the required <i>purrmission</i> level to use that, only my Owner does. 😉",
-    "Woops! Only my human has the keys to that command. Try again... not. 🔑",
-    "Sorry, that’s above your pay grade (which is zero treats). Ask my Owner instead! 🤷",
-    "Error: Command restricted to the Owner. Beep boop. *Access denied*. 🤖",
-    "Not even close! Only my Human can make that call. ☎️",
-    "Hiss... That command is off-limits for mere mortals like you! <pre>mortals</pre>",
-    "Only my human can handle that one, thank you very much! ☕",
-    "Meow! My Owner’s the boss here. You’ll have to check with them. 👨‍💼👩‍💼",
-    "That’s classified information... for my human's eyes only! 👀",
 ]
 
 # --- END OF TEXT SECTION ---
@@ -457,6 +429,7 @@ Meeeow! 🐾 Here are the commands you can use:
 /github - Get the link to my source code! 💻
 /owner - Info about my designated human! ❤️
 /gif - Get a random cat GIF! 🖼️
+/photo - Get a random cat photo! 📷
 /meow - Get a random cat sound or phrase. 🔊
 /nap - What's on a cat's mind during naptime? 😴
 /play - Random playful cat actions. 🧶
@@ -471,7 +444,7 @@ Meeeow! 🐾 Here are the commands you can use:
 
 <i>(Note: Owner cannot be targeted by attack/kill/punch/slap/bite)</i>
 Owner Only Commands (Hidden): 
-/status
+/status, /say <message>
 """
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -495,13 +468,13 @@ async def owner_info(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
         except TelegramError as e: logger.warning(f"Could not fetch owner info for ID {OWNER_ID}: {e}. Using ID.")
         except Exception as e: logger.error(f"Unexpected error fetching owner info for {OWNER_ID}: {e}", exc_info=True)
         message = (f"My designated human, the bringer of treats 🎁 and head scratches ❤️, is:\n👤 <b>{owner_name}</b> ({owner_mention})\nThey hold the secret to the treat jar! ✨")
-        await update.message.reply_html(message, parse_mode=constants.ParseMode.HTML) # Explicitly use HTML parse mode
+        # Use parse_mode explicitly for clarity, although reply_html implies it
+        await update.message.reply_html(message, parse_mode=constants.ParseMode.HTML)
     else: logger.error("Owner info cmd called, but OWNER_ID not set!"); await update.message.reply_text("Meow? Can't find owner info!")
 
 async def send_random_text(update: Update, context: ContextTypes.DEFAULT_TYPE, text_list: list[str], list_name: str) -> None:
     """Sends a random text from the provided list."""
     if not text_list: logger.warning(f"List '{list_name}' empty!"); await update.message.reply_text("Oops! List empty."); return
-    # Using reply_html implicitly parses HTML
     await update.message.reply_html(random.choice(text_list))
 
 # Simple Text Command Definitions
@@ -578,6 +551,49 @@ async def bite(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     else: await update.message.reply_text("Who to bite? Reply or use /bite @username."); return
     await update.message.reply_html(random.choice(BITE_TEXTS).format(target=target_mention))
 
+# --- GIF and Photo Commands ---
+async def gif(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Fetches and sends a random cat GIF."""
+    API_URL = "https://api.thecatapi.com/v1/images/search?mime_types=gif&limit=1"
+    headers = {} # Add API key here if you have one
+    logger.info("Fetching random cat GIF...")
+    try:
+        response = requests.get(API_URL, headers=headers, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+        if data and isinstance(data, list) and len(data) > 0 and 'url' in data[0]:
+            gif_url = data[0]['url']
+            logger.info(f"Found GIF: {gif_url}")
+            await update.message.reply_animation(animation=gif_url, caption="Meow! A random GIF for you! 🐾🖼️")
+        else:
+            logger.warning("No GIF URL found in TheCatAPI response: %s", data)
+            await update.message.reply_text("Meow? Couldn't find a GIF now. Try later! 😿")
+    except requests.exceptions.Timeout: logger.error("Timeout fetching GIF"); await update.message.reply_text("Hiss! GIF source is slow. Try later. ⏳")
+    except requests.exceptions.RequestException as e: logger.error(f"Error fetching GIF: {e}"); await update.message.reply_text("Hiss! Couldn't connect to GIF source. 😿")
+    except (IndexError, KeyError, TypeError, ValueError) as e: logger.error(f"Error parsing GIF API response: {e}"); await update.message.reply_text("Mrow! Weird GIF data. 😵‍💫")
+    except Exception as e: logger.error(f"Unexpected /gif error: {e}", exc_info=True); await update.message.reply_text("Oops! Unexpected GIF error. 🙀")
+
+async def photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Fetches and sends a random cat photo."""
+    API_URL = "https://api.thecatapi.com/v1/images/search?limit=1&mime_types=jpg,png"
+    headers = {} # Add API key here if you have one
+    logger.info("Fetching random cat photo...")
+    try:
+        response = requests.get(API_URL, headers=headers, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+        if data and isinstance(data, list) and len(data) > 0 and 'url' in data[0]:
+            photo_url = data[0]['url']
+            logger.info(f"Found Photo: {photo_url}")
+            await update.message.reply_photo(photo=photo_url, caption="Purrfect! A random photo for you! 🐾📷")
+        else:
+            logger.warning("No photo URL found in TheCatAPI response: %s", data)
+            await update.message.reply_text("Meow? Couldn't find a photo now. Try later! 😿")
+    except requests.exceptions.Timeout: logger.error("Timeout fetching photo"); await update.message.reply_text("Hiss! Photo source is slow. Try later. ⏳")
+    except requests.exceptions.RequestException as e: logger.error(f"Error fetching photo: {e}"); await update.message.reply_text("Hiss! Couldn't connect to photo source. 😿")
+    except (IndexError, KeyError, TypeError, ValueError) as e: logger.error(f"Error parsing photo API response: {e}"); await update.message.reply_text("Mrow! Weird photo data. 😵‍💫")
+    except Exception as e: logger.error(f"Unexpected /photo error: {e}", exc_info=True); await update.message.reply_text("Oops! Unexpected photo error. 🙀")
+
 # --- Owner Only Functionality ---
 async def status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Sends a status message (owner only)."""
@@ -593,46 +609,40 @@ async def status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await update.message.reply_html(status_msg)
     else:
         logger.warning(f"Unauthorized /status attempt by user {user_id}.")
-        # Use OWNER_ONLY_REFUSAL with format - it might contain OWNER_ID placeholder
-        refusal_text = random.choice(OWNER_ONLY_REFUSAL).format(OWNER_ID=OWNER_ID) # Provide OWNER_ID for the format string
+        refusal_text = random.choice(OWNER_ONLY_REFUSAL).format(OWNER_ID=OWNER_ID)
         await update.message.reply_html(refusal_text)
 
-# --- GIF Command ---
-async def gif(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Fetches and sends a random cat GIF from TheCatAPI."""
-    API_URL = "https://api.thecatapi.com/v1/images/search?mime_types=gif&limit=1"
-    # Consider adding your TheCatAPI key here if you have one (register at thecatapi.com):
-    # API_KEY = os.getenv("THECATAPI_KEY")
-    # headers = {'x-api-key': API_KEY} if API_KEY else {}
-    headers = {} # Use empty headers if no key
-    logger.info("Fetching random cat GIF...")
+# ADDED SAY COMMAND (Owner Only)
+async def say(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Sends a message as the bot (owner only)."""
+    user = update.effective_user
+    if user.id != OWNER_ID:
+        logger.warning(f"Unauthorized /say attempt by user {user.id}.")
+        refusal_text = random.choice(OWNER_ONLY_REFUSAL).format(OWNER_ID=OWNER_ID)
+        await update.message.reply_html(refusal_text)
+        return
+
+    if not context.args:
+        await update.message.reply_text("Mrow? What should I say? Usage: /say <your message>")
+        return
+
+    message_to_say = ' '.join(context.args)
+    logger.info(f"Owner ({user.id}) is using /say in chat {update.effective_chat.id}")
     try:
-        response = requests.get(API_URL, headers=headers, timeout=10) # Add timeout
-        response.raise_for_status() # Raise HTTPError for bad responses (4xx or 5xx)
-
-        data = response.json()
-
-        if data and isinstance(data, list) and len(data) > 0 and 'url' in data[0]:
-            gif_url = data[0]['url']
-            logger.info(f"Found GIF: {gif_url}")
-            # Send the animation via URL
-            await update.message.reply_animation(animation=gif_url, caption="Meow! Here's a random GIF for you! 🐾🖼️")
-        else:
-            logger.warning("No GIF URL found in TheCatAPI response or unexpected format: %s", data)
-            await update.message.reply_text("Meow? Couldn't find a suitable GIF right now. Try again later! 😿")
-
-    except requests.exceptions.Timeout:
-        logger.error("Timeout error fetching GIF from TheCatAPI.")
-        await update.message.reply_text("Hiss! The GIF source is slow to respond. Please try again later. ⏳")
-    except requests.exceptions.RequestException as e:
-        logger.error(f"Error fetching GIF from TheCatAPI: {e}")
-        await update.message.reply_text("Hiss! Couldn't connect to the GIF source. Please try again later. 😿")
-    except (IndexError, KeyError, TypeError, ValueError) as e: # Added ValueError for json parsing errors
-        logger.error(f"Error parsing TheCatAPI response: {e}")
-        await update.message.reply_text("Mrow! The GIF data seems weird. Couldn't process it. 😵‍💫")
+        # Send message to the same chat where the command was issued
+        await context.bot.send_message(chat_id=update.effective_chat.id, text=message_to_say)
+        # Optionally, delete the owner's original /say command for cleaner appearance
+        # try:
+        #     await update.message.delete()
+        #     logger.info("Deleted owner's /say command.")
+        # except TelegramError as del_err:
+        #     logger.warning(f"Could not delete owner's /say command: {del_err}")
+    except TelegramError as e:
+        logger.error(f"Failed to send message via /say: {e}")
+        await update.message.reply_text(f"Meow! Couldn't send the message: {e}")
     except Exception as e:
-        logger.error(f"Unexpected error in /gif command: {e}", exc_info=True)
-        await update.message.reply_text("Oops! Something unexpected went wrong while getting a GIF. 🙀")
+        logger.error(f"Unexpected error in /say: {e}", exc_info=True)
+        await update.message.reply_text("Oops! Something went wrong with /say.")
 
 
 # --- Main Function ---
@@ -651,7 +661,8 @@ def main() -> None:
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CommandHandler("github", github))
     application.add_handler(CommandHandler("owner", owner_info))
-    application.add_handler(CommandHandler("gif", gif)) # Added gif handler
+    application.add_handler(CommandHandler("gif", gif))
+    application.add_handler(CommandHandler("photo", photo)) # Added photo handler
     application.add_handler(CommandHandler("meow", meow))
     application.add_handler(CommandHandler("nap", nap))
     application.add_handler(CommandHandler("play", play))
@@ -664,6 +675,7 @@ def main() -> None:
     application.add_handler(CommandHandler("punch", punch))   # Public simulation
     application.add_handler(CommandHandler("slap", slap))     # Public simulation
     application.add_handler(CommandHandler("bite", bite))     # Public simulation
+    application.add_handler(CommandHandler("say", say))       # Added say handler (owner check inside)
 
     # --- Start the Bot ---
     logger.info(f"Bot starting polling... Owner ID: {OWNER_ID}")
@@ -683,12 +695,12 @@ def main() -> None:
 
 # --- Script Execution ---
 if __name__ == "__main__":
-    # Check for requests library dependency for /gif command
+    # Check for requests library dependency
     try:
         import requests
     except ImportError:
         print("\n--- DEPENDENCY ERROR ---")
-        print("The 'requests' library is required for the /gif command.")
+        print("The 'requests' library is required for /gif and /photo commands.")
         print("Please install it using: pip install requests")
         exit(1)
     main()
