@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-# --- Cat Bot - A simple Telegram bot with fun cat actions ---
+# --- MyCatBot - A simple Telegram bot with fun cat actions ---
 # Includes owner protection, simulation commands, GIF/Photo fetching, and owner commands.
 # Uses environment variables for configuration (Token, Owner ID).
 # Tenor API Key is OPTIONAL for themed GIFs in action commands.
@@ -520,17 +520,17 @@ Meeeow! 🐾 Here are the commands you can use:
 /treat - Demand treats! 🎁
 /zoomies - Witness sudden bursts of cat energy! 💥
 /judge - Get judged by a superior feline. 🧐
-/attack [reply/@user] - Launch a playful attack! ⚔️ (Sim, +GIF if API key set)
-/kill [reply/@user] - Metaphorically eliminate someone! 💀 (Sim, +GIF if API key set)
-/punch [reply/@user] - Deliver a textual punch! 👊 (Sim, +GIF if API key set)
-/slap [reply/@user] - Administer a swift slap! 👋 (Sim, +GIF if API key set)
-/bite [reply/@user] - Take a playful bite! 😬 (Sim, +GIF if API key set)
-/hug [reply/@user] - Offer a comforting hug! 🤗 (Sim, +GIF if API key set)
+/attack [reply/@user] - Launch a playful attack! ⚔️
+/kill [reply/@user] - Metaphorically eliminate someone! 💀
+/punch [reply/@user] - Deliver a textual punch! 👊
+/slap [reply/@user] - Administer a swift slap! 👋
+/bite [reply/@user] - Take a playful bite! 😬
+/hug [reply/@user] - Offer a comforting hug! 🤗
 
 <i>(Note: Owner cannot be targeted by attack/kill/punch/slap/bite/hug)</i>
 Owner Only Commands (Hidden):
   /status - Show bot status.
-  /say [target_chat_id] <your text> - Send message as bot.
+  /say [target_chat_id] [your text] - Send message as bot.
 """
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -545,7 +545,7 @@ async def owner_info(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
             owner_chat = await context.bot.get_chat(OWNER_ID)
             owner_mention = owner_chat.mention_html(); owner_name = owner_chat.full_name or owner_chat.title or owner_name
         except Exception as e: logger.warning(f"Could not fetch owner info for ID {OWNER_ID}: {e}")
-        message = (f"My designated human is: 👤 <b>{owner_name}</b> ({owner_mention}) ❤️")
+        message = (f"My designated human, the bringer of treats 🎁 and head scratches ❤️, is:\n👤 <b>{owner_name}</b> ({owner_mention})\nThey hold the secret to the treat jar! ✨")
         await update.message.reply_html(message)
     else: logger.error("Owner info cmd called, but OWNER_ID not set!"); await update.message.reply_text("Meow? Can't find owner info!")
 
