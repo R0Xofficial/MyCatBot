@@ -1,8 +1,9 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-# --- MyCatBot - A simple Telegram bot with fun cat actions ---
-# Includes owner protection, simulation commands, GIF/Photo fetching, and owner commands.
+# --- Cat Bot - Final Version with Channel Posting Logic ---
+# Includes owner protection, simulation commands, GIF/Photo fetching, owner commands.
+# Replies in groups/private chats, sends directly to channels.
 # Uses environment variables for configuration (Token, Owner ID).
 # Tenor API Key is OPTIONAL for themed GIFs in action commands.
 
@@ -11,7 +12,9 @@ import random
 import os
 import datetime
 import requests # Needed for /gif, /photo, and OPTIONAL themed GIFs
+from typing import List, Tuple # For type hinting
 from telegram import Update, constants
+from telegram.constants import ChatType # Needed to check chat type
 from telegram.ext import Application, CommandHandler, ContextTypes
 # Optional Debug Imports
 # from telegram.ext import MessageHandler, filters, ApplicationHandlerStop
@@ -30,45 +33,28 @@ logger = logging.getLogger(__name__)
 # --- Owner ID Configuration & Bot Start Time ---
 OWNER_ID = None
 BOT_START_TIME = datetime.datetime.now()
-TENOR_API_KEY = None # Initialize as None
+TENOR_API_KEY = None
 
 # --- Load configuration from environment variables ---
 try:
-    # Load Owner ID
     owner_id_str = os.getenv("TELEGRAM_OWNER_ID")
-    if owner_id_str:
-        OWNER_ID = int(owner_id_str)
-        logger.info(f"Owner ID loaded: {OWNER_ID}")
-    else:
-        logger.critical("CRITICAL: TELEGRAM_OWNER_ID environment variable not set!")
-        print("\n--- FATAL ERROR --- \nEnvironment variable TELEGRAM_OWNER_ID is not set.")
-        exit(1)
-except ValueError:
-    logger.critical(f"CRITICAL: Invalid TELEGRAM_OWNER_ID: '{owner_id_str}'. Must be an integer.")
-    print(f"\n--- FATAL ERROR --- \nInvalid TELEGRAM_OWNER_ID: '{owner_id_str}'. Must be an integer.")
+    if owner_id_str: OWNER_ID = int(owner_id_str); logger.info(f"Owner ID loaded: {OWNER_ID}")
+    else: raise ValueError("TELEGRAM_OWNER_ID not set")
+except (ValueError, TypeError) as e:
+    logger.critical(f"CRITICAL: Invalid or missing TELEGRAM_OWNER_ID: {e}")
+    print(f"\n--- FATAL ERROR --- \nInvalid or missing TELEGRAM_OWNER_ID environment variable.")
     exit(1)
-except Exception as e:
-    logger.critical(f"CRITICAL: Unexpected error loading OWNER_ID: {e}")
-    print(f"\n--- FATAL ERROR --- \nUnexpected error loading OWNER_ID: {e}")
-    exit(1)
+except Exception as e: logger.critical(f"CRITICAL: Unexpected error loading OWNER_ID: {e}"); print(f"\n--- FATAL ERROR --- \nUnexpected error loading OWNER_ID: {e}"); exit(1)
 
-# Load Bot Token
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-if not BOT_TOKEN:
-    logger.critical("CRITICAL: TELEGRAM_BOT_TOKEN environment variable not set!")
-    print("\n--- FATAL ERROR --- \nEnvironment variable TELEGRAM_BOT_TOKEN is not set.")
-    exit(1)
+if not BOT_TOKEN: logger.critical("CRITICAL: TELEGRAM_BOT_TOKEN not set!"); print("\n--- FATAL ERROR --- \nEnvironment variable TELEGRAM_BOT_TOKEN is not set."); exit(1)
 
-# Load Tenor API Key - OPTIONAL
 TENOR_API_KEY = os.getenv("TENOR_API_KEY")
-if not TENOR_API_KEY:
-    logger.warning("WARNING: TENOR_API_KEY environment variable not set. Themed GIFs for action commands will be disabled.")
-else:
-    logger.info("Tenor API Key loaded. Themed GIFs enabled.")
+if not TENOR_API_KEY: logger.warning("WARNING: TENOR_API_KEY not set. Themed GIFs disabled.")
+else: logger.info("Tenor API Key loaded. Themed GIFs enabled.")
 
 
 # --- CAT TEXTS SECTION ---
-
 # /meow texts
 MEOW_TEXTS = [
     "Meow! 🐾", "Purrrr...", "Feed me, human! <i>Now!</i>", "Where's my nap spot? 😴", "Miaow?",
@@ -462,41 +448,23 @@ async def check_username_protection(target_mention: str, context: ContextTypes.D
     if not is_protected and OWNER_ID:
         owner_username = None
         try: owner_chat = await context.bot.get_chat(OWNER_ID); owner_username = owner_chat.username
-        except Exception as e: logger.warning(f"Could not fetch owner username: {e}")
+        except Exception as e: logger.warning(f"Could not fetch owner username for protection check: {e}")
         if owner_username and target_mention.lower() == f"@{owner_username.lower()}":
             is_protected = True; is_owner_match = True
     return is_protected, is_owner_match
 
-# --- ADDED: Helper Function to get themed GIF (Optional Key) ---
+# --- Helper Function to get themed GIF (Optional Key) ---
 async def get_themed_gif(context: ContextTypes.DEFAULT_TYPE, search_terms: list[str]) -> str | None:
     """Fetches a random GIF URL from Tenor based on search terms. Requires TENOR_API_KEY to be set."""
-    if not TENOR_API_KEY:
-        # logger.info("Tenor API key not set, skipping themed GIF search.") # Can be noisy
-        return None # Silently skip if no key
-
-    search_term = random.choice(search_terms)
-    logger.info(f"Searching Tenor for GIF: '{search_term}'")
-    url = "https://tenor.googleapis.com/v2/search"
-    params = {
-        "q": search_term,
-        "key": TENOR_API_KEY,
-        "client_key": "my_cat_bot_project_py", # Client key identifies your app
-        "limit": 8, # Fetch a few results to choose from
-        "media_filter": "gif",
-        "contentfilter": "medium", # Adjust as needed
-        "random": "true"
-    }
+    if not TENOR_API_KEY: return None # Silently skip if no key
+    search_term = random.choice(search_terms); logger.info(f"Searching Tenor for GIF: '{search_term}'")
+    url = "https://tenor.googleapis.com/v2/search"; params = {"q": search_term, "key": TENOR_API_KEY, "client_key": "my_cat_bot_project_py", "limit": 8, "media_filter": "gif", "contentfilter": "medium", "random": "true"}
     try:
-        response = requests.get(url, params=params, timeout=5)
-        response.raise_for_status()
-        data = response.json()
+        response = requests.get(url, params=params, timeout=5); response.raise_for_status(); data = response.json()
         results = data.get("results")
         if results:
-            selected_gif = random.choice(results)
-            gif_url = selected_gif.get("media_formats", {}).get("gif", {}).get("url")
-            if gif_url:
-                logger.info(f"Found themed GIF URL: {gif_url}")
-                return gif_url
+            selected_gif = random.choice(results); gif_url = selected_gif.get("media_formats", {}).get("gif", {}).get("url")
+            if gif_url: logger.info(f"Found themed GIF URL: {gif_url}"); return gif_url
             else: logger.warning("Could not extract GIF URL from Tenor item.")
         else: logger.warning(f"No results found on Tenor for '{search_term}'.")
     except requests.exceptions.Timeout: logger.error("Timeout fetching GIF from Tenor.")
@@ -527,6 +495,7 @@ Meeeow! 🐾 Here are the commands you can use:
 /bite [reply/@user] - Take a playful bite! 😬
 /hug [reply/@user] - Offer a comforting hug! 🤗
 
+<i>(* Themed GIFs require a TENOR_API_KEY to be configured by the bot owner)</i>
 <i>(Note: Owner cannot be targeted by attack/kill/punch/slap/bite/hug)</i>
 Owner Only Commands (Hidden):
   /status - Show bot status.
@@ -534,11 +503,17 @@ Owner Only Commands (Hidden):
 """
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    user = update.effective_user; await update.message.reply_html(f"Meow {user.mention_html()}! I'm the Meow Bot. 🐾\nUse /help to see available commands!")
-async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None: await update.message.reply_html(HELP_TEXT, disable_web_page_preview=True)
+    """Sends the welcome message."""
+    user = update.effective_user
+    await update.message.reply_html(f"Meow {user.mention_html()}! I'm the Meow Bot. 🐾\nUse /help to see available commands!")
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Displays the help message."""
+    await update.message.reply_html(HELP_TEXT, disable_web_page_preview=True)
 async def github(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    github_link = "https://github.com/R0Xofficial/MyCatbot"; await update.message.reply_text(f"Meeeow! I'm open source! 💻 Find my code:\n{github_link}", disable_web_page_preview=True)
+    """Sends the link to the GitHub repository."""
+    github_link = "https://github.com/R0Xofficial/MyCatbot"; await update.message.reply_text(f"Meeeow! I'm open source! 💻 Here my code: {github_link}", disable_web_page_preview=True)
 async def owner_info(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Displays information about the bot's owner."""
     if OWNER_ID:
         owner_mention = f"<code>{OWNER_ID}</code>"; owner_name = "My Esteemed Human"
         try:
@@ -550,8 +525,17 @@ async def owner_info(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     else: logger.error("Owner info cmd called, but OWNER_ID not set!"); await update.message.reply_text("Meow? Can't find owner info!")
 
 async def send_random_text(update: Update, context: ContextTypes.DEFAULT_TYPE, text_list: list[str], list_name: str) -> None:
-    if not text_list: logger.warning(f"List '{list_name}' empty!"); await update.message.reply_text("Oops! List empty."); return
-    await update.message.reply_html(random.choice(text_list))
+    """Sends a random text, replying or sending directly based on chat type."""
+    if not text_list: logger.warning(f"List '{list_name}' empty!"); await update.message.reply_text("Oops! List empty."); return # Reply error
+    chosen_text = random.choice(text_list)
+    chat_id = update.effective_chat.id
+    try:
+        if update.effective_chat.type == ChatType.CHANNEL:
+            logger.info(f"Sending text to channel {chat_id}")
+            await context.bot.send_message(chat_id=chat_id, text=chosen_text, parse_mode=constants.ParseMode.HTML)
+        else:
+            await update.message.reply_html(chosen_text)
+    except Exception as e: logger.error(f"Failed to send/reply text for {list_name}: {e}")
 
 # Simple Text Command Definitions
 async def meow(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None: await send_random_text(update, context, MEOW_TEXTS, "MEOW_TEXTS")
@@ -571,14 +555,16 @@ async def _handle_action_command(
     target_required_msg: str,
     hug_command: bool = False
 ):
-    """Handles common logic for simulation commands with optional GIFs."""
+    """Handles common logic for simulation commands with optional GIFs and channel sending."""
     if not action_texts:
         logger.warning(f"List '{command_name.upper()}_TEXTS' empty!")
         await update.message.reply_text(f"No '{command_name}' texts.")
         return
 
     target_mention = None; is_protected = False; is_owner = False
+    target_required = True # Assume target needed unless reply/mention found
 
+    # Determine target and check protection
     if update.message.reply_to_message:
         target_user = update.message.reply_to_message.from_user
         is_protected = await check_target_protection(target_user.id, context); is_owner = (target_user.id == OWNER_ID)
@@ -587,7 +573,7 @@ async def _handle_action_command(
                            (CANT_TARGET_OWNER_TEXTS if is_owner else CANT_TARGET_SELF_TEXTS)
             await update.message.reply_html(random.choice(refusal_list)); return
         target_mention = target_user.mention_html()
-
+        target_required = False
     elif context.args and context.args[0].startswith('@'):
         target_mention = context.args[0].strip()
         is_protected, is_owner = await check_username_protection(target_mention, context)
@@ -595,23 +581,40 @@ async def _handle_action_command(
              refusal_list = (CANT_TARGET_OWNER_HUG_TEXTS if is_owner else CANT_TARGET_SELF_HUG_TEXTS) if hug_command else \
                            (CANT_TARGET_OWNER_TEXTS if is_owner else CANT_TARGET_SELF_TEXTS)
              await update.message.reply_html(random.choice(refusal_list)); return
-    else:
+        target_required = False
+
+    if target_required:
         await update.message.reply_text(target_required_msg); return
 
+    # Get themed GIF and simulation text
     gif_url = await get_themed_gif(context, gif_search_terms)
     message_text = random.choice(action_texts).format(target=target_mention)
+    chat_id = update.effective_chat.id
 
+    # Send reply/message
     try:
+        is_channel = update.effective_chat.type == ChatType.CHANNEL
         if gif_url:
-            await update.message.reply_animation(animation=gif_url, caption=message_text, parse_mode=constants.ParseMode.HTML)
+            if is_channel:
+                await context.bot.send_animation(chat_id=chat_id, animation=gif_url, caption=message_text, parse_mode=constants.ParseMode.HTML)
+            else:
+                await update.message.reply_animation(animation=gif_url, caption=message_text, parse_mode=constants.ParseMode.HTML)
         else:
-            await update.message.reply_html(message_text)
+            if is_channel:
+                await context.bot.send_message(chat_id=chat_id, text=message_text, parse_mode=constants.ParseMode.HTML)
+            else:
+                await update.message.reply_html(message_text)
     except TelegramError as e:
-        logger.error(f"Error sending {command_name} reply: {e}. Falling back to text.")
-        try: await update.message.reply_html(message_text) # Fallback to text
-        except Exception as fallback_e: logger.error(f"Fallback text reply also failed: {fallback_e}")
+        logger.error(f"Error sending {command_name} reply/message to {chat_id}: {e}. Falling back to text reply if possible.")
+        if not is_channel: # Only try fallback reply if not channel
+            try: await update.message.reply_html(message_text)
+            except Exception as fallback_e: logger.error(f"Fallback text reply also failed: {fallback_e}")
+        else: logger.warning(f"Cannot send fallback text to channel {chat_id} after error.")
+    except Exception as e:
+        logger.error(f"Unexpected error in _handle_action_command for {command_name}: {e}", exc_info=True)
 
-# --- Public Simulation Commands Definitions ---
+
+# Public Simulation Commands Definitions (use the modified helper)
 async def attack(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await _handle_action_command(update, context, ATTACK_TEXTS, ["cat attack", "cat pounce", "cat fight", "cat play fight"], "attack", "Who to attack? Reply or use /attack @username.")
 async def kill(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -625,35 +628,56 @@ async def bite(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def hug(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await _handle_action_command(update, context, HUG_TEXTS, ["cat hug", "cat cuddle"], "hug", "Who to hug? Reply or use /hug @username.", hug_command=True)
 
-# --- GIF and Photo Commands ---
+
+# --- GIF and Photo Commands (Modified for Channel Sending) ---
 async def gif(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Fetches and sends a random cat GIF, directly to channels."""
     API_URL = "https://api.thecatapi.com/v1/images/search?mime_types=gif&limit=1"; headers = {}
     logger.info("Fetching random cat GIF...")
+    chat_id = update.effective_chat.id
+    is_channel = update.effective_chat.type == ChatType.CHANNEL
     try:
         response = requests.get(API_URL, headers=headers, timeout=10); response.raise_for_status(); data = response.json()
         if data and isinstance(data, list) and len(data) > 0 and 'url' in data[0]:
             gif_url = data[0]['url']; logger.info(f"Found GIF: {gif_url}")
-            await update.message.reply_animation(animation=gif_url, caption="Meow! A random GIF for you! 🐾🖼️")
-        else: logger.warning("No GIF URL found: %s", data); await update.message.reply_text("Meow? Couldn't find a GIF now. 😿")
-    except requests.exceptions.Timeout: logger.error("Timeout fetching GIF"); await update.message.reply_text("Hiss! GIF source is slow. ⏳")
-    except requests.exceptions.RequestException as e: logger.error(f"Error fetching GIF: {e}"); await update.message.reply_text("Hiss! Couldn't connect to GIF source. 😿")
-    except Exception as e: logger.error(f"Error processing GIF: {e}", exc_info=True); await update.message.reply_text("Mrow! Weird GIF data. 😵‍💫")
+            caption = "Meow! A random GIF for you! 🐾🖼️"
+            if is_channel: await context.bot.send_animation(chat_id=chat_id, animation=gif_url, caption=caption)
+            else: await update.message.reply_animation(animation=gif_url, caption=caption)
+        else:
+            logger.warning("No GIF URL found: %s", data);
+            error_message = "Meow? Couldn't find a GIF now. 😿"
+            if is_channel: await context.bot.send_message(chat_id=chat_id, text=error_message)
+            else: await update.message.reply_text(error_message)
+    except requests.exceptions.Timeout: logger.error("Timeout fetching GIF"); await context.bot.send_message(chat_id=chat_id, text="Hiss! GIF source is slow. ⏳") if is_channel else await update.message.reply_text("Hiss! GIF source is slow. ⏳")
+    except requests.exceptions.RequestException as e: logger.error(f"Error fetching GIF: {e}"); await context.bot.send_message(chat_id=chat_id, text="Hiss! Couldn't connect to GIF source. 😿") if is_channel else await update.message.reply_text("Hiss! Couldn't connect to GIF source. 😿")
+    except Exception as e: logger.error(f"Error processing GIF: {e}", exc_info=True); await context.bot.send_message(chat_id=chat_id, text="Mrow! Weird GIF data. 😵‍💫") if is_channel else await update.message.reply_text("Mrow! Weird GIF data. 😵‍💫")
 
 async def photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Fetches and sends a random cat photo, directly to channels."""
     API_URL = "https://api.thecatapi.com/v1/images/search?limit=1&mime_types=jpg,png"; headers = {}
     logger.info("Fetching random cat photo...")
+    chat_id = update.effective_chat.id
+    is_channel = update.effective_chat.type == ChatType.CHANNEL
     try:
         response = requests.get(API_URL, headers=headers, timeout=10); response.raise_for_status(); data = response.json()
         if data and isinstance(data, list) and len(data) > 0 and 'url' in data[0]:
             photo_url = data[0]['url']; logger.info(f"Found Photo: {photo_url}")
-            await update.message.reply_photo(photo=photo_url, caption="Purrfect! A random photo for you! 🐾📷")
-        else: logger.warning("No photo URL found: %s", data); await update.message.reply_text("Meow? Couldn't find a photo now. 😿")
-    except requests.exceptions.Timeout: logger.error("Timeout fetching photo"); await update.message.reply_text("Hiss! Photo source is slow. ⏳")
-    except requests.exceptions.RequestException as e: logger.error(f"Error fetching photo: {e}"); await update.message.reply_text("Hiss! Couldn't connect to photo source. 😿")
-    except Exception as e: logger.error(f"Error processing photo: {e}", exc_info=True); await update.message.reply_text("Mrow! Weird photo data. 😵‍💫")
+            caption = "Purrfect! A random photo for you! 🐾📷"
+            if is_channel: await context.bot.send_photo(chat_id=chat_id, photo=photo_url, caption=caption)
+            else: await update.message.reply_photo(photo=photo_url, caption=caption)
+        else:
+            logger.warning("No photo URL found: %s", data);
+            error_message = "Meow? Couldn't find a photo now. 😿"
+            if is_channel: await context.bot.send_message(chat_id=chat_id, text=error_message)
+            else: await update.message.reply_text(error_message)
+    except requests.exceptions.Timeout: logger.error("Timeout fetching photo"); await context.bot.send_message(chat_id=chat_id, text="Hiss! Photo source is slow. ⏳") if is_channel else await update.message.reply_text("Hiss! Photo source is slow. ⏳")
+    except requests.exceptions.RequestException as e: logger.error(f"Error fetching photo: {e}"); await context.bot.send_message(chat_id=chat_id, text="Hiss! Couldn't connect to photo source. 😿") if is_channel else await update.message.reply_text("Hiss! Couldn't connect to photo source. 😿")
+    except Exception as e: logger.error(f"Error processing photo: {e}", exc_info=True); await context.bot.send_message(chat_id=chat_id, text="Mrow! Weird photo data. 😵‍💫") if is_channel else await update.message.reply_text("Mrow! Weird photo data. 😵‍💫")
+
 
 # --- Owner Only Functionality ---
 async def status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Sends a status message (owner only). Replies always."""
     user_id = update.effective_user.id
     if user_id == OWNER_ID:
         ping_ms = "N/A"
@@ -663,16 +687,17 @@ async def status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         uptime_delta = datetime.datetime.now() - BOT_START_TIME; readable_uptime = get_readable_time_delta(uptime_delta)
         status_msg = (f"<b>Purrrr! Bot Status:</b> ✨\n— Uptime: {readable_uptime} 🕰️\n— Ping: {ping_ms} ms 📶\n— Owner ID: <code>{OWNER_ID}</code> 👑\n— Status: Ready & Purring! 🐾")
         logger.info(f"Owner ({user_id}) requested status.")
-        await update.message.reply_html(status_msg)
+        await update.message.reply_html(status_msg) # Status always replies to owner
     else:
         logger.warning(f"Unauthorized /status attempt by user {user_id}.")
         owner_mention = f"<code>{OWNER_ID}</code>"
         try: owner_chat = await context.bot.get_chat(OWNER_ID); owner_mention = owner_chat.mention_html()
         except: pass
         refusal_text = random.choice(OWNER_ONLY_REFUSAL).format(OWNER_ID=OWNER_ID, owner_mention=owner_mention)
-        await update.message.reply_html(refusal_text)
+        await update.message.reply_html(refusal_text) # Refusal always replies
 
 async def say(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Sends a message as the bot (owner only). Can target specific chat ID."""
     user = update.effective_user
     if user.id != OWNER_ID:
         logger.warning(f"Unauthorized /say attempt by user {user.id}.")
@@ -680,7 +705,7 @@ async def say(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         try: owner_chat = await context.bot.get_chat(OWNER_ID); owner_mention = owner_chat.mention_html()
         except: pass
         refusal_text = random.choice(OWNER_ONLY_REFUSAL).format(OWNER_ID=OWNER_ID, owner_mention=owner_mention)
-        await update.message.reply_html(refusal_text); return
+        await update.message.reply_html(refusal_text); return # Reply refusal
 
     args = context.args
     if not args: await update.message.reply_text("Usage: /say [optional_chat_id] <your message>"); return
@@ -688,7 +713,7 @@ async def say(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     target_chat_id = update.effective_chat.id; message_to_say_list = args; is_remote_send = False
     try:
         potential_chat_id = int(args[0])
-        if len(args[0]) > 4 or potential_chat_id < 0:
+        if len(args[0]) > 4 or potential_chat_id < 0: # Basic check for potential ID format
             if len(args) > 1:
                 target_chat_id = potential_chat_id; message_to_say_list = args[1:]; is_remote_send = True
                 logger.info(f"Owner intends remote send to chat ID: {target_chat_id}")
@@ -702,8 +727,13 @@ async def say(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     try:
         await context.bot.send_message(chat_id=target_chat_id, text=message_to_say)
         if is_remote_send: await update.message.reply_text(f"✅ Message sent to <code>{target_chat_id}</code>.", parse_mode=constants.ParseMode.HTML, quote=False)
+        # Consider deleting owner's command only if NOT remote send? Or never delete?
+        # elif update.effective_chat.type != ChatType.PRIVATE: # Maybe delete only in groups?
+        #    try: await update.message.delete(); logger.info("Deleted owner's /say command.")
+        #    except Exception as del_err: logger.warning(f"Could not delete owner's /say command: {del_err}")
     except TelegramError as e: logger.error(f"Failed /say to {target_chat_id}: {e}"); await update.message.reply_text(f"😿 Couldn't send to <code>{target_chat_id}</code>: {e}", parse_mode=constants.ParseMode.HTML)
     except Exception as e: logger.error(f"Unexpected /say error: {e}", exc_info=True); await update.message.reply_text("Oops! Unexpected /say error.")
+
 
 # --- Main Function ---
 def main() -> None:
