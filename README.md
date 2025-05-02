@@ -11,9 +11,11 @@ Meet **MyCatBot**, the playful and quirky cat-themed Telegram bot that will make
 
 ## How to run
 
-1. Set your environment in env.sh
+1. Run **pip install -r requirements.txt**
 
-2. Run this command:
+2. Set your environment in env.sh
+
+3. Run this command:
 
 **cd ~/catbot && . ./env.sh && python catbot.py**
 
