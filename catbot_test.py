@@ -1406,27 +1406,45 @@ async def greet_owner_on_bot_add(update: Update, context: ContextTypes.DEFAULT_T
     if not OWNER_ID or not update.message or not update.message.new_chat_members: return
     if update.effective_chat.type not in [ChatType.GROUP, ChatType.SUPERGROUP]: return
 
-    bot_was_added = any(member.id == context.bot.id for member in update.message.new_chat_members)
+    # Sprawdź, czy bot został dodany
+    bot_id = context.bot.id
+    bot_was_added = any(member.id == bot_id for member in update.message.new_chat_members)
+
     if bot_was_added:
         chat = update.effective_chat; chat_id = chat.id
         logger.info(f"Bot was added to chat {chat_id} ('{chat.title}')")
-        # --- CORRECTED try...except ---
+
+        # Spróbuj sprawdzić status właściciela
         try:
+            logger.info(f"Checking status for OWNER_ID {OWNER_ID} in chat {chat_id}...")
             owner_member = await context.bot.get_chat_member(chat_id, OWNER_ID)
+            # --- DODANO LOGOWANIE STATUSU ---
+            logger.info(f"Owner status check result: Status='{owner_member.status}', User='{owner_member.user.id}'")
+            # --- KONIEC LOGOWANIA ---
+
             if owner_member.status in [ChatMemberStatus.MEMBER, ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.OWNER]:
-                logger.info(f"Owner {OWNER_ID} is already in chat {chat_id}. Sending welcome.")
+                logger.info(f"Owner {OWNER_ID} is an active member in chat {chat_id}. Sending welcome.")
                 owner_mention = owner_member.user.mention_html()
                 chat_title = chat.title if chat.title else "this group"
                 welcome_text = random.choice(BOT_ADDED_OWNER_WELCOME_TEXTS).format(owner_mention=owner_mention, chat_title=chat_title)
-                # Send message directly, do not reply to system message
-                await context.bot.send_message(chat_id=chat_id, text=welcome_text, parse_mode=constants.ParseMode.HTML)
-            else: logger.info(f"Owner {OWNER_ID} not active member in chat {chat_id} (Status: {owner_member.status}).")
+                # --- Dodano try...except wokół wysyłania ---
+                try:
+                    await context.bot.send_message(chat_id=chat_id, text=welcome_text, parse_mode=constants.ParseMode.HTML)
+                except Exception as send_e:
+                    logger.error(f"Failed to send bot-add welcome message to {chat_id}: {send_e}")
+                # --- Koniec try...except ---
+            else:
+                 logger.info(f"Owner {OWNER_ID} not active member in chat {chat_id} (Status: {owner_member.status}). No welcome sent.")
+
         except BadRequest as e:
-            if "user not found" in str(e).lower(): logger.info(f"Owner {OWNER_ID} not found in chat {chat_id}.")
-            else: logger.error(f"BadRequest checking owner status in {chat_id}: {e}")
-        except TelegramError as e: logger.error(f"TelegramError checking owner status in {chat_id}: {e}")
-        except Exception as e: logger.error(f"Unexpected error checking owner status in {chat_id}: {e}", exc_info=True)
-        # --- END CORRECTION ---
+            if "user not found" in str(e).lower():
+                logger.info(f"Owner {OWNER_ID} not found in chat {chat_id} when bot was added.")
+            else:
+                 logger.error(f"BadRequest checking owner status in {chat_id}: {e}")
+        except TelegramError as e:
+            logger.error(f"TelegramError checking owner status in {chat_id}: {e}")
+        except Exception as e:
+            logger.error(f"Unexpected error checking owner status in {chat_id}: {e}", exc_info=True)
 
 # --- Main Function ---
 def main() -> None:
