@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-# --- MyCatBot - Final Version (ALL Syntax Errors Fixed) ---
+# --- Cat Bot - Final Version (ALL Syntax Errors Fixed) ---
 # Includes owner protection, simulation commands, GIF/Photo fetching, owner commands,
 # and special welcome for the owner joining a group.
 # Uses environment variables for configuration (Token, Owner ID).
@@ -14,7 +14,7 @@ import datetime
 import requests # Needed for /gif, /photo, and OPTIONAL themed GIFs
 from typing import List, Tuple # For type hinting
 from telegram import Update, constants
-from telegram.constants import ChatType # Needed to check chat type
+from telegram.constants import ChatType, ChatMemberStatus # Added ChatMemberStatus
 # Import necessary components
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 # Optional Debug Imports
@@ -1130,8 +1130,13 @@ async def check_username_protection(target_mention: str, context: ContextTypes.D
     if bot_username and target_mention.lower() == f"@{bot_username.lower()}": is_protected = True
     if not is_protected and OWNER_ID:
         owner_username = None
-        try: owner_chat = await context.bot.get_chat(OWNER_ID); owner_username = owner_chat.username
-        except Exception as e: logger.warning(f"Could not fetch owner username: {e}")
+        # --- CORRECTED try...except ---
+        try:
+            owner_chat = await context.bot.get_chat(OWNER_ID)
+            owner_username = owner_chat.username
+        except Exception as e:
+            logger.warning(f"Could not fetch owner username: {e}")
+        # --- END CORRECTION ---
         if owner_username and target_mention.lower() == f"@{owner_username.lower()}":
             is_protected = True; is_owner_match = True
     return is_protected, is_owner_match
@@ -1140,6 +1145,7 @@ async def get_themed_gif(context: ContextTypes.DEFAULT_TYPE, search_terms: list[
     if not TENOR_API_KEY: return None
     search_term = random.choice(search_terms); logger.info(f"Searching Tenor: '{search_term}'")
     url = "https://tenor.googleapis.com/v2/search"; params = {"q": search_term, "key": TENOR_API_KEY, "client_key": "my_cat_bot_project_py", "limit": 8, "media_filter": "gif", "contentfilter": "medium", "random": "true"}
+    # --- CORRECTED try...except ---
     try:
         response = requests.get(url, params=params, timeout=5); response.raise_for_status(); data = response.json()
         results = data.get("results")
@@ -1151,6 +1157,7 @@ async def get_themed_gif(context: ContextTypes.DEFAULT_TYPE, search_terms: list[
     except requests.exceptions.Timeout: logger.error("Timeout fetching GIF from Tenor.")
     except requests.exceptions.RequestException as e: logger.error(f"Error fetching GIF from Tenor: {e}")
     except Exception as e: logger.error(f"Unexpected error in get_themed_gif: {e}", exc_info=True)
+    # --- END CORRECTION ---
     return None
 
 # --- Command Handlers ---
@@ -1263,7 +1270,6 @@ async def _handle_action_command(
             logger.error(f"Fallback text reply also failed for {command_name}: {fallback_e}")
     # --- END OF CORRECTION in _handle_action_command ---
 
-
 # Public Simulation Commands Definitions
 async def attack(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None: await _handle_action_command(update, context, ATTACK_TEXTS, ["cat attack", "cat pounce", "cat fight"], "attack", True, "Who to attack? Reply or use /attack @username.")
 async def kill(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None: await _handle_action_command(update, context, KILL_TEXTS, ["cat angry", "cat evil", "cat hiss"], "kill", True, "Who to 'kill'? Reply or use /kill @username.")
@@ -1363,11 +1369,17 @@ async def say(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not message_to_say: await update.message.reply_text("Mrow? Cannot send empty message!"); return
 
     logger.info(f"Owner ({user.id}) using /say. Target: {target_chat_id}. Msg: '{message_to_say[:50]}...'")
+    # --- CORRECTED try...except ---
     try:
         await context.bot.send_message(chat_id=target_chat_id, text=message_to_say)
         if is_remote_send: await update.message.reply_text(f"✅ Sent to <code>{target_chat_id}</code>.", parse_mode=constants.ParseMode.HTML, quote=False)
-    except TelegramError as e: logger.error(f"Failed /say to {target_chat_id}: {e}"); await update.message.reply_text(f"😿 Couldn't send to <code>{target_chat_id}</code>: {e}", parse_mode=constants.ParseMode.HTML)
-    except Exception as e: logger.error(f"Unexpected /say error: {e}", exc_info=True); await update.message.reply_text("Oops! Unexpected /say error.")
+    except TelegramError as e:
+        logger.error(f"Failed /say to {target_chat_id}: {e}")
+        await update.message.reply_text(f"😿 Couldn't send to <code>{target_chat_id}</code>: {e}", parse_mode=constants.ParseMode.HTML)
+    except Exception as e:
+        logger.error(f"Unexpected /say error: {e}", exc_info=True)
+        await update.message.reply_text("Oops! Unexpected /say error.")
+    # --- END CORRECTION ---
 
 # Handler for welcoming the owner when THEY join
 async def welcome_owner(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -1404,6 +1416,7 @@ async def greet_owner_on_bot_add(update: Update, context: ContextTypes.DEFAULT_T
                 owner_mention = owner_member.user.mention_html()
                 chat_title = chat.title if chat.title else "this group"
                 welcome_text = random.choice(BOT_ADDED_OWNER_WELCOME_TEXTS).format(owner_mention=owner_mention, chat_title=chat_title)
+                # Send message directly, do not reply to system message
                 await context.bot.send_message(chat_id=chat_id, text=welcome_text, parse_mode=constants.ParseMode.HTML)
             else: logger.info(f"Owner {OWNER_ID} not active member in chat {chat_id} (Status: {owner_member.status}).")
         except BadRequest as e:
