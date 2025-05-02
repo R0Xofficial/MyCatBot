@@ -17,6 +17,10 @@ Meet **MyCatBot**, the playful and quirky cat-themed Telegram bot that will make
 
 **cd ~/catbot && . ./env.sh && python catbot.py**
 
+If you want run test do this command
+
+**cd ~/catbot && . ./env.sh && python catbot_test.py**
+
 ## Commands
 /start - Shows the welcome message. ✨
 
