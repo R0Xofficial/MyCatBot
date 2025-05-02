@@ -48,6 +48,8 @@ If you want run test do this command
 
 /judge - Get judged by a superior feline. 🧐
 
+/fed - I just ate, thank you! 😋
+
 /attack [reply/@user] - Launch a playful attack! ⚔️
 
 /kill [reply/@user] - Metaphorically eliminate someone! 💀
