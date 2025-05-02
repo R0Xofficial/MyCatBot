@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-# --- Cat Bot - Final Version with Channel Posting Logic ---
+# --- MyCatBot - Final Version with Channel Posting Logic ---
 # Includes owner protection, simulation commands, GIF/Photo fetching, owner commands.
 # Replies in groups/private chats, sends directly to channels.
 # Uses environment variables for configuration (Token, Owner ID).
