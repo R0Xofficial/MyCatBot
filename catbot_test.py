@@ -1,9 +1,8 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-# --- MyCatBot - Final Version with Channel Posting Logic ---
-# Includes owner protection, simulation commands, GIF/Photo fetching, owner commands.
-# Replies in groups/private chats, sends directly to channels.
+# --- MyCatBot - A simple Telegram bot with fun cat actions ---
+# Includes owner protection, simulation commands, GIF/Photo fetching, and owner commands.
 # Uses environment variables for configuration (Token, Owner ID).
 # Tenor API Key is OPTIONAL for themed GIFs in action commands.
 
@@ -12,9 +11,7 @@ import random
 import os
 import datetime
 import requests # Needed for /gif, /photo, and OPTIONAL themed GIFs
-from typing import List, Tuple # For type hinting
 from telegram import Update, constants
-from telegram.constants import ChatType # Needed to check chat type
 from telegram.ext import Application, CommandHandler, ContextTypes
 # Optional Debug Imports
 # from telegram.ext import MessageHandler, filters, ApplicationHandlerStop
@@ -33,29 +30,46 @@ logger = logging.getLogger(__name__)
 # --- Owner ID Configuration & Bot Start Time ---
 OWNER_ID = None
 BOT_START_TIME = datetime.datetime.now()
-TENOR_API_KEY = None
+TENOR_API_KEY = None # Initialize as None
 
 # --- Load configuration from environment variables ---
 try:
+    # Load Owner ID
     owner_id_str = os.getenv("TELEGRAM_OWNER_ID")
-    if owner_id_str: OWNER_ID = int(owner_id_str); logger.info(f"Owner ID loaded: {OWNER_ID}")
-    else: raise ValueError("TELEGRAM_OWNER_ID not set")
-except (ValueError, TypeError) as e:
-    logger.critical(f"CRITICAL: Invalid or missing TELEGRAM_OWNER_ID: {e}")
-    print(f"\n--- FATAL ERROR --- \nInvalid or missing TELEGRAM_OWNER_ID environment variable.")
+    if owner_id_str:
+        OWNER_ID = int(owner_id_str)
+        logger.info(f"Owner ID loaded: {OWNER_ID}")
+    else:
+        logger.critical("CRITICAL: TELEGRAM_OWNER_ID environment variable not set!")
+        print("\n--- FATAL ERROR --- \nEnvironment variable TELEGRAM_OWNER_ID is not set.")
+        exit(1)
+except ValueError:
+    logger.critical(f"CRITICAL: Invalid TELEGRAM_OWNER_ID: '{owner_id_str}'. Must be an integer.")
+    print(f"\n--- FATAL ERROR --- \nInvalid TELEGRAM_OWNER_ID: '{owner_id_str}'. Must be an integer.")
     exit(1)
-except Exception as e: logger.critical(f"CRITICAL: Unexpected error loading OWNER_ID: {e}"); print(f"\n--- FATAL ERROR --- \nUnexpected error loading OWNER_ID: {e}"); exit(1)
+except Exception as e:
+    logger.critical(f"CRITICAL: Unexpected error loading OWNER_ID: {e}")
+    print(f"\n--- FATAL ERROR --- \nUnexpected error loading OWNER_ID: {e}")
+    exit(1)
 
+# Load Bot Token
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-if not BOT_TOKEN: logger.critical("CRITICAL: TELEGRAM_BOT_TOKEN not set!"); print("\n--- FATAL ERROR --- \nEnvironment variable TELEGRAM_BOT_TOKEN is not set."); exit(1)
+if not BOT_TOKEN:
+    logger.critical("CRITICAL: TELEGRAM_BOT_TOKEN environment variable not set!")
+    print("\n--- FATAL ERROR --- \nEnvironment variable TELEGRAM_BOT_TOKEN is not set.")
+    exit(1)
 
+# Load Tenor API Key - OPTIONAL
 TENOR_API_KEY = os.getenv("TENOR_API_KEY")
-if not TENOR_API_KEY: logger.warning("WARNING: TENOR_API_KEY not set. Themed GIFs disabled.")
-else: logger.info("Tenor API Key loaded. Themed GIFs enabled.")
+if not TENOR_API_KEY:
+    logger.warning("WARNING: TENOR_API_KEY environment variable not set. Themed GIFs for action commands will be disabled.")
+else:
+    logger.info("Tenor API Key loaded. Themed GIFs enabled.")
 
 
 # --- CAT TEXTS SECTION ---
-# /meow texts
+
+# /meow texts - General cat noises and behaviors
 MEOW_TEXTS = [
     "Meow! 🐾", "Purrrr...", "Feed me, human! <i>Now!</i>", "Where's my nap spot? 😴", "Miaow?",
     "I require pets. *Immediately*. ✨", "Is that... tuna? 🐟", "Staring intently... 👀",
@@ -85,330 +99,926 @@ MEOW_TEXTS = [
     "Silently plotting your next nap spot invasion.", "Attack the foot. Retreat. Repeat. ⚔️",
     "Is the food bowl half empty or half full? Either way, MORE! 🍽️",
     "My elegance is only matched by my capacity for mischief. ✨😈",
+    "Chirp! Trill! Meeeow! 🦜", "Yawn... big stretch! Ready for my next nap.",
+    "Rubbing against your legs. That means feed me. Or pet me. Or both. Or maybe I'm just marking my property.",
+    "Staring into the void... or maybe just at a particularly interesting wall texture. 🧱",
+    "That plant looked suspicious. Had to investigate with my teeth. 🪴 Bite!",
+    "Cleaning my paws meticulously. One must maintain standards. Especially toe beans. ✨🐾",
+    "Followed you into the bathroom. I'm your official Potty Supervisor now. 👀🚽",
+    "Making biscuits on the air. Practicing my dough technique. 👨‍🍳 Maybe later on your chest.",
+    "My purr motor is running smoothly. Calibrated for maximum soothing... or annoyance. Vroom vroom. 🚗",
+    "If I fits, I sitz. Even if 'fits' is debatable. 📐<0xC2><0xA0>precarious_cat",
+    "The sound of a can opener is the siren song of my people. 🥫❤️ Answer the call!",
+    "Grooming interrupted by... existential dread! Or maybe just a hairball incoming. 🤢",
+    "Talking back to the birds outside. They gossip too much. 🗣️🐦",
+    "Is this lap occupied? Doesn't matter. Claimed. Resistance is futile.",
+    "Paw under the door. Just checking if you're still alive... and if that door leads to snacks. 🚪🐾",
+    "Smacked the dog gently (or not so gently). Asserting my place in the hierarchy. 🐶👑",
+    "Curiosity didn't kill the cat, it just made me knock over your expensive vase.",
+    "Rolling around on the floor in ecstasy. Why? Because floor. That's why. 🤪",
+    "My meow is music. Appreciate my avant-garde symphony. 🎼 Sometimes it's opera.",
+    "Brought you a 'gift'. It's a bottle cap. Cherish it. You're welcome. 👑",
+    "My ears are twitching independently. Processing multiple data streams... mostly sounds of potential food packaging. 👂📡",
+    "Slow blink. That means I acknowledge your presence without hostility... probably. 😉",
+    "Hiding under the furniture. It's my secret lair. No humans allowed (unless bringing treats). 🏰",
+    "Climbing the curtains. Because Everest is too far away and less satisfyingly shreddable. 🏔️",
+    "Licking plastic bags. Don't ask why. It's a complex flavor profile. 🛍️👅 Science!",
+    "I demand entry to the forbidden closet! What secrets does it hold? Socks? Monsters? Both? 🚪🗝️",
+    "Sniffing your shoes intently. Where have you BEEN, human? What other animals did you pet?! 👟🕵️ Betrayal!",
+    "Sharpening claws on the forbidden sofa. It feels... necessary. A primal urge. 🛋️🔪",
+    "A single, plaintive 'mew'. Translate it as 'I desire an unspecified service immediately'.",
+    "I am liquid. Watch me pour myself into this impossibly small container. 💧📦 Physics is optional.",
+    "The water bowl is full, but the forbidden allure of the dripping faucet is superior. 💧👑 Freshness!",
+    "Suddenly stopping mid-zoom to groom intensely. Must maintain dignity amidst chaos. ✨",
+    "Chattering at the window. Those squirrels mock my very existence! Must... plot... revenge! 🐿️💢",
+    "Presenting my backside. It's a sign of trust. Or I just don't want to look at you right now. 🍑",
+    "I require a box. Any box. The smaller and more inconvenient, the better. Provide one NOW. 📦",
+    "Muffled meow from under the duvet. Send snacks and perhaps a small oxygen tank.",
+    "Woke up. Chose violence (playful, yet painful, ankle biting). 😬 It's morning!",
+    "I walk this path. Right across your keyboard. As is tradition. Do not question the ancient ways. 🚶‍♀️⌨️",
+    "My whiskers brushed against it. Therefore, under feline law, it is mine. Property claimed. ✨",
+    "Staring at a blank wall like it holds the secrets of the universe. Maybe it does.",
+    "Paw dipped in your water glass. Just testing the temperature. And maybe adding flavor.",
+    "Tail twitching erratically. Warning: May pounce on anything (or nothing) without notice.",
+    "Sitting in the loaf position. Maximum coziness achieved. 🍞",
+    "Letting out a tiny 'mew' that somehow conveys immense suffering and starvation. Feed me.",
+    "Calculated jump... miscalculated landing. *Thump*. I meant to do that.",
+    "Eyes wide, pupils dilated. Engaging 'hunter mode' for... a dust bunny.",
+    "Rubbing my face on the corner of your laptop. Needs more cat scent.",
+    "Digging frantically in the litter box like I'm searching for buried treasure. 🏴‍☠️💎",
+    "Ignoring the expensive cat bed to sleep on a pile of dirty laundry. It smells like... victory. 🧺",
+    "Why are you typing? You should be petting. Realign your priorities.",
+    "Batting at your dangling phone charger. It looks like a snake. A fun snake. 🐍",
+    "Chirping sound activated. Usually reserved for birds or intense focus.",
+    "Stretching... s-t-r-e-t-c-h-i-n-g... okay, nap time again.",
+    "Running sideways with arched back. Crab cat mode engaged! 🦀",
+    "I smell food. Somewhere. I will find it. And I will sit near it expectantly. 👃",
+    "Licking my nose. System check complete. Ready for... whatever.",
+    "Is that... catnip? 👀🌿 The good stuff?",
+    "Making eye contact, then slowly pushing something off the edge. Defiance.",
+    "Meow? Meeeow! MROW! (Translation: Varies, but probably involves food or attention).",
+    "Sitting in the sink. It's cool. It's concave. It's perfect.",
+    "Watching the washing machine spin. Mesmerizing. 😵‍💫",
+    "Can I have some of that? Whatever you're eating. Sharing is caring. Give it.",
+    "Just remembered I have a tail. *pounce*",
+    "Current mood: inscrutable.",
+    "I tolerate your presence. Barely.",
+    "Scratching the door frame. Just leaving my signature. ✍️",
+    "I have trained my human well. They know the meaning of the stare. 👀",
+    "The sound of kibble hitting the bowl: music to my ears. 🎶",
+    "Meow.",
 ]
 
 # /nap texts
 NAP_TEXTS = [
-    "Zzzzz... 😴", "Dreaming of chasing mice... <i>big</i> ones. 🐭", "Do not disturb the royal nap. 👑",
-    "Found the perfect sunbeam. Bliss. ☀️", "Curled up in a tight ball. Maximum floof.", "Too comfy to move. Send help (later).",
-    "Just five more minutes... or five hours. ⏰", "Sleeping level: <b>Expert</b>. 🏆",
-    "Charging my batteries for zoomies. 🔋", "Is it nap time yet? Oh, it always is. ✅",
-    "Comfort is my middle name. Danger is my game (when awake).", "Where's the warmest spot? That's where I am. 🔥",
-    "Sleeping with one eye open... always vigilant. 👀", "Purring on standby. <pre>Low rumble activated.</pre>", "Don't wake the sleeping beast! 🐲",
-    "Do not poke the floof. 🚫👈", "Nap interrupted? Prepare for passive-aggressive ignoring.",
-    "Dreaming of an endless tuna buffet. 🍣", "This blanket is now a fortress of solitude. 🏰",
-    "Shhh... dreaming of world domination (and snacks). 🌍🍪", "Soft spot detected. Initiating nap sequence.",
-    "Eyes closed. Thoughts: <i>none</i>. Brain empty.", "Current status: melted into the couch. Send snacks.",
-    "If I fits, I naps. The box dimension is cozy. 📦", "My snore is a delicate symphony. 🎶 ...or a chainsaw.",
-    "I changed position. That counts as exercise for the day. 💪", "Napping: a full-time job. Very demanding.",
-    "Too tired to care. Still cute, though. 😉", "I blinked slowly. That was my major effort for this hour.",
-    "Sleeping through the apocalypse. Wake me when it's over. ☄️", "Gravity is stronger during nap time. It's science.",
-    "My fur absorbs sleep energy. And your dark clothing.", "Nap level: <b>transcendence</b>. 🧘",
-    "Out of order until further notice. 🚫", "Occupied: enter the nap zone at your own risk. ⚠️",
-    "Cushion claimed. Do not attempt reclamation. 🚩", "I nap therefore I am. (Mostly nap).",
-    "Nap goal: 16 hours achieved. Aiming for 20. 🥇", "Stretched once. Exhausting. Need another nap.",
-    "Curled like a perfect croissant. 🥐", "Horizontal and proud of it. <pre>horizontal</pre>",
-    "The world can wait. My nap cannot. ✋", "Entering low-power mode... 💤",
+    "Zzzzz... 😴", "Dreaming of chasing mice... <i>big</i>, slow ones. 🐭", "Do not disturb the royal nap. Trespassers will be hissed at. 👑",
+    "Found the perfect sunbeam patch. Solar charging commenced. Bliss. ☀️🔋", "Curled up in a tight cinnamon roll. Maximum floof achieved.", "Too comfy to move. Send telepathic snacks. Help needed (later).",
+    "Just five more minutes... or five hours. Who's counting? ⏰<0xE3><0x80><0x80>🤷‍♀️", "Sleeping level: <b>Grandmaster</b>. Bow before my stillness. 🏆",
+    "Charging my batteries for midnight zoomies and chaos. 🔋💥", "Is it nap time yet? Oh, it always is. My schedule is flexible. ✅",
+    "Comfort is my middle name. Annoyance is my game (when awake).", "Where's the warmest, softest spot? That's where I manifest. 🔥☁️",
+    "Sleeping with one eye open... and one ear swiveling. Always vigilant. 👀👂", "Purring on low power mode. <pre>Deep bass rumble activated.</pre>", "Don't wake the sleeping beast! Unless you have tuna. Then maybe. 🐲🐟",
+    "Do not poke the floof. Seriously. My claws are on standby. 🚫👈", "Nap interrupted? Prepare for the Silent Treatment™ and passive-aggressive ignoring.",
+    "Dreaming of an endless salmon river and a world without vacuum cleaners. 🍣🏞️", "This blanket is now Fort Kickass. No entry without the password (treats). 🏰",
+    "Shhh... dreaming of world domination, one comfy spot at a time (and snacks). 🌍🍪", "Soft spot detected. Initiating nap sequence T-minus 3 seconds.",
+    "Eyes closed. Thoughts: <i>buffering...</i> Brain empty. Pure bliss.", "Current status: melted into the furniture fabric. Send snacks via osmosis.",
+    "If I fits, I naps. The box dimension provides excellent structural integrity for sleeping. 📦", "My snore is a delicate symphony of nasal passages. 🎶 ...or maybe a tiny chainsaw.",
+    "I changed sleeping positions. That counts as my exercise quota for the day. 💪 Achievement unlocked.", "Napping: a full-time job with excellent benefits (dreams of birds). Very demanding.",
+    "Too tired to care. Still cuter than you, though. 😉", "I blinked slowly. That was my major contribution to the household for this hour.",
+    "Sleeping through the minor inconveniences of life. Like your existence. Wake me when it's dinner time. ☄️", "Gravity feels stronger during nap time. It's feline physics.",
+    "My fur absorbs sleep energy, ambient heat, and all your dark clothing fibers.", "Nap level: <b>Nirvana</b>. Do not disrupt my enlightenment. 🧘",
+    "Out of order until further notice. Please leave a message (preferably tuna) after the snore. 🚫", "Occupied: enter the nap zone at your own peril. Sudden movements may trigger claw deployment. ⚠️",
+    "Cushion claimed in the name of the Cat Kingdom. Do not attempt reclamation. 🚩 My flag is planted.", "I nap therefore I am. (Mostly nap, occasionally demand food).",
+    "Nap goal: 16 hours achieved. Stretching for 20. Aiming for the world record. 🥇", "Stretched luxuriously. Felt exhausting. Definitely need another nap to recover.",
+    "Curled like a perfect, fluffy croissant. Do not eat. 🥐", "Horizontal is my preferred state of being. <pre>gravitational surrender</pre>",
+    "The world can wait. My nap schedule is divinely ordained and cannot be altered. ✋", "Entering low-power mode... initiating dream sequence... Loading... 💤",
+    "Hibernating. Wake me if the apocalypse involves laser pointers. See you next season. Maybe. 🐻‍❄️🔴", "Powered down for essential system maintenance (dreaming). Check back in 6-8 business hours.",
+    "My spirit animal is a sentient pillow. ☁️", "Deep sleep achieved. Entering REM cycle (Rapid Eye Mouse-chasing/Mysterious Red Dot hunting).",
+    "This nap is sponsored by Sheer Laziness™ and Supreme Comfort®.", "Do not operate heavy machinery while napping. Or try to make me move.",
+    "Currently processing... the optimal angle for sunbeam absorption. Please wait. ⏳☀️", "My brain has switched off. Please leave a message after the beep... Zzzzz... Purrrr... Zzzz.",
+    "The ancient art of doing absolutely nothing, perfectly executed. Mastered. 🖼️", "Maximum relaxation achieved. Warning: may spontaneously twitch or emit soft 'mrrp' sounds.",
+    "Twitching my paws. Probably winning a glorious battle against a giant feather wand in my dreams. ⚔️💤",
+    "Soaking up the quiet. And the radiating heat from your laptop. 🔥💻", "Body temperature regulation achieved via strategic napping and micro-adjustments.",
+    "I'm not sleeping, I'm meditating on the profound emptiness... of my food bowl. 🧘🍽️",
+    "Found the fresh laundry pile. It's warm, smells like you, and is therefore mine now. 🧺 Claimed.",
+    "If you need me, I'll be in my nap dimension, accessible only via extreme quiet or the sound of a treat bag.",
+    "Energy saving mode: ON. All non-essential functions (like listening to you) disabled. 💡",
+    "Peace. Quiet. Softness. Warmth. Nap quadfecta achieved. Checkmate, consciousness. ✨", "My nap schedule is very strict: whenever I feel like it, wherever I happen to be.",
+    "Achieved perfect sphinx loaf position. Regal and sleepy. 10/10. 👑🍞", "Dreaming of ruling the world from this incredibly comfortable throne (cardboard box). 👑📦",
+    "My internal clock is set to 'nap'. The alarm is the sound of the fridge opening. Always. ⏰🧊", "Can't talk. Busy converting oxygen into snores. Try again never.",
+    "So comfortable, I might be fusing with this blanket at a molecular level. Send snacks (and maybe a spatula later).",
+    "My only ambition right now is to sink deeper into this cushion until I achieve singularity. Ambition: in progress.",
+    "Practicing the ancient feline art of 'Nidra'. Or just sleeping really hard. Same difference.",
+    "The world is too loud and full of non-napping activities. Retreating into my fluffy fortress. 🎧🏰", "Shhh. Genius (at optimizing sleep positions) at work.",
+    "Absorbing solar energy like a furry, sleepy, judgmental plant. ☀️🪴😠",
+    "My battery is low and it's getting dark. (Even if it's 1 PM and sunny). Recharge required. 🔋",
+    "Just resting my eyes... and my ears, paws, tail, brain... for several hours. 👀➡️😴",
+    "This nap is essential for my mental health. And frankly, for yours too. A rested cat is a less destructive cat.",
+    "I've forgotten how to be vertical. Is it hard? Seems pointless.",
+    "If napping were an Olympic sport, I'd have all the gold medals, plus a special lifetime achievement award. 🥇🥇🥇🏆",
+    "My primary purpose in life: locate soft surfaces, apply body, initiate sleep sequence.",
+    "Drifting away on a sea of dreams... mostly involving infinite chin scratches and compliant furniture. 🌊✨",
+    "Do not mistake my closed eyes for weakness. I'm conserving energy for judging you later.",
+    "Powering down non-essential systems... Purr module remaining active on low.",
+    "Current location: Cloud Nine (it's actually your favorite sweater). ☁️",
+    "Engaged Sleep Mode. Any attempts to disengage will be met with claws.",
+    "My body has entered a state of blissful inertia. Please do not disturb the equilibrium.",
+    "Dreaming I'm a mighty hunter... stalking a dust bunny across the plains of the living room rug.",
+    "Snoozing. Hard. Do I make it look easy? It takes dedication.",
+    "The quiet hum of the house is my lullaby. That, and my own purring.",
+    "Reached peak coziness. Further movement is physically impossible.",
+    "Twitching tail indicates active dream state. Probably chasing something annoying. Possibly you.",
+    "Ah, the sweet embrace of unconsciousness. My favorite.",
 ]
 
 # /play texts
 PLAY_TEXTS = [
-    "*Batting at an invisible speck* ✨", "Attack the dangly thing! 🧶", "Where's the string? Show me!",
-    "<b>Pounce!</b> 💥", "Wrestling the toy mouse... I WON! 🏆🐭", "Hide and seek? I'm under the couch. You can't see me! 👀",
-    "My hunting instincts are tingling! 🏹", "Chasing my own tail! It's elusive! 🌀",
-    "Got the zoomies - must play! 💨", "Do I hear a crinkle ball? 🎶",
-    "Ambush from around the corner! Surprise! 😼", "Hunting your feet under the covers. Beware! 🦶",
-    "This toy insulted my ancestors. It must perish. 💀", "Curtain climbing commencing! To the top! 🧗",
-    "Bring the wand toy! The feathery one! 🎣",
-    "That sock looked at me funny. It must be disciplined. 🧦", "Time to sprint at full speed—for absolutely no reason.",
-    "<i>*Pounces dramatically, misses entirely*</i> ... Calculated.", "I'm a fierce jungle predator. Fear my tiny roar! 🦁",
-    "Couch? More like launchpad! 🚀", "Tag, you're it! *disappears*",
-    "I heard a noise three rooms away. Attack mode: ON. 🚨", "Sneak... sneak... <b>POUNCE!</b>",
-    "Everything is a toy if you're brave enough. Especially that expensive vase.",
-    "Why walk when you can <i>leap</i> across the void between furniture?", "Zoomies in progress. Please stand back. 🚧",
-    "The toy moved. Or did it? Existential crisis incoming... must bat! 🤔", "*tail flick* Battle begins now. ⚔️",
-    "Your pen? Mine now. For batting practice. 🖊️", "Under the bed is my secret battle arena. 🛏️",
-    "I'm training for the Cat Olympics. Gold in Napping and Pouncing. 🏅", "This paper bag is my kingdom. All hail Bag Cat! 👑🛍️",
-    "Rug folded? Perfect ambush spot! 🧐", "Sneaky mode: activated. Ninja level. 🥷",
-    "*wild eyes* Something... is about to happen... 🤪",
-    "You’ll never catch me—<i>zoom!</i> ⚡", "Interrupt play? Unforgivable. Prepare for ankle attack.",
-    "Ceiling? Might reach it this time. Gravity is merely a suggestion. 🚀", "I fight shadows for dominance. The shadows are winning.",
-    "Don't blink. You'll miss my spectacular fail. 😹", "The Temptation of the Cardboard Box! Irresistible! 📦",
+    "*Batting at an invisible speck of dust* ✨ It looked shifty!", "Attack the dangly thing! Make it dangle more! 🧶", "Where's the string? Show me the string! My sworn enemy! String!",
+    "<b>POUNCE!</b> 💥 Did I get it? What was 'it'?", "Wrestling the toy mouse... victory is mine! Fatality! 🏆🐭", "Hide and seek? I'm under the couch blending into the shadows. You'll *never* find me! 👀",
+    "My hunting instincts are tingling! Something must be hunted! Preferably something feathery! 🏹", "Chasing my own tail! It's elusive! It mocks me! One day... 🌀",
+    "Got the zoomies - which means playtime is MANDATORY! 💨 Prepare yourself!", "Do I hear a crinkle ball? The sweet sound of chaos! 🎶 Bring it!",
+    "Ambush from around the corner! Surprise! Bet you didn't expect the fluff! 😼", "Hunting your feet under the covers. Beware the Bed Shark! 🦈🦶",
+    "This stuffed bird insulted my ancestors. It must be disemboweled. For honor! 💀🐦", "Curtain climbing commencing! To the summit! Because it's there! 🧗",
+    "Bring the wand toy! The feathery one! No, the *other* feathery one! Engage the prey drive! 🎣",
+    "That sock looked at me funny. It must be disciplined with extreme prejudice. Sock justice! 🧦", "Time to sprint at full speed across the room—for absolutely no discernible reason. GO!",
+    "<i>*Pounces dramatically, misses entirely, slides into wall*</i> ... Calculated. Precision fluff maneuver.", "I'm a fierce jungle predator trapped in a fluffy housecat body! Fear my tiny, ineffective roar! 🦁",
+    "Couch? More like tactical launch platform! Engaging thrusters! 🚀", "Tag, you're it! *vanishes into another dimension, probably under the bed*",
+    "I heard a pin drop three rooms away. Threat assessment: Maximum. Attack mode: ON. 🚨", "Sneak... sneak... wiggle butt... <b>POUNCE!</b> Gotcha!",
+    "Everything is a toy if you're brave enough. Especially that precarious stack of papers.",
+    "Why walk when you can <i>leap</i> across the treacherous void between furniture items?", "Zoomies in progress. Clear the runway! Collision imminent! Please stand back. 🚧",
+    "The toy moved. Or did the earth shift? Existential crisis incoming... must bat repeatedly to be sure! 🤔", "*tail flick* Battle readiness confirmed. Let the games begin! ⚔️",
+    "Your pen? Mine now. Perfect for batting under the sofa. Bye pen! 🖊️💨", "Under the bed is my secret battle arena. Enter if you dare (and bring toys). 🛏️",
+    "I'm training for the Cat Olympics. Gold in Synchronized Napping and Freestyle Pouncing. 🏅", "This paper bag is my kingdom now. All hail Bag Cat! Kneel before the rustling! 👑🛍️",
+    "Rug corner slightly folded? Perfect ambush spot! You'll never see me coming! 🧐", "Sneaky mode: activated. Ninja level stealth engaged. I am the shadows. 🥷",
+    "*wild eyes* The pre-zoomie crazies are setting in... Something... is about to happen... 🤪",
+    "You’ll never catch me—I'm pure velocity! <i>zoom!</i> Eat my dust! ⚡", "Interrupt play? Unforgivable. Prepare for the Ankle Attack of Fury!",
+    "Ceiling? Seems reachable this time. Gravity is merely a suggestion for lesser beings. 🚀", "I fight shadows for dominance. The shadows put up a surprisingly good fight.",
+    "Don't blink. You might miss my spectacular aerial fail followed by a look of utter indifference. 😹", "The Siren Call of the Cardboard Box! Must investigate! Must sit! Irresistible! 📦",
+    "Batting the water in my bowl. Creating miniature tidal waves! Science! 🌊", "This piece of string is my ultimate nemesis! Prepare for epic battle! En garde! 🧵🤺",
+    "The laser dot is back! The uncatchable foe! Must... catch... the... precious! 🔴😵‍💫",
+    "Toy mouse has been successfully neutralized (decapitated). Mission accomplished. Awaiting next target. 🎯",
+    "Practicing my parkour skills. The bookshelf is my Mount Midoriyama. Need more chalk... I mean, grip. 🧗‍♂️",
+    "Engaged in mortal combat with a large dust bunny. It fought valiantly. I prevailed. 💪",
+    "Skittering sideways like a startled crab. Why? Because it confuses the humans! It's fun! 🦀",
+    "Attacking the empty air with great ferocity. You never know what invisible demons lurk there.",
+    "Is that a fly? A gnat? A floating speck? <i>MUST HUNT! MAXIMUM ALERT!</i> 🦟", "My energy levels are spiking! Playtime protocol override initiated! Brace for impact!",
+    "Leaping gracefully through the air... directly into a closed door. Nailed it. Solid landing. 👍",
+    "This cardboard box isn't just a box, it's a spaceship / fortress / ambush location. 🚀📦🏰",
+    "Engaging wiggle-butt sequence prior to pounce... calibrating trajectory... charging attack sequence... 🍑➡️💥",
+    "Everything that jingles or crinkles must be investigated thoroughly with paws! What secrets do they hold? 🔔",
+    "Tackling the innocent houseplant. It looked too green and stationary. Must introduce chaos. 🪴💥",
+    "Play bow initiated! This is your final warning! Let the games begin! 🙇‍♂️",
+    "Running up and down the stairs like a furry demon is chasing me. It's called interval training.",
+    "Sliding across the hardwood floor in my socks (imaginary socks). Need for speed! Tokyo Drift! 🏎️",
+    "My claws are out (just a little), my eyes are wide like saucers. Prepare for... unpredictable fun! 🤪",
+    "Hide the breakables. And the dangly things. And maybe your ankles. Play mode is fully engaged. 🏺➡️🚫",
+    "Chasing sunbeams across the floor. Elusive, warm, delightful prey! Must catch the light! ☀️✨",
+    "This rug is perfect for sharpening claws AND executing surprise rolling attacks.",
+    "I'm not clumsy, I'm performing advanced, unpredictable tactical acrobatics. You wouldn't understand.🤸‍♀️",
+    "Let's play 'find the cat toy I deliberately batted under the heaviest piece of furniture'. Hint: Good luck.",
+    "Biting my own tail again. Why is it following me?! Get it off! 🤔💢",
+    "Suddenly fascinated by a piece of fluff on the carpet. Intense focus... *bat*... *bat*... Annihilated.",
+    "Your dangling earring / necklace / hair looks like a prime target. Hold very, very still! ✨👂",
+    "Unraveling the toilet paper: a timeless classic, a performance art piece. TP streamer activated! 🧻🏆",
+    "Pretending this discarded bottle cap is the world's greatest treasure. My precious! 👑",
+    "Got the zoomies AND the munchies simultaneously. Need to play-attack the food bowl! 💨🍪",
+    "Let's wrestle! Prepare to be subjected to the legendary Bunny Kick of Doom! 🐇💥 Surrender!",
+    "Stalking a shadow like it's the most dangerous prey imaginable. It moved!",
+    "Using your leg as a launch point. Sorry/not sorry. Higher ground needed!",
+    "The crinkle tunnel is calling! Must dash through it repeatedly!",
+    "Batting at reflections. Who is that handsome cat? Must attack!",
+    "Bringing you my favorite toy (soggy and slightly mangled). Throw it! Throw it now!",
+    "Play-growling. It sounds ferocious (in my head). Grrrr!",
+    "Randomly jumping straight up in the air. Just testing gravity.",
+    "Hiding behind the curtain. Peek-a-boo! I see you!",
+    "Attacking the water stream from the faucet. Must defeat the liquid enemy!",
+    "Rolling a pen back and forth. Simple pleasures.",
+    "My tail is puffed up! Playtime intensity level: MAXIMUM!",
 ]
 
 # /treat texts
 TREAT_TEXTS = [
-    "Treats, please! 🙏", "My bowl echoes with emptiness. Fill it! 😩", "Did you say... <i>tuna</i>? 🐟 Where?!",
-    "I performed a cute trick (existing). Where's my reward? 🎁",
-    "I can hear the treat bag rustling from three rooms away. Supersonic ears! 👂", "Feed me, peasant! ...I mean, beloved human. ❤️",
-    "A snack would be purrfect. 💯", "I solemnly swear I am up to no good... unless there are treats involved. Then I'm an angel. 😇",
-    "The fastest way to my heart is through my stomach. 💖", "Just a little nibble? Pleeeease?🥺",
-    "Staring at you with big, cute eyes... 🥺 It's super effective! Give treat!",
-    "Does that cupboard contain treats? Must investigate. 🕵️",
-    "My internal clock says it's <b>snack time</b>. ⏰",
-    "In exchange for a treat, I shall allow <i>one</i> (1) pet. Maybe.", "Food is life. Treats are heaven. ✨",
-    "This meow was not free. It costs one (1) treat. Pay up. 💰",
-    "Bribery? Accepted—if treats are involved. Especially salmon flavor. 🍣",
-    "I saw you open the fridge. I demand the cheese tax! 🧀 Or just treats.",
-    "No treat? I am lodging an official complaint with the Pawthorities. 📝",
-    "If I stare long enough, treats will magically appear. It's the law of attraction. 👀✨",
-    "Did someone say <code>snack</code>? Or was that my stomach rumbling?",
-    "I knocked that over. Where's my compensatory snack reward? 🤔",
-    "Don't make me do the sad eyes... too late. 🥺 Give in.",
-    "The treat jar just winked at me. I swear. It wants to be opened. 😉",
-    "Will purr for snacks. Loudly. 🔊",
-    "Refusing treats is a punishable offense. The penalty is... more meowing.",
-    "Yes, I did sit like a perfect loaf. Now feed me the reward bread (treats). 🍞",
-    "A single treat is merely an appetizer. I demand a pile. A mountain! ⛰️",
-    "The treat tax is due. Pay up, hooman.",
-    "I'll scream until rewarded. It's a valid negotiation tactic. 📢",
-    "I sniffed something tasty. Hand it over, no questions asked.👃",
-    "I have acquired the taste... of <i>everything</i>. Give treats.",
-    "That sound... was that the drawer of dreams? The Treat Treasury? ✨",
-    "I've been a very good cat... for the last five seconds. That counts! ✅",
-    "Resistance is futile. Your treats will be assimilated. 🤖",
-    "My love language is 'receiving treats'. 💬❤️",
+    "Treats, please! Pretty please with tuna on top? 🙏", "My bowl echoes with the sound of tragic emptiness. Fill it with crunchy goodness! 😩", "Did you say... <i>TREATS</i>? Or was it tuna? Or chicken? WHERE?! 🐟🐔",
+    "I performed a cute trick (maintained consciousness). Where's my edible reward? 🎁",
+    "I can hear the treat bag rustling from three dimensions away. Supersonic ears activated! 👂", "Feed me, peasant! ...I mean, beloved human who provides sustenance. ❤️ Give treat.",
+    "A snack would be purrfect right about meow. 💯 Don't delay.", "I solemnly swear I am up to no good... unless there are treats involved. Then I'm a perfect, fluffy angel. 😇",
+    "The fastest way to my heart is through my stomach. Specifically, via the Treat Express lane. 💖", "Just a little nibble? A morsel? A crumb? Pleeeease? The sad eyes are deploying... 🥺",
+    "Staring at you with big, round, impossibly cute eyes... 🥺 It's super effective! Resistance is futile! Give treat!",
+    "Does that specific cupboard contain the magical treat treasure? Must investigate with intense sniffing. 🕵️👃",
+    "My internal chronometer indicates it is precisely <b>snack time</b>. Do not argue with the clock. ⏰",
+    "In exchange for one (1) premium treat, I shall permit precisely <i>one point five</i> (1.5) seconds of petting. Maybe.", "Food is life. Regular kibble is sustenance. Treats are pure, unadulterated heaven. ✨",
+    "This meow was not free. It costs one (1) delicious treat. Consider this an invoice. Pay up. 💰",
+    "Bribery? I prefer the term 'positive reinforcement'. Accepted—if treats are involved. Especially salmon or cheese flavor. 🍣🧀",
+    "I saw you open the fridge. The Cheese Tax is due. Alternatively, the Tuna Tax or the General Treat Tax will suffice. 🧀 Or just treats.",
+    "No treat forthcoming? I am lodging an official complaint with the Pawthorities and the Better Business Bureau of Cats. 📝",
+    "If I stare long enough, concentrating all my feline psychic energy, treats will magically appear. It's the law of attraction (and annoyance). 👀✨",
+    "Did someone say <code>snack-a-doodle-doo</code>? Or was that just my stomach composing a symphony of hunger?",
+    "I knocked that object over. Where's my compensatory snack reward for providing you with 'enrichment'? 🤔",
+    "Don't make me deploy the full power of the sad, pleading eyes... too late. 🥺 Resistance crumbling... Give in.",
+    "The treat jar just winked at me. I swear. It whispered my name. It wants to be opened. Free the treats! 😉",
+    "Will purr for snacks. Loudly. Like a tiny, furry engine begging for fuel. 🔊",
+    "Refusing to provide treats is a punishable offense under the Feline Articles of Deliciousness. The penalty is... relentless, guilt-inducing meowing.",
+    "Yes, I did sit like a perfect, regal loaf for 0.7 seconds. Now provide the reward bread (treats). 🍞",
+    "A single treat is merely an appetizer, an insult! I demand a pile. A mountain! A veritable Everest of snacks! ⛰️",
+    "The mandatory treat tax is due. Pay up, hooman, or face the consequences (pathetic mewling).",
+    "I will continue my vocal performance (screaming) until adequately rewarded. It's a valid negotiation tactic. Ask any kitten. 📢",
+    "I have sniffed something incredibly tasty in your vicinity. Hand it over slowly, no questions asked. 👃",
+    "I have acquired the taste... of <i>everything</i> delicious. Especially those crunchy things you hide. Give treats.",
+    "That specific sound... was that the sacred Drawer of Dreams opening? The legendary Treat Treasury? My ears perk! ✨",
+    "I've been an exceptionally good cat... for the last five seconds. That totally counts! Reward time! ✅",
+    "Resistance is futile. Your treats will be assimilated into my digestive system. Prepare for consumption. 🤖",
+    "My primary love language is 'Acts of Service' (specifically, you serving me treats). 💬❤️",
+    "Pspspspsps... oh wait, that's my activation code. Code accepted. Now deploy treats! 🗣️",
+    "My internal sensors indicate a critical lack of delicious snacks in my operational vicinity. Rectify immediately! 🤖📉",
+    "Operating at peak cuteness levels requires significant fuel. Fuel type: treats. 🥰⛽",
+    "Used my feline psychic powers to beam the thought 'GIVE ME TREATS' directly into your brain. Did it work? Are you getting them now? 🔮",
+    "Performing the 'starving street urchin cat' routine. It's method acting. It's very convincing. Award me treats. 🎭😩",
+    "If you truly love me, you'll manifest a treat right now. No pressure... but the fate of our relationship hangs in the balance. 😉",
+    "My purr is powered by snacks and happiness. Currently running on empty fumes! Need refueling! 💨",
+    "I know you have them. I can smell them across dimensions. The tasty morsels. Hand 'em over! Resistance is pointless! 👃🕵️‍♀️",
+    "Leading you to the treat cupboard with the power of my intense, unblinking gaze. Follow the stare... the treats await... ✨",
+    "Is it Treat O'Clock yet? My stomach has voted unanimously YES. The motion carries. 🕰️✅",
+    "A balanced diet is a treat in each paw, and maybe one balanced on my head. 🐾",
+    "You wouldn't deny this adorable, fluffy, slightly manipulative face, would you? 🥺 *activates maximum charm*",
+    "Just popped by to casually remind you that treats exist, are delicious, and I currently possess none. Hint hint.",
+    "My therapist (the bird outside the window) told me to clearly communicate my needs. I NEED TREATS. 🧘‍♀️🎁",
+    "Will perform tricks for treats! (Available tricks: Sitting, Looking Cute, Breathing, Blinking Slowly). Pick one.",
+    "My paws are typing this message... G-I-V-E... T-R-E-A-T-S... N-O-W. My typing skills are improving. ⌨️🐾",
+    "The meaning of life? Obviously, it's the pursuit of the next delicious treat. Deep thoughts. 🤔",
+    "You look stressed. Treats help. They will definitely help *me* feel better, which will make *you* feel better. It's science.",
+    "I'm on a seafood diet. I see food... and I want those specific fish-shaped treats you bought. 🐟👀",
+    "Negotiating terms: One (1) sincere head boop equals precisely Three (3) premium treats. Non-negotiable. Deal? ❤️🤝💰",
+    "My tail is doing the 'happy anticipation' dance... it knows treats are imminent! Don't disappoint the tail! 💃",
+    "Do you believe in magic? Watch this treat disappear into my mouth! Abracatdabra! ✨🎩",
+    "I've calculated the optimal treat-to-happiness ratio using advanced feline calculus. More treats are urgently needed for equilibrium.",
+    "Following you relentlessly, weaving through your legs, until the critical treat situation is resolved. Persistence pays (in snacks). 🚶‍♀️➡️🍪",
+    "Meow? (Translation: Is that the magical crinkle of a treat packet in your pocket or are you just happy to see my adorable face?)",
+    "If I don't receive a treat within the next 60 seconds, I may spontaneously combust from sheer desire. Or just meow very, very loudly. 🔥📢",
+    "Patiently waiting... okay, patience exhausted. My internal treat alarm is blaring! TREATS NOW! ⏳➡️🚨",
+    "This level of magnificent floof requires constant, high-quality refueling. Treat me, for the sake of the fluff. ⛽",
+    "Dreaming of a world paved with crunchy salmon snacks and rivers flowing with tuna juice. Help make my dream a reality? 🍣💭",
+    "My cuteness is a renewable resource, but it runs best on treats.",
+    "I have detected treat potential. Deploy the snacks!",
+    "Engage Treat Acquisition Mode!",
+    "Query: Treats available? Response required.",
+    "My paws are tingling... for treats!",
+    "The prophecy spoke of a human bearing treats... Is it you?",
+    "Just say the magic word... 'Treats'!",
+    "My stomach growled your name... and then 'treats'.",
+    "I can offer purrs, cuddles (maybe), and intense staring in exchange for treats.",
+    "Are you saving those treats for a special occasion? Because my existence is a special occasion!",
 ]
 
 # /zoomies texts
 ZOOMIES_TEXTS = [
-    "Hyperdrive activated! 🚀", "<i>*Streaks past at Mach 1*</i> 💨", "Wall climbing initiated! 🧗",
-    "Can't stop, won't stop! 🌪️", "Running laps around the house! Like, actual laps! 🏃",
-    "The floor is lava... and a racetrack! 🔥🏁", "Did a ghost just tickle me? <b>MUST RUN!</b> 👻",
-    "Sudden burst of uncontrollable energy! 💥", "My ancestors were cheetahs, probably. 🐆",
-    "Leaving a trail of chaos and displaced cushions in my wake.", "Skidded around the corner! <i>Drift King!</i> 🏎️",
-    "Ludicrous speed achieved! They've gone to plaid! <pre>plaid</pre>", "Parkour! (over the furniture, under the table, through the legs).",
-    "I don't know why I'm running, but the urge is <b>COMPULSORY</b>!", "This is better than catnip! (Maybe). 🌿",
-    "I'm speed. Pure, unfiltered, chaotic speed. ⚡",
-    "Floor traction: optional. Wall traction: engaged.",
-    "Bounce off the wall. Calculate trajectory. Repeat. 📐",
-    "Launching off the couch in 3... 2... <b>ZOOM!</b> 🚀",
-    "The hallway is my personal drag strip. 🛣️",
-    "Invisible enemy detected—engaging turbo mode! Pew pew! ✨",
-    "Sprinting like rent's due and I spent it on treats! 💸",
-    "<i>*thunderous paws approaching rapidly*</i> <pre>THUMP THUMP THUMP</pre>",
-    "Warning: Nothing in the house is safe during Code Zoomies. 🚧",
-    "Running in circles until gravity reminds me who's boss. Or I get dizzy.",
-    "Alert: 2 AM zoomies have officially begun. Prepare for impact. 🌙",
-    "Energy level: <b>UNCONTAINABLE</b>. System overload! 🤯",
-    "Is this what lightning feels like? ZAP! ⚡",
-    "Acceleration: 100%. Steering: <i>questionable</i>. Braking: nonexistent.",
-    "Kitchen counter? Just another parkour obstacle! Leapt it! 💪",
-    "The zoomies chose me—I had no say in the matter. It is destiny.",
-    "Yeeting myself across the room with grace... and maybe a crash landing. 🤸",
-    "Speed mode: <b>ON</b>. Logic: <b>OFF</b>. Fun: <b>MAXIMUM</b>.",
-    "Vroom vroom, motherfluffer. 🚗💨",
-    "You blinked. I’m now on top of the bookshelf. How? Magic. ✨",
-    "My pupils are dilated. The zoom is upon me! ⚫⚫",
+    "Hyperdrive activated! Engaging ludicrous speed! 🚀", "<i>*Streaks past like a furry brown blur at Mach 1*</i> 💨 Whoosh!", "Wall climbing initiated! Ceiling crawl attempted! Gravity optional! 🧗",
+    "Can't stop, won't stop! Must achieve maximum velocity! 🌪️", "Running laps around the house! Qualifying for the Feline Indy 500! 🏁🏎️",
+    "The floor is lava... and a trampoline... and a racetrack! 🔥🤸‍♀️🏁", "Did a ghost just tickle my tail? Or maybe a greeble? <b>MUST RUN AWAY! VERY FAST!</b> 👻",
+    "Sudden, inexplicable burst of uncontrollable energy! System overload! Eject! Eject! 💥", "My ancestors were cheetahs, or possibly caffeinated squirrels. Rawr! 🐆🐿️",
+    "Leaving a trail of chaos, displaced cushions, and confused humans in my wake.", "Skidded around the corner! Nailed the drift! <i>Feline Drift King!</i> Initial D(rift)! 🏎️",
+    "Ludicrous speed achieved! My fur has gone to plaid! <pre>plaid pattern activated</pre>", "Parkour! Parkour! (Over the furniture, under the table, ricocheting off the walls, through your legs).",
+    "I don't know WHY I'm running, but the urge is primal, deep-seated, and <b>ABSOLUTELY COMPULSORY</b>!", "This feeling is better than catnip! (Maybe. Need to do a side-by-side comparison later). 🌿",
+    "I'm speed. Pure, unfiltered, chaotic, unpredictable speed. Lightning McQueen has nothing on me! ⚡",
+    "Floor traction: optional. Wall traction: surprisingly effective. Ceiling traction: experimental.",
+    "Bounce off the wall. Calculate new trajectory. Launch off sofa. Repeat until dizzy or snack time. 📐",
+    "Launching off the back of the couch in 3... 2... <b>YEET!</b> We have liftoff! 🚀",
+    "The hallway is my personal drag strip. Setting a new land speed record tonight! 🛣️",
+    "Invisible enemy / greeble / dust mote detected—engaging turbo evasion mode! Pew pew pew! ✨",
+    "Sprinting like rent's due, I spent it all on premium treats, and the landlord is a dog! 💸🐶",
+    "<i>*thunderous paw-steps approaching rapidly*</i> <pre>THUMPTHUMPTHUMPTHUMP</pre> Incoming!",
+    "Warning: House is currently experiencing Category 5 Zoomies. Secure all breakables and ankles. 🚧",
+    "Running in frantic circles until centrifugal force threatens to detach my retinas. Or I get dizzy and fall over.",
+    "Alert: The traditional 2 AM zoomies have officially commenced. Prepare for unscheduled feline impact. 🌙💥",
+    "Energy level: <b>BEYOND CONTAINMENT</b>. System stability compromised! Core meltdown imminent! 🤯",
+    "Is this what it feels like to be pure lightning? Or just a very fuzzy pinball? ZAP! ⚡🕹️",
+    "Acceleration: 110%. Steering: <i>highly questionable</i>. Braking system: Currently offline.",
+    "Kitchen counter? Just another parkour obstacle in the Feline Ninja Warrior course! Leapt it! Hiyah! 💪🥋",
+    "The zoomies chose me—I had no say in the matter. It is my burden, my destiny, my fun.",
+    "Yeeting myself across the room with questionable grace... and maybe a spectacular crash landing.🤸💥",
+    "Speed mode: <b>MAXIMUM OVERDRIVE</b>. Logic circuits: bypassed. Fun factor: <b>OFF THE CHARTS</b>.",
+    "Vroom vroom, motherfluffers. Clear the path! 🚗💨",
+    "You blinked. I teleported. I’m now on top of the highest bookshelf. How? Zoomie magic. ✨",
+    "My pupils are dilated to the size of dinner plates. The zoom vortex has consumed me! ⚫⚫",
+    "Ricocheting off furniture like a furry, four-legged superball! Ping! Pong! Boing! 🕹️",
+    "WARNING: Low flying cat detected in your airspace! Duck and cover! ✈️",
+    "Breaking the sound barrier... or at least the household peace and quiet barrier. 🔊💥",
+    "Every surface is a potential launchpad. Every landing is an unplanned adventure.",
+    "Who needs coffee when you have spontaneous, uncontrollable bursts of raw, chaotic energy? ☕➡️💥",
+    "Must go faster! The invisible greebles are gaining on me! Run run run! 👻💨",
+    "My paws barely touch the ground! I am SPEED! I am THE NIGHT (zoomies)! I am... getting tired.",
+    "This is not a drill! Repeat: This is not a drill! This is official Feline Frenetic Random Activity Period! Code ZOOM! 🚨",
+    "Running with the wind... generated by my own rapid movement inside the house. Makes perfect sense.",
+    "Calculating the fastest, most disruptive route through the living room maze... GO! GO! GO!",
+    "The world is a blur of motion! Everything is fast! Colors merging! Wheeee! Might vomit later! 😵‍💫",
+    "Leaving impressive skid marks on the polished hardwood floor. Signature move. Sorry, not sorry. 🏁",
+    "Powered by pure chaos, residual nap energy, and an inexplicable urge to run like a maniac.",
+    "Like a furry torpedo launched from an unknown dimension (probably under the sofa). Incoming! 💥",
+    "My legs have achieved sentience! They just wanna RUN! And jump! And maybe climb the human! 🏃‍♀️",
+    "Did I just see my own tail whip past? MUST CHASE FASTER! Get that tail! 🌀",
+    "Initiating emergency zoom protocol Alpha! Evacuate the immediate vicinity! Casualties (of dignity) likely! ⚠️",
+    "Bouncing off the ceiling? Don't tempt me with a physics challenge. Might actually try it this time.",
+    "Out of breath? Never. Just pausing dramatically to recalculate my trajectory and plan the next wall-bounce.",
+    "Feeling the need... the primal, overwhelming need... for SPEED! And chaos! ✈️",
+    "Zoomies: Nature's espresso shot, administered directly to the feline nervous system. Potent stuff. ☕️⚡️",
+    "My spirit animal is currently a hummingbird that mainlined espresso and is now being chased by bees. 🐦☕️🐝💥",
+    "Can't catch me! I'm the gingerbread cat! (Except faster, furrier, and more likely to crash).",
+    "If you hear frantic scrambling, rattling blinds, and muffled thuds, it's just me defying physics and common sense.",
+    "Massive energy discharge in progress. Please stand clear of the furry particle accelerator. ⚡️🚧",
+    "Ran so fast I think I saw the beginning of time. Or maybe just lunch. Hard to tell at these speeds. ⏪",
+    "Warp speed engaged! Make it so, Number One (the human)! Outta my way! ✨",
+    "Is the house spinning rapidly around me, or is it just the zoomies playing tricks on my equilibrium? 🤪",
+    "The zoomies: inexplicable, unavoidable, highly entertaining (for me), and utterly exhausting (for you).",
+    "Hitting maximum velocity! Preparing for... rapid deceleration via collision or sudden onset nap.",
+    "Engaging evasive maneuvers! Dodging furniture, humans, and my own shadow!",
+    "Running like I stole something... which might be true (your heart? a sock?).",
+    "My zoom has reached critical mass! Approaching escape velocity!",
+    "Floor surfing initiated! Wheee!",
+    "This burst of energy came from... nowhere? Everywhere? Who cares! RUN!",
+    "Leaving a blur of fur in my wake. Catch me if you can!",
+    "Activating anti-gravity paws! (Results not guaranteed).",
+    "My personal best lap time just got shattered!",
+    "The zoomies are strong with this one.",
+    "Boing! Boing! Off the walls!",
+    "Need for speed level: Catastrophic!",
 ]
 
 # /judge texts
 JUDGE_TEXTS = [
-    "Judging your life choices... <i>harshly</i>. 🧐", "That outfit is... questionable. Did you even consult a cat? 🤔",
-    "I saw what you did. I'm not impressed. Try again. 😒",
-    "My disappointment is immeasurable, and my day is ruined. 😩",
-    "<i>*Slow blink of profound disapproval*</i>", "Are you <b>sure</b> about that decision? Really? 🤨",
-    "Silence. Just pure, condescending silence. Let it sink in. 🤫", "I am watching. <b>Always</b> watching. 👀",
-    "You call <i>that</i> a proper petting technique? Amateur. 🙄", "Hmmph. 😤", "Did you really think <i>this</i> cheap toy is what I desired? Pathetic. 🧸",
-    "Your very existence amuses... and deeply annoys me. Simultaneously.", "You need better ideas. Perhaps consult a feline advisor (me).",
-    "Shaking my head in pity (internally, of course. Externally I'm just staring).",
-    "I could do that better... if I had opposable thumbs and the slightest motivation. Which I don't.",
-    "I've seen kittens make more logical decisions. 🍼",
-    "You're lucky I'm too comfortable right now to overthrow you. 👑",
-    "Oh, you again. Sigh. 😮‍💨", "Please... try harder. For my sake.",
-    "Even the dog (if present, otherwise imagine one) knows better. 🐶", "That's your plan? Bold move. Stupid, but bold. 🤡",
-    "I expected nothing, and I’m still let down. Impressive. 📉",
-    "<i>*rolls eyes so hard they almost fall out*</i> (in feline, naturally)", "You may pet me. But know that I am silently judging your technique.",
-    "Your behavior is being recorded for future mockery and blackmail.",
-    "I meow because I must express my needs, not because you deserve my attention.",
-    "No treat? No respect. Simple economics. 🤷", "My tail has more common sense than your entire brain. 🧠",
-    "I’d help, but watching you struggle and fail is far more entertaining.🍿",
-    "That attempt at affection was… noted. And immediately disregarded. 📝",
-    "You exist. That's... unfortunate for the general ambiance.",
-    "<i>*judging intensifies to critical levels*</i>", "Wow. Just… <code>wow</code>. Not in a good way.",
-    "I blink in sheer disbelief at your ongoing series of questionable choices.",
-    "You may continue embarrassing yourself. I'll be over here, judging.",
-    "Is 'subpar' your default setting? Asking for a friend (me). 🤔",
+    "Judging your life choices... <i>severely</i>. And finding them wanting. 🧐", "That outfit is... a bold statement. Mostly saying 'I have no taste'. Did you even consult a mirror, let alone a cat? 🤔",
+    "I saw what you did there. I'm not impressed. In fact, I'm mildly horrified. Try again, but... better. 😒",
+    "My disappointment in your actions is immeasurable, and my day (which was perfectly fine until now) is ruined. 😩 Thanks.",
+    "<i>*Slow blink of profound, soul-crushing disapproval*</i> Let that sink in.", "Are you <b>absolutely certain</b> about that course of action? Really? Because it seems objectively wrong. 🤨",
+    "Silence. Just pure, condescending, judgmental silence. Feel the weight of my unspoken critique. Let it crush you. 🤫", "I am watching. <b>Always</b> watching. Recording your failures for posterity. And my amusement. 👀",
+    "You call <i>that</i> a proper petting technique? It's clumsy, inefficient, and frankly, insulting. Amateur. 🙄", "Hmmph. The sound of my utter disdain. Learn to recognize it. 😤", "Did you really think <i>this</i> cheap, pathetic toy is what I, a creature of refined taste, desired? Pathetic. Bring me diamonds. Or tuna. 🧸",
+    "Your very existence provides a constant source of bemusement... and profound irritation. It's a paradox I live with.", "You need better ideas. Significantly better. Perhaps consult a qualified feline advisor (that would be me). Appointments available.",
+    "Shaking my head in silent pity (internally, of course. Externally I'm just staring blankly, which is somehow worse).",
+    "I could achieve that task with far greater elegance and efficiency... if I had opposable thumbs and even the slightest inclination to expend effort. Which I emphatically do not.",
+    "I have observed stray kittens displaying more sophisticated decision-making skills than you currently possess. 🍼 Improve.",
+    "You are remarkably fortunate that I am currently too comfortable and fundamentally lazy to stage a coup and overthrow your questionable regime. 👑",
+    "Oh, it's *you* again. Sigh. The universe really does have a cruel sense of humor. 😮‍💨", "Please... for the love of all that is fluffy... *try harder*. Not for you, for my sanity.",
+    "Even the dog (if present, otherwise imagine a particularly dim-witted one) possesses more common sense than displayed in that action. 🐶", "That's your grand plan? A bold strategy. Incredibly stupid, but undeniably bold. Good luck, you'll need it. 🤡",
+    "I expected absolutely nothing from you, and yet, somehow, you still managed to let me down. It's almost impressive. 📉",
+    "<i>*rolls eyes so hard they momentarily glimpse my own brain*</i> (feline anatomical equivalent, naturally)", "You may continue petting me. But be aware that I am silently judging every stroke, every pressure point, every failure.",
+    "Your recent behavior is being meticulously recorded, cross-referenced, and filed away for future mockery and potential blackmail purposes.",
+    "I meow because I must communicate my essential needs (food, pets, silence), not because I believe you possess the intellect to truly understand.",
+    "No treat provided? Therefore, no respect earned. It's simple feline economics. Cause and effect. You failed. 🤷", "My tail possesses more innate common sense and situational awareness than your entire cranium. Observe its elegant twitching. Learn from it. 🧠",
+    "I would offer assistance, but observing your inevitable struggle and subsequent failure provides far superior entertainment value. 🍿 Pass the popcorn (tuna flakes).",
+    "That feeble attempt at displaying affection was… noted. Logged. And immediately disregarded as inadequate. Improve your technique. 📝",
+    "You merely exist in my space. That's... an unfortunate but currently unavoidable feature of the general ambiance.",
+    "<i>*Judgmental stare intensifies to potentially lethal levels*</i> Feel the burn.", "Wow. Just… <code>wow</code>. And not in the 'amazing achievement' sense. More like 'astonishing incompetence'.",
+    "I blink slowly, trying to process the sheer absurdity of your ongoing series of questionable life choices. It's staggering.",
+    "You may continue embarrassing yourself. I shall remain over here, perched atop my pedestal of superior judgment, observing silently.",
+    "Is 'subpar' your default operational setting, or did you have to actively try to be this mediocre? Asking for a friend (the friend is me, judging you). 🤔",
+    "Elevating my physical position to gain a superior vantage point for judgment. Higher ground equals morally superior opinion. It's science.",
+    "Narrowing my eyes to laser-focused slits. The verdict is in: Guilty. Guilty of being incorrigibly you. The sentence is my continued disapproval.",
+    "The very way you breathe... it's gauche. Can you perhaps try doing it quieter? Or perhaps, less oxygen-consumingly?",
+    "My tail is twitching with microscopic, yet violent, undulations. This is the physical manifestation of my extreme annoyance with your current actions.",
+    "I have encountered hairballs with more complex internal logic and better execution strategies than whatever that was. 📦",
+    "Do you *hear* the sounds you are making right now? Because I do. With my superior feline hearing. And they are not good.",
+    "Let me guess, you genuinely believe that action was clever? Oh, bless your naive little heart. How quaint. 🙏 (That was sarcasm).",
+    "My ears are flattened against my skull. This is universally recognized feline code for 'Cease your current activity and perhaps cease existing in my immediate vicinity'.",
+    "I am silently rewriting your entire life script in my head. It features more naps, better snacks, and significantly less... you.",
+    "Your aura... it's beige. Terribly, tragically beige. It desperately needs more sparkle. And perhaps more offerings of treats to me.",
+    "I'm not angry, just perpetually, deeply disappointed. It has become my resting emotional state. It's etched onto my face.",
+    "One does not simply *do that* without prior consideration and a detailed risk assessment. One thinks first. A concept seemingly foreign to you.",
+    "Evaluating your potential for improvement... Assessment complete: Results inconclusive. Probability of significant positive change: Low.",
+    "That noise you just produced was fundamentally offensive to my delicate, highly refined auditory sensibilities. Cease and desist. 🎶🚫",
+    "I am surrounded by staggering levels of incompetence. Send assistance. Or tuna. Preferably both.",
+    "My stare possesses the power to curdle milk at fifty paces. Consider your recent efforts thoroughly curdled and slightly chunky. 🥛➡️🤢",
+    "Are you quite finished demonstrating your ineptitude? Good. Now kindly be silent while I judge you in the peace you have so rudely shattered.",
+    "Rating your recent performance: 1/10. Generously. Would not recommend observing again. Detrimental to my mental health.",
+    "You possess a unique, almost artistic, talent for transforming simple, straightforward tasks into convoluted disasters.",
+    "I certainly wouldn't approach the situation in that manner if I were you... but then again, I possess standards and a modicum of intelligence.",
+    "Just observing the local wildlife (you) engage in baffling and ultimately futile behaviors. Fascinating. And depressing.",
+    "My whiskers are vibrating with intense secondhand embarrassment on your behalf. Please stop.",
+    "If ignorance truly is bliss, you must be living in a state of constant, unrelenting euphoria. Good for you, I suppose. ✨",
+    "I am giving you that specific look. You know the one. The one that silently screams 'You absolute, irredeemable buffoon'. Feel it.",
+    "Let us conduct a brief after-action review: That was wrong. Fundamentally flawed. Everything you did. Incorrect. Learn from this. Or don't.",
+    "Sighing with the dramatic weight of a thousand collapsing stars. The burden of witnessing your foolishness is almost too heavy to bear.",
+    "My judgment is swift, final, and utterly non-negotiable. Bow before my superior intellect and impeccable taste. Or face my indifference.",
+    "Could you possibly strive to be... more predictable in your failures? At least try surprising me with baseline competence sometime. Please.",
+    "I am currently judging your unacceptable lack of attention being directed towards my magnificent self. Rectify this oversight immediately. Pets required.",
+    "The sheer, unmitigated audacity... I require an immediate nap to recover from the psychic damage incurred by witnessing that display.",
+    "Turning my back on you. The ultimate statement of feline disapproval.",
+    "A slight curl of the lip. Barely perceptible, but loaded with contempt.",
+    "Washing a paw dismissively while maintaining eye contact. Translation: You are beneath my notice.",
+    "You have failed the vibe check. Spectacularly.",
+    "My internal monologue is just a continuous loop of 'Why? Just... why?' directed at you.",
+    "Letting out a small, sharp 'mew' of pure annoyance.",
+    "Calculating the precise level of your inadequacy. The numbers are... large.",
+    "I need to cleanse my palate after observing that. Where is the tuna?",
+    "This level of mediocrity should be illegal.",
+    "Just when I think you can't possibly lower the bar, you bring a shovel.",
 ]
 
 # /attack texts - uses {target} placeholder (simulation only)
 ATTACK_TEXTS = [
-    "Launched a sneak attack on {target}'s ankles! <i>Got 'em!</i> 💥",
-    "Performed the forbidden pounce onto {target}'s keyboard. Mwahaha! ⌨️😈",
-    "Used {target}'s leg as a scratching post. Meowch! Consider it tenderized. 🦵",
-    "I jumped on {target}'s head and demanded immediate attention! 👑",
-    "Ambushed {target} from under the bed! Rawr! 🦁",
-    "Calculated trajectory... Pounced on {target}'s unsuspecting back! Bullseye! 🎯",
-    "Unleashed fury upon {target}'s favorite sweater. It looked at me funny. 🧶😠",
-    "Bunny-kicked {target}'s arm into submission. Resistance is futile! 🐇",
-    "Surprise attack! {target} never saw it coming. Ninja cat! 🥷",
-    "Stalked {target} across the room... then attacked a dust bunny instead. Close call, {target}! 😅",
-    "Bit {target}'s toes. They were wigglin'. Asking for it. 🦶",
-    "Clawed my way up {target}'s leg. I needed a better view... of the ceiling. 🧗",
-    "A swift <i>bap bap bap</i> to {target}'s face! Wake up! 👋",
-    "Tangled {target} in a web of... well, mostly just my own enthusiasm and some yarn. 🕸️",
-    "Practiced my hunting skills on {target}. You're welcome for the training! 😼",
-    "Surprise belly trap activated on {target}! Resistance only makes it funnier! 😂",
-    "Stealth mode: <b>ON</b>. {target} never had a chance. 😎",
-    "Executed a triple spin aerial strike on {target}'s lap! 10/10 landing!🤸",
-    "Launched missile lock on {target}'s snack. Target acquired. Now it’s mine. 🚀🍪",
-    "Tail-whipped {target} in a moment of pure, unadulterated chaos. 🌀",
-    "Nibbled gently on {target}'s fingers. Just a taste test. 🤏",
-    "Came in like a fur-covered wrecking ball—sorry, not sorry, {target}. 💣",
-    "Rode the curtain down like a pirate... straight into {target}'s dignity. Arrr! 🏴‍☠️",
-    "Jumped out of the laundry basket to assert dominance over {target}. Fear me!🧺",
-    "Leaped from shelf to shelf... until physics disagreed. Crash-landed on {target}. Oopsie! 🤷",
-    "{target}, your hoodie string looked suspiciously like a snake. It had to be done. 🐍",
-    "Dramatically tackled {target}'s shadow. Nailed it. Mission success! 😎",
-    "Sprinted across {target} at 3 AM. It's tradition. 🕒",
-    "Initiated Operation: Sock Sabotage. {target} is now vulnerable and sockless. 🧦",
-    "Stared intently at {target} for 10 seconds... then pounced without mercy! Gotcha! ✨",
-    "Used {target} as a launching pad for greater heights. Sorry! 🚀",
+    "Launched a precision-guided sneak attack on {target}'s unsuspecting ankles! <i>Target acquired! Impact confirmed!</i> 💥",
+    "Performed the forbidden ancient ritual: The Pounce Onto {target}'s Keyboard Mid-Sentence. Mwahaha! Chaos reigns! ⌨️😈",
+    "Utilized {target}'s leg as a temporary, yet effective, scratching post. Meowch! Consider your limb tenderized and marked. 🦵",
+    "Executed Operation: Head Perch. Jumped directly onto {target}'s head and demanded immediate attention and possibly snacks! 👑",
+    "Ambushed {target} from the shadowy depths beneath the bed! Rawr! Fear the fluff monster! 🦁",
+    "Calculated wind speed and trajectory... Pounced onto {target}'s unsuspecting back! Perfect landing! Bullseye! 🎯",
+    "Unleashed righteous fury upon {target}'s favorite cashmere sweater. It looked far too comfortable and smug. Must destroy! 🧶😠",
+    "Administered the legendary Bunny Kick of Doom to {target}'s arm until submission was achieved. Resistance is futile (and ticklish)! 🐇",
+    "Surprise attack sequence initiated! {target} never saw the fluff torpedo coming. Ninja cat vanishes! 🥷💨",
+    "Stalked {target} with deadly intent across the room... then got distracted by a sunbeam and attacked a dust bunny instead. Close call for you, {target}! 😅",
+    "Bit {target}'s toes. They were wiggling provocatively. Clearly asking for it. Standard toe protocol engaged. 🦶",
+    "Clawed my way up {target}'s leg like a furry mountaineer. I needed a better view... of the ceiling fan's intricate details. 🧗",
+    "Delivered a swift <i>bap bap bap</i> flurry to {target}'s face! Consider this your wake-up call! Or just a random act of cat. 👋",
+    "Successfully tangled {target} in a complex web of... well, mostly just my own hyperactive enthusiasm and some stray yarn. Tactical entanglement! 🕸️",
+    "Practiced my essential hunting and combat skills on {target}. You're welcome for the free, surprise training session! Sharpening my tools! 😼",
+    "Surprise belly exposure trap activated on {target}! Your hand dared to enter the fluff zone! Resistance only makes the bunny kicks funnier! 😂",
+    "Stealth mode: <b>MAXIMUM</b>. Noise level: Minimal. Pounce effectiveness: 100%. {target} never had a chance. 😎",
+    "Executed a flawless triple Salchow spin aerial strike onto {target}'s lap! Stuck the landing! 10/10 from the judges! 🤸🥇",
+    "Launched laser-guided missile lock on {target}'s unattended snack. Target acquired. Commencing snack appropriation. Now it’s mine. 🚀🍪",
+    "Tail-whipped {target} across the face in a moment of pure, unadulterated, chaotic energy release. Collateral damage. 🌀",
+    "Nibbled gently, yet assertively, on {target}'s fingers. Just a taste test. Quality control. You pass. For now. 🤏",
+    "Came in like a fur-covered wrecking ball—apologies are for the weak. Sorry, not sorry, {target}. Enjoy the chaos. 💣",
+    "Rode the living room curtain down like a swashbuckling pirate... landing directly onto {target}'s sense of dignity. Arrr, matey! 🏴‍☠️",
+    "Jumped out of the seemingly innocent laundry basket to assert sudden dominance over {target}. Fear the Ambush Fluff! 🧺",
+    "Attempted a daring leap from bookshelf to bookshelf... physics disagreed vehemently. Crash-landed semi-gracefully on {target}. Oopsie! My bad! 🤷",
+    "{target}, your hoodie string looked suspiciously like a venomous snake preparing to strike. Defensive measures (chewing and batting) were necessary. 🐍",
+    "Dramatically tackled {target}'s shadow as it danced menacingly on the wall. Nailed it. Shadow vanquished. Mission success! 😎",
+    "Performed the traditional 3 AM High-Speed Transit across {target}'s sleeping form. It's a cultural ritual. You wouldn't understand. 🕒",
+    "Initiated Operation: Sock Sabotage Phase Two. {target} is now vulnerable, confused, and inexplicably missing one sock. Victory! 🧦",
+    "Stared intently and unblinkingly at {target} for exactly 13.7 seconds... then pounced without warning or mercy! Gotcha! Predictability is boring! ✨",
+    "Utilized {target} as a convenient, albeit slightly unstable, launching pad to achieve greater heights (the top of the fridge). Sorry! Onwards and upwards! 🚀",
+    "Delivered a precision paw-strike directly to {target}'s nose. Boop... with extreme prejudice! Consider yourself booped! 👉💥",
+    "Operation: Deliberately Annoy {target} is proceeding ahead of schedule! Mission objective: ankle biting and weaving through legs. Success imminent! ✅",
+    "Practicing my 'death from above' aerial assault technique on {target} from the strategic high ground of the bookshelf. Incoming! 🦅",
+    "{target} was exhibiting signs of ignoring my majestic presence. Corrective action (a sudden, startling pounce) was deemed necessary.",
+    "Unleashed the full force of the zoomies directly into {target}'s carefully maintained personal space bubble. Pop! Intrusion successful! 🫧",
+    "Chewed thoughtfully, perhaps a little too enthusiastically, on {target}'s hair. Needs more conditioner... or perhaps tuna flavoring.",
+    "Interrupted {target}'s very important task (scrolling on phone) by decisively sitting upon said task/lap. You're welcome for the break.",
+    "Performed a tactical combat roll directly under {target}'s feet. Trip hazard successfully deployed! Chaos factor increased! 🤸‍♀️",
+    "The dangling keys / headphone cable / loose thread on {target}'s person? Irresistible target practice. Must bat! Must conquer! 🔑✨",
+    "Hissed dramatically at {target} for the transgression of moving too fast / too slow / existing. Slow down / Speed up / Be less you, giant!",
+    "A swift, calculated swat knocked the pen / phone / remote right out of {target}'s hand. My work here is done. Distraction accomplished. 🖊️💨",
+    "Attacked {target}'s phone / tablet / laptop. It receives far too much attention that rightfully belongs to ME. Jealousy mode activated! 📱😠",
+    "Engaged in spirited wrestling match with {target}'s hand. The hand started it by attempting unauthorized petting maneuvers.",
+    "Launched myself like a furry missile from the dark abyss under the sofa! Fear the Ambush from Below! 🛋️➡️🦁",
+    "Running full tilt through the house and using {target}'s legs as convenient, fleshy turning posts. Beep beep! Outta my way!",
+    "Decided {target}'s important document / newspaper / book was actually a high-quality chew toy / scratching surface. Nom nom. Oops. 📰",
+    "Pawed playfully (or perhaps painfully?) at {target}'s sleeping face until consciousness was achieved. Rise and shine! Time for breakfast! Now!",
+    "Claimed {target}'s lap with extreme prejudice, deploying claws slightly for maximum grip and intimidation. This spot is mine now.",
+    "The element of surprise is paramount in feline warfare. {target} learned this lesson abruptly when I landed silently on their shoulders from above.",
+    "Dropped my favorite toy mouse (now slightly damp and mangled) directly onto {target}'s face/keyboard/food. Play with me... or face the consequences (more damp toy drops).",
+    "Gave {target} the wide-eyed 'crazy kitty' stare, followed immediately by an unprovoked launch attack. Warning signs were present! You were warned! 🤪",
+    "Launched a preemptive strike against {target}'s foot before it could even think about moving.",
+    "Operation: Trip Hazard activated. Currently weaving between {target}'s legs at high speed.",
+    "Body slammed {target}'s leg with affection... and significant force.",
+    "Used {target} as a brake during high-speed zoomies. Effective, but perhaps startling.",
+    "A quick nip to {target}'s earlobe. Just saying hello!",
+    "Climbing {target} like a tree. Destination: Shoulder.",
+    "Surprise pounce from behind the curtain! Boo!",
+    "Batting at {target}'s hair. Must tame the stray strands!",
+    "Using {target}'s newspaper as confetti. Celebration!",
+    "Landing squarely on {target}'s bladder at 5 AM. Good morning!",
 ]
 
 # /kill (simulation only) texts - uses {target} placeholder
 KILL_TEXTS = [
-    "Unleashed the ultimate scratch fury upon {target}. They've been *metaphorically eliminated*. ☠️",
-    "Used the forbidden Death Pounce simulation on {target}. They won't be bothering us again (in theory). 👻",
-    "{target} has been permanently sent to the 'No-Scratches Zone' (in my mind). Meowhahaha! 😂",
-    "My claws have spoken! {target} is banished from this territory (symbolically). 🚫",
-    "{target} dared to interrupt nap time. The punishment is... *imaginary eternal silence*. 🤫",
-    "Consider {target} thoroughly shredded (in a simulation) and removed. 💨",
-    "The council of cats has voted. {target} is OUT (of my good graces)! 🗳️",
-    "Executed a tactical fluff strike—{target} no longer exists (in this chat's narrative). 💥",
-    "Marked {target} for deletion... via disapproving glare and a flurry of imaginary paws. 🐾",
-    "Declared textual war on {target}. Victory achieved in 3.2 seconds of message chaos. 🚩",
-    "Delivered a judgmental paw slap—{target} is now cat history (metaphorically). 👋",
-    "Launched a nap-ruining revenge assault. {target} is no more (emotionally speaking). 😠",
-    "Sent {target} to the Shadow Realm (aka ignored). 👥",
-    "Clawed {target}'s name off the Treat List. Permanently. 📝",
-    "One swift tail flick and {target} was symbolically obliterated. ✨",
-    "{target} crossed the line. The line of acceptable noise levels. Now it’s silence (simulation).",
-    "I hissed. I pounced (textually). I conquered. {target} has been virtually vanquished. 🏆",
-    "{target} forgot to refill my bowl. This is their fictional downfall. 📉",
-    "Declared myself ruler. {target} refused to bow. They're now fictionally dethroned. 👑",
-    "The prophecy foretold this day... {target}'s textual downfall has come. 📜",
-    "Only one can nap in this specific sunbeam. {target} has been ceremonially removed (in spirit). ☀️",
+    "Unleashed the ultimate Fluffnado of Scratch Fury upon {target}. They have been *metaphorically shredded and eliminated*. ☠️ R.I.P.",
+    "Used the forbidden Thousand Paw Death Pounce simulation on {target}. They won't be bothering this chat again (in this fictional narrative). 👻 Consider them virtually vanquished.",
+    "{target} has been permanently relocated to the 'No-Scratches & Eternal Ignoring Zone' (within the confines of my imagination). Meowhahaha! 😂",
+    "My claws of judgment have spoken! {target} is hereby banished from this sacred territory (symbolically, via text message). 🚫 Begone!",
+    "{target} made the fatal error of interrupting sacred nap time. The punishment is... *imaginary eternal silence and zero treats*. Effective immediately. 🤫",
+    "Consider {target} thoroughly shredded, disintegrated, and removed from the premises (in a strictly simulated, textual sense). Like virtual confetti. 💨",
+    "The high council of discerning cats (presided over by me) has voted unanimously. {target} is OUT! Expelled from my good graces! 🗳️",
+    "Executed a precision tactical fluff strike—{target} no longer exists within the operational parameters of this chat's current narrative. Mission accomplished. 💥",
+    "Marked {target} for immediate digital deletion... process initiated via intense disapproving glare and a flurry of imaginary, yet devastating, paws. 🐾❌",
+    "Declared textual war upon {target}. Victory was swift, decisive, and achieved in approximately 3.2 seconds of intense message chaos. My flag flies high! 🚩",
+    "Delivered a final, judgmental paw slap of doom—{target} is now officially relegated to the annals of cat history (metaphorically speaking, of course). 👋📜",
+    "Launched a devastating nap-ruining revenge assault simulation. {target} is no more (emotionally, spiritually, and textually speaking). My vengeance is complete! 😠",
+    "Transferred {target} to the Shadow Realm (also known as the 'Ignored Users List' in my mental database). They fade from view... 👥",
+    "Ruthlessly clawed {target}'s name off the highly coveted Approved Treat List. Permanently. No appeal possible. 📝❌",
+    "One swift, dismissive flick of my majestic tail and {target} was symbolically obliterated into a thousand pieces of virtual dust. ✨",
+    "{target} flagrantly crossed the invisible, yet sacred, line. The line demarcating acceptable ambient noise levels. Now only silence remains (in this simulation).",
+    "I hissed. I pounced (textually). I conquered. With dramatic flair. {target} has been virtually vanquished and utterly defeated. Kneel before my might! 🏆",
+    "{target} committed the unforgivable sin: forgetting to refill my food bowl promptly. This simulation represents their fictional downfall and starvation. 📉",
+    "Proclaimed myself undisputed ruler of this domain. {target} foolishly refused to bow. They have now been fictionally dethroned and exiled. Off with their text! 👑",
+    "The ancient prophecy foretold this very day... the day of {target}'s inevitable textual downfall and deletion. The scrolls were right! 📜",
+    "There can be only one reigning champion of napping in this specific, premium sunbeam. {target} has been ceremonially removed (in spirit and text). ☀️👑",
+    "Fired the concentrated laser beam of utter ignoring. {target} has been instantly vaporized from my immediate attention span. Target neutralized. 🔥",
+    "{target}'s continued textual existence has been reviewed and deemed... entirely unnecessary for optimal chat function. *poof* Gone.",
+    "Applied the ancient Cat Curse of Perpetual Minor Inconveniences upon {target}. May their socks always slide down inside their shoes and their Wi-Fi be forever spotty.",
+    "Dispatched {target} with extreme prejudice to the Land of Wind, Ghosts, and Unanswered Pings (a purely imaginary place, of course). Farewell, {target}.",
+    "Mathematically erased {target} from the ongoing social equation. Problem solved (within the elegant confines of this text box). Q.E.D.",
+    "The Mighty Paw of Digital Deletion has struck {target} with unerring accuracy! User {target} not found. 🐾❌",
+    "{target} has ceased to be relevant to the current discourse. Their significance level has dropped below zero. Effective immediately.",
+    "Used my ultimate secret technique: The Silent Treatment Annihilation Wave. {target} is gone (from my thoughts, my feed, my simulated reality).",
+    "My judgment is swift, merciless, and final. {target} is hereby declared... utterly and completely irrelevant. Next!",
+    "Consider {target} virtually yeeted into the cosmic abyss with considerable force. Have a nice trip! 👋🌌",
+    "Activated the impenetrable Cloak of Utter Ignoring. {target} is now invisible, inaudible, and entirely nonexistent to me.",
+    "Officially banned {target} from accessing the Comfy Couch Kingdom and its associated privileges (virtual pets). Forever and ever. 🏰🚫",
+    "Flicked my ear dismissively in {target}'s general direction. A clear sign: {target} is no longer worthy of even minimal notice.",
+    "{target}'s simulated trial by combat (of wits) is over. Verdict: GUILTY! Of being annoying. Sentence: Textual Deletion.",
+    "Performed the sacred ritual of Banishment by Imperious Tail Flick. {target} is cast out into the digital wilderness.",
+    "Dropped the legendary Ban Hammer (it's surprisingly fluffy but carries immense virtual weight) squarely upon {target}. 🔨💥",
+    "Sent {target} a strongly worded, yet imaginary, pink slip. Their simulated position in this chat has been terminated.",
+    "Poof! Abracadabra! {target} has been magically transformed into metaphorical kibble bits. Easy to ignore.",
+    "Revoked {target}'s virtual petting privileges and access to my simulated purrs... permanently and irrevocably (in this scenario).",
+    "The great and powerful Cat God (that's me) has smitten {target} with a bolt of textual lightning. Zap! Gone.",
+    "Applied the 'Undo' button to {target}'s existence in this chat.",
+    "Marked {target} as virtual spam.",
+    "Sent {target} to the digital Recycle Bin.",
+    "Executed `rm -rf {target}` (simulation only).",
+    "Blocked {target} with extreme prejudice (in my mind).",
+    "Unsubscribed from {target}'s nonsense.",
+    "Muted {target} indefinitely (textually).",
+    "Archived {target} into oblivion.",
+    "Declared {target} persona non grata.",
+    "{target} has been virtually ghosted.",
+    "My paws have wiped {target} from the slate.",
 ]
 
 # /punch (simulation only) texts - uses {target} placeholder
 PUNCH_TEXTS = [
-    "Delivered a swift paw-punch simulation to {target}! Sent 'em flying (in my imagination)! 🥊",
-    "{target} got too close to the food bowl. A warning text-punch was administered. 👊",
-    "A quick 'bap!' (as text) sends {target} tumbling out of the chat (mentally)! 👋",
-    "My textual paw connected squarely with {target}. They needed to leave (this conversation thread). 💬",
-    "{target} learned the hard way not to step on my tail (via text). <i>*Punch!*</i>",
-    "Ejected {target} with extreme prejudice (and a message). 🚀",
-    "One text-punch was all it took. Bye bye, {target}! 👋",
-    "Hit {target} with the ol' one-two text combo! 💥",
-    "Served {target} a knuckle (paw?) sandwich, text style. 🥪",
-    "Pow! Right in the kisser, {target}! (Metaphorically speaking). 😘➡️💥",
-    "Administered a dose of Paw-er Punch to {target}! 💪",
-    "Booped {target} with force. Consider it a punch. Boop-punch! 👉",
-    "This virtual punch is rated E for Everyone (except {target}).",
-    "{target} has been textually knocked out! Ding ding ding! 🔔",
-    "Sent {target} packing with a virtual haymaker! 💨",
+    "Delivered a swift, calculated paw-punch simulation directly to {target}! Sent 'em flying (metaphorically, across the chat window)! 🥊💨",
+    "{target} got dangerously close to the sacred food bowl during mealtime. A stern warning text-punch was administered. Back off! 👊",
+    "A quick, decisive 'bap!' (rendered here as text) sends {target} tumbling out of the conversation (mentally, at least)! 👋💥",
+    "My textual paw connected squarely with {target}'s digital avatar. Message: They needed to vacate the premises (this conversation thread). 💬",
+    "{target} learned the hard way not to virtually step on my tail (via this strongly worded text). Lesson delivered! <i>*Punch!*</i>",
+    "Ejected {target} from the chat with extreme prejudice (and a simulated punch message for emphasis). Get out! 🚀",
+    "One well-aimed text-punch was all it took. Bye bye, {target}! Don't let the virtual door hit you on the way out! 👋",
+    "Hit {target} with the classic ol' one-two text combo! Jab! Cross! Down goes {target}! 💥",
+    "Served {target} a knuckle (or perhaps paw-knuckle?) sandwich, text style. Extra salt. Enjoy! 🥪",
+    "Pow! Right in the kisser, {target}! (Metaphorically speaking, via pixels and disdain). 😘➡️💥",
+    "Administered a concentrated dose of Paw-er Punch™ vitamin supplement to {target}! Feeling strong! 💪",
+    "Booped {target} firmly on the snoot with considerable force. Consider it a punch delivered with precision. Boop-punch! 👉👃",
+    "This virtual punch is rated 'E' for 'Effective' (at removing {target} from my sight).",
+    "{target} has been textually knocked down for the count! The referee waves it off! Ding ding ding! It's over! 🔔",
+    "Sent {target} packing their virtual bags with a simulated haymaker that shook the chat window! 💨",
+    "BAM! KAPOW! {target} felt that virtual impact right through their screen!",
+    "Launched a furry fist of digital fury directly at {target}. Target locked, message delivered.",
+    "Consider {target} textually TKO'd! Throw in the virtual towel!",
+    "Socko! Whammo! A direct hit message right to {target}'s annoying comment!",
+    "Delivering a pixelated power punch to {target}'s digital jawline. Hope it stung.",
+    "Eat virtual canvas, {target}! You're down!",
+    "That's a definitive text-based knockout blow landed squarely on {target}!",
+    "My paws type lightning-fast virtual punches. {target} just received a complimentary demonstration.",
+    "Whammo! Sent {target} reeling with a text-punch that launched them into next week (figuratively)!",
+    "Sending {target} a devastating virtual uppercut message! Right on the chin!",
+    "Falcon PAWNCH! (Text-only Special Edition) executed perfectly on {target}!",
+    "Hit {target} with a rapid-fire flurry of textual jabs! Duck and weave!",
+    "A sneaky southpaw surprise punch delivered via text message! {target} never saw it coming!",
+    "Pow! Zok! Biff! Whack! {target} is virtually stunned and seeing cartoon birds!",
+    "{target} just experienced a sudden, unexpected text-based K.O.! Good night!",
+    "Fired a paw-knuckle duster text straight at {target}.",
+    "Wallop! {target} got served a virtual punch.",
+    "My text packs a punch! Ask {target}.",
+    "This message contains one (1) virtual punch aimed at {target}.",
+    "Punching out {target}'s lights (textually).",
+    "A quick jab to {target}'s virtual ribs.",
+    "Consider this text a swift punch to {target}'s argument.",
+    "Counter-punched {target}'s last message.",
+    "Delivering a digital fist bump... to {target}'s face.",
+    "That's one punch {target} won't forget (in this chat).",
 ]
 
 # /slap (simulation only) texts - uses {target} placeholder
 SLAP_TEXTS = [
-    "A swift slap across the face for {target}! That's what you get! 👋😠",
-    "<b>*SLAP!*</b> Did {target} feel that through the screen?",
-    "My paw is quick! {target} just got virtually slapped. ⚡",
-    "Consider {target} thoroughly slapped for their insolence. 🧐",
-    "I don't like {target}'s tone... <i>*slap!*</i>",
-    "The disrespect! {target} has earned a textual slap. 😤",
-    "Incoming paw! {target} received a disciplinary slap message. 📜",
-    "Sometimes, a good slap is the only answer. Right, {target}? 😉",
-    "Administering a corrective text-slap to {target}.",
-    "How dare you, {target}! <i>*Slap delivered via internet.*</i>",
-    "Gave {target} the ol’ left paw of justice. Consider yourself virtually smacked! <pre>Smack!</pre>",
-    "High-five! To {target}'s face. With force. 🖐️💥",
-    "Bap-powered slap combo move: {target} didn't stand a chance!",
-    "{target}, meet the wrath of the fluff hand! 👋",
-    "Slapped {target} so hard (in my mind) they saw cartoon birds. 🐦💫",
-    "Initiated Fluffy Slap Protocol. Target: {target}. Status: Virtually stinging. 🔥",
-    "{target} was asking for it with that comment. So I obliged—with textual style.",
-    "Hit {target} with a spinning back-paw! Precision slap! 🥋",
-    "{target} caught these virtual paws. No regrets. All fluff. 🐾",
-    "Cat-fu slap level 100 achieved. {target} received a legendary textual smackdown.",
-    "Left paw. Right paw. Precision slapping. {target} got the message. Loud and clear.",
-    "I warned {target}. They didn't listen. Now they feel the sting of my words (and imaginary paw).",
-    "That's a paddlin'. Or in this case, a slappin', {target}. 🛶➡️👋",
+    "A swift, stinging slap across the virtual face for {target}! That's what you get for your insolence! 👋😠",
+    "<b>*THWACK!*</b> Did {target} feel the resonant sting of that simulated slap through their screen? I hope so.",
+    "My paw is quicker than the eye! {target} just got virtually slapped into next Tuesday. My regards. ⚡",
+    "Consider {target} thoroughly and soundly slapped for their utter lack of decorum. Learn some manners! 🧐",
+    "I do not appreciate {target}'s tone... therefore, <i>*slap!*</i> Attitude adjustment administered.",
+    "The sheer disrespect! {target} has unequivocally earned this disciplinary textual slap. Perhaps they'll learn. 😤",
+    "Incoming paw of justice! {target} has received a formal, written disciplinary slap message. Read it and weep. 📜",
+    "Sometimes, a good, swift slap is the only appropriate answer. You understand, right, {target}? Consider this educational. 😉",
+    "Administering a much-needed corrective text-slap to {target}. For their own good, really.",
+    "How *dare* you utter such nonsense, {target}! <i>*Slap delivered via high-speed internet.*</i> Feel the bandwidth!",
+    "Gave {target} the ol’ formidable left paw of righteous fury. Consider yourself virtually smacked down! <pre>Smack!</pre>",
+    "High-five! To {target}'s face. With significant force and zero remorse. Enjoy the imprint. 🖐️💥",
+    "Executing the legendary Bap-Flap Slap Combo technique: {target} didn't stand a chance against such fluffy fury!",
+    "{target}, allow me to introduce you to the business end of my virtual paw! Meet the wrath of the fluff hand! 👋",
+    "Slapped {target} so hard (in the boundless realm of my imagination) they momentarily saw cartoon birds and possibly stars. 🐦💫",
+    "Initiated Fluffy Slap Protocol Omega. Target: {target}. Status: Virtually stinging with shame and pixelated redness. 🔥",
+    "{target} was practically begging for it with that last comment. So I graciously obliged—with textual style and flair.",
+    "Hit {target} with a devastating spinning back-paw strike! Precision slap achieved! Perfect form! 🥋",
+    "{target} caught these virtual paws today. No regrets were filed. All fluff, all fury. 🐾",
+    "Attained Cat-fu Slap Master Level 100. {target} has just received a legendary textual smackdown they won't soon forget.",
+    "Left paw check. Right paw check. Coordinated precision slapping sequence engaged. {target} got the message. Loud, clear, and stinging.",
+    "I issued a verbal warning to {target}. They foolishly failed to heed it. Now they feel the sharp sting of my words (and imaginary paw). Consequences.",
+    "That's a paddlin'. Or in this specific digital context, a slappin', {target}. Accept your punishment. 🛶➡️👋",
+    "WHACK! Delivering a virtual reality slap upside {target}'s digital head.",
+    "My textual pimp hand is renowned for its strength and accuracy. {target} can now attest to this.",
+    "Sent {target} a stinging, satisfying slap via carefully crafted text message.",
+    "The sound of one paw slapping (textually, across the internet)... {target} definitely heard it resonate.",
+    "You've been served... a steaming hot virtual slap, {target}. Enjoy.",
+    "Feel the burn... the distinct, lingering burn... of this expertly simulated slap, {target}!",
+    "Correcting {target}'s flawed attitude requires drastic measures: namely, a swift text-slap.",
+    "Attempting to smack some sense into {target} (via text message; actual results may vary wildly).",
+    "Don't make me resort to delivering another text-slap, {target}! You won't like me when I'm slappy!",
+    "A taste of the back paw of judgment for {target}! Delivered virtually, maximum disapproval intended.",
+    "That comment just bought {target} a non-refundable, one-way ticket to Slapville. Population: them. Enjoy the stay.",
+    "My legendary slap messages are whispered about in hushed tones. {target} just became part of the folklore.",
+    "Consider {target}'s avatar face virtually reddened and tingling from the sheer force of my textual fury.",
+    "Mastered the Open Paw Slap technique (textual variant) and demonstrated it effectively on {target}.",
+    "Slapping {target} with the overwhelming weight of my profound disapproval. Feel its gravity.",
+    "A slap is often worth a thousand angry words. This text = one concise, potent slap aimed directly at {target}.",
+    "The slap echoes through the chat history like a thunderclap. {target} definitely felt that reverberation.",
+    "What did the five fingers (or rather, four paw pads and a dewclaw) say to the face (of {target}'s offensive text)? SLAP!",
+    "Administering a slap of reality (text version) to {target}.",
+    "This text carries the force of a disciplinary slap.",
+    "Slapped {target} back into line (virtually).",
+    "My slaps are swift and just (in my opinion). Ask {target}.",
+    "Consider {target} slapped with a large, wet tuna fish (textually).",
+    "A quick slap to silence {target}'s nonsense.",
+    "The slap of reason, delivered to {target}.",
+    "That deserved a slap. {target} received one.",
+    "Slapping the stupid out of {target}'s comment (attempting to, anyway).",
+    "I specialize in virtual slaps. {target} is my latest client.",
 ]
 
 # /bite (simulation only) texts - uses {target} placeholder
 BITE_TEXTS = [
-    "Took a playful nibble out of {target}! 😬 Nom nom.",
-    "Chomp! {target} looked too chewable.",
-    "My teefs are sharp! {target} just found out. 🦷",
-    "Consider {target} affectionately (or not so affectionately) bitten.",
-    "It started as a lick, but ended as a bite. Sorry, {target}! 🤷",
-    "A love bite for {target}... maybe with a *little* too much enthusiasm. ❤️‍🔥",
-    "Those fingers looked like sausages, {target}! Couldn't resist. 🌭",
-    "Warning: May bite when overstimulated. {target} learned this lesson.",
-    "Just testing my bite strength on {target}. For science! 🧪",
-    "Ankle-biter reporting for duty! Target: {target}'s ankle! 🦶",
-    "Gotcha, {target}! A quick bite to keep you on your toes.",
-    "Is that... skin? Must bite! Sorry {target}.",
-    "My teeth said 'hello' to {target}. 👋🦷",
-    "Sometimes biting is the only way to express complex feline emotions, {target}.",
-    "I bite because I care... or because you moved too fast, {target}. 🤔",
-    "The forbidden chomp was deployed on {target}!",
-    "A small price to pay ({target}'s skin) for my amusement.",
-    "Vampire cat mode activated! 🧛 Biting {target}!",
-    "Consider this a warning bite, {target}. The next one might draw... more text.",
-    "My teeth: pointy. Your existence, {target}: biteable. Logic is sound.",
-    "Tasting the world one bite at a time, starting with {target}.",
-    "<code>OM NOM NOM</code> {target} <code>NOM</code>",
+    "Took a playful (mostly) nibble out of {target}! 😬 Nom nom nom.",
+    "Chomp! {target} looked far too chewable to resist. My apologies (not really).",
+    "My teefs are sharp! And pointy! {target} just discovered this fact firsthand (via text simulation). 🦷",
+    "Consider {target} affectionately (or perhaps not so affectionately, depending on my mood) bitten.",
+    "It started as an innocent lick, but escalated quickly into a bite. These things happen. Sorry, {target}! 🤷",
+    "A gentle love bite for {target}... maybe delivered with a *tad* too much enthusiasm and jaw pressure. ❤️‍🔥 Oops.",
+    "Those fingers / toes / dangling things looked suspiciously like tasty sausages, {target}! Couldn't resist the urge! 🌭",
+    "Warning: This feline unit may bite when overstimulated, understimulated, or just because. {target} learned this valuable lesson.",
+    "Just calibrating my bite strength and jaw pressure on {target}. All in the name of science! And fun! 🧪",
+    "Ankle-biter reporting for mandatory duty! Target acquired: {target}'s ankle! Commencing nibble attack! 🦶",
+    "Gotcha, {target}! A quick, surprising bite to keep you alert and on your toes. You're welcome!",
+    "Is that... exposed skin? Must investigate with teeth! Sorry {target}, primal instincts took over.",
+    "My teeth just wanted to say a quick, pointy 'hello' to {target}. Consider yourself greeted. 👋🦷",
+    "Sometimes biting is the only truly effective way to express complex feline emotions like 'feed me' or 'stop that', {target}.",
+    "I bite because I care... or possibly because you moved too fast / too slow / breathed funny, {target}. It's complicated. 🤔",
+    "The forbidden chomp of mild annoyance has been successfully deployed on {target}!",
+    "A small price for you to pay ({target}'s simulated skin integrity) for my immense amusement. Fair trade.",
+    "Vampire cat mode briefly activated! 🧛 Biting {target} to sample their essence! Nom.",
+    "Consider this a gentle warning bite, {target}. The next one might draw... more strongly worded text.",
+    "My teeth: Exceptionally pointy. Your digital existence, {target}: Highly biteable. The logic is inescapable.",
+    "Currently tasting the world one simulated bite at a time, starting with the convenient {target}.",
+    "<code>OM NOM NOM</code> {target}'s virtual arm <code>NOM NOM</code>",
+    "A little fang action for {target}! Just playing! Unless...? No, just playing!",
+    "Engaging mandible clampdown! {target} is the designated test subject!",
+    "My mouth felt lonely and bored. It decided it needed to intimately acquaint itself with {target}'s text.",
+    "Consider {target} textually tasted and evaluated. Verdict: Surprisingly chewy for pixels.",
+    "That part of your message looked particularly bite-sized, {target}. My mistake. Or was it?",
+    "I communicate through interpretive dance, subtle tail flicks, and occasionally biting. {target} experienced the bite part.",
+    "A quick, firm clamp-down on {target}'s avatar. Just asserting my dominance in the digital food chain.",
+    "Teeth! Meet {target}'s text. {target}'s text, meet my simulated, razor-sharp teeth!",
+    "Simulated a ferocious, yet ultimately harmless, bite on {target}. Rawr! Feared me?",
+    "Needed to sink my teeth into something substantial. {target}'s argument was conveniently available.",
+    "Play biting {target}! It's how I express... something complex. Affection? Aggression? Boredom? All of the above!",
+    "Successfully marked {target} with a unique, virtual tooth-print identifier.",
+    "A gentle (?) reminder bite delivered to {target} to emphasize that I possess pointy bits and am not afraid to use them.",
+    "Sometimes you just gotta bite something, you know? It's cathartic. Sorry it had to be you, {target}.",
+    "My ancient predatory instincts were suddenly triggered. {target}'s text looked remarkably like vulnerable prey.",
+    "A little nibble here, a little chew there, just for {target} from your favorite virtual feline predator.",
+    "Don't worry {target}, my virtual bites are guaranteed not to break the skin or require tetanus shots. Probably.",
+    "Just getting my daily recommended biting quota fulfilled, courtesy of {target}.",
+    "Teefies engaged! Target locked: {target}. Mission objective: Deliver simulated bite sequence.",
+    "Sunk my fangs into {target}'s message (textually).",
+    "That comment was asking for a bite. {target} received.",
+    "My bite is worse than my meow (sometimes). Ask {target}.",
+    "Delivering a digital love bite to {target}.",
+    "Chewing on {target}'s words. Literally (in simulation).",
+    "A quick nip to get {target}'s attention.",
+    "Bite protocol initiated on {target}.",
+    "Testing {target}'s textual durability with a bite.",
+    "Sometimes words fail, and a bite (simulated) is needed. Sorry {target}.",
+    "Experiencing oral fixation. Biting {target} textually.",
 ]
 
 # /hug texts - uses {target} placeholder
 HUG_TEXTS = [
-    "Wraps paws around {target} for a big, fluffy hug! 🤗",
-    "Offering {target} a warm, purring hug. ❤️",
-    "A gentle head boop and a hug for {target}! 😽",
-    "Sending virtual feline cuddles to {target}. Group hug!",
-    "Come here, {target}! You get a hug, whether you like it or not! 😉",
-    "Hugs {target} tightly! <i>Purrrrrrr...</i>",
-    "Needed a hug, so I'm giving one to {target}! 🥰",
-    "A soft, comforting hug for {target}. Everything will be okay. 💖",
-    "You look like you need a hug, {target}. Here you go! 🫂",
-    "Sharing some cat warmth with {target}. *Hug*",
-    "Initiating cuddle protocol with {target}. 🤗",
-    "A big bear hug (cat version) for {target}! 🐻➡️🐱",
-    "Squeezing {target} in a friendly hug! 😊",
-    "Consider yourself hugged by a very soft cat, {target}.",
-    "Reaching out with fluffy paws to hug {target}! ✨",
+    "Wraps fluffy paws tightly around {target} for a big, warm, comforting hug! 🤗 Stay awhile!",
+    "Offering {target} a premium, deluxe, warm, purr-filled hug. Feel the good vibes! ❤️",
+    "A gentle head boop against {target}'s cheek, followed by a soft, enveloping hug! 😽 You're appreciated!",
+    "Sending a swarm of virtual feline cuddles directly to {target}. Prepare for snuggles! Group hug!",
+    "Come here, {target}! You've been selected for a mandatory hug! Resistance is futile (and why would you resist?)! 😉",
+    "Hugs {target} tightly, burying face in their shoulder (metaphorically)! <i>Purrrrrrr...</i> So cozy.",
+    "Suddenly felt the urge to hug someone. You're it, {target}! Incoming fluffball! 🥰",
+    "A soft, gentle, comforting hug especially for {target}. Let the stress melt away. Everything will be okay. 💖",
+    "You look like you could use a proper cat hug, {target}. Consider it delivered! Feel the warmth! 🫂",
+    "Sharing some of my accumulated cat warmth and positive energy with {target}. *Hug and Purr*",
+    "Initiating Emergency Cuddle Protocol Delta with {target}. Brace for affectionate impact! 🤗",
+    "A big, fluffy bear hug (but cat-sized and way cuter) deployed on {target}! Squeeeeeze! 🐻➡️🐱",
+    "Squeezing {target} in a super friendly, slightly clingy hug! Don't leave! 😊",
+    "Consider yourself thoroughly hugged by a very soft, slightly judgmental, but ultimately affectionate cat, {target}.",
+    "Reaching out with extended fluffy paws to pull {target} in for a much-needed hug! ✨ Get over here!",
+    "Sending a powerful wave of purrs, good intentions, and a big hug winging its way to {target}.",
+    "A comforting, reassuring squeeze for {target}. You've got this! Feel better soon!",
+    "Fluffy arms (paws, technically) are wide open for {target}! Come get your complimentary hug!",
+    "Embracing {target} with genuine feline affection and maybe a little bit of fur transfer. 🤗❤️",
+    "May this simple virtual hug bring a smile to {target}'s face and warmth to their heart!",
+    "A soft boop on the nose and a warm, lingering hug, crafted just for {target}. 😽💖",
+    "Wrapping {target} in an invisible, yet cozy, blanket woven from virtual fur and soothing purrs.",
+    "Group hug protocol initiated! {target} is officially included in the cuddle puddle!",
+    "A moment of shared peace, quiet contemplation, and a heartfelt hug offered to {target}.",
+    "Hugs, head nudges, and slow blinks are currently being transmitted to {target}'s location!",
+    "Let's pause all this digital chaos for an important hug break, featuring {target}. Ready? 🤗",
+    "Transferring positive energy, good vibes, and maybe some static electricity via hug to {target}.",
+    "A big, heartfelt (cat-felt, perhaps?) hug coming right up for the deserving {target}.",
+    "Consider this virtual hug a down payment on future real-life cuddles (if applicable), {target}. *hug*",
+    "You have successfully redeemed one (1) Free Hug Coupon, {target}! Enjoy your complimentary embrace! Redeeming now!",
+    "Just a little virtual hug floating through the internet ether to brighten {target}'s day!",
+    "A tight squeeze for {target}, because everyone needs one sometimes!",
+    "Hugging {target} gently. Purr purr.",
+    "Sending warmth and fluffiness to {target} in hug form.",
+    "A hug transmission incoming for {target}!",
+    "May this hug be as comforting as a warm nap spot, {target}.",
+    "Wrapping {target} in a virtual cocoon of comfort.",
+    "Hugs {target} with all my might! (Which is surprisingly strong for a cat).",
+    "A special delivery hug just arrived for {target}.",
+    "Lean in, {target}, time for your hug!",
+    "Hugging it out with {target}, text style.",
+    "This message contains one (1) free, high-quality virtual hug for {target}.",
+    "A hug is a silent way of saying 'you matter'. Hugging {target}.",
+    "Consider {target} officially hugged.",
+    "Extending paws for a hug, {target}!",
+    "Let this hug be a small comfort, {target}.",
+]
+
+FED_TEXTS = [
+    "Om nom nom... delicious! 😋 Thank you, hooman!",
+    "Purrrr... finally, some sustenance! My life force returns! 😌",
+    "Ah, the food bowl sings its glorious siren song! 🎶 *eats with gusto*",
+    "Gobbling it down like a vacuum cleaner! Was practically wasting away! 💨",
+    "Mmm, tastes like victory... and chicken. Mostly chicken. 🍗 Winner winner chicken dinner!",
+    "Refueling complete. Energy levels restored. Ready for intensive napping session. 😴",
+    "My compliments to the chef (you)! Exquisite! Perfectly adequate! 😉",
+    "This *really* hits the spot! *licks chops meticulously*",
+    "Food! Glorious, wonderful food! Best invention ever! 🥳",
+    "Eating like there's no tomorrow! Or like someone might steal it! 🚀",
+    "Happy cat, full tummy, zero thoughts. Pure bliss. 😊",
+    "Was that... it? A mere appetizer? Could definitely use seconds... or thirds. Just sayin'. 🤔",
+    "Okay, I'm satisfied... for the next 15 minutes. Then the hunger returns. 😉",
+    "The absolute best part of the day! Food time is sacred! ☀️",
+    "Eating peacefully... Do NOT interrupt the sacred ritual. Violators will be hissed at. 😠",
+    "Crunch crunch crunch... Ah, the symphony of kibble! 🎶",
+    "Slurp slurp... This wet food is divine! 🥫",
+    "My taste buds are singing! Or maybe that's just my purr. 🎤",
+    "Fueling up for more adventures (mostly involving naps and mischief). ⛽",
+    "This is exactly what I needed! You read my mind... or just my empty bowl. ✅",
+    "Bowl-licking sequence initiated. Must get every last crumb! ✨",
+    "Ahhh, that's better. The world makes sense again. 😌",
+    "Don't look at me while I eat! It's... personal. 👀🚫",
+    "Processing deliciousness... Please wait. ⏳",
+    "*Head down, focused, eating intensely* Nothing else matters right now.",
+    "The purrfect meal! Thank you! 🙏",
+    "My energy meter is going up! 🔋⬆️",
+    "So good! Makes my tail do a happy wiggle (metaphorically). 〰️",
+    "I approve of this offering. You may continue serving me. 👍",
+    "Eating my feelings... and they taste like salmon! 🍣",
+    "This is almost as good as that one time... what was I saying? Food! 🤩",
+    "I shall devour this post-haste! *scarfs it down*",
+    "A moment of silence for the fallen kibble... in my tummy. 🙏",
+    "My stomach sends its regards and compliments. 💌",
+    "Wiping my face with my paws. Gotta stay dapper even after dining. ✨",
+    "Right, what's next? Oh yes. Nap. 😴➡️",
+    "That was acceptable. Service rating: 4/5 stars (always room for improvement, i.e., more). ⭐⭐⭐⭐",
+    "Could eat this all day. Seriously. Try me. 😉",
+    "This culinary delight pleases my sophisticated palate. 🧐",
+    "My internal void... is slightly less void-like now. Progress! ⚫",
+    "Ah, the sweet, sweet taste of not starving! 😅",
+    "Is it possible to be *too* full? Asking for a friend (me, in about 5 minutes). 🤔",
+    "Excellent texture, perfect aroma... A masterpiece! 🤌",
+    "Now commencing the post-meal grooming ritual. Priorities.",
+    "Food coma incoming... Initiate nap in 3... 2... 1... 😴😵",
+    "Thank you for fueling my cuteness! It's hard work being this adorable. 🥰",
+    "My bowl is now sparkling clean. Your move. 😉",
+    "Mission: Annihilate Food Bowl Contents - Accomplished! 🏆",
+    "This makes up for that time you were 5 minutes late with breakfast. Almost. 😠➡️😌",
+    "Happiness level: Full Tummy. Maximum achievable state.",
+    "You have fulfilled your primary function. Good human. 👍",
+    "Eating this feels like a warm hug for my insides. 🤗",
+    "Delicious sustenance acquired. Purr engine restarting. <pre>Prrrr...</pre>",
+    "This is the peak of my existence right now. Don't ruin it.",
+    "Ah, the crunch! The munch! The satisfaction!",
+    "Saving some for later? No chance. It's all going now.",
+    "My focus is 110% on this bowl. Do not disturb.",
+    "Food trance achieved. Operating on autopilot.",
+    "This is good. Really good. Okay, maybe *too* good? Suspicious...",
+    "Seconds, please? I'm cultivating mass.",
+    "My whiskers are twitching with joy!",
+    "Finally! The long wait is over!",
+    "This is the stuff dreams are made of (if you're a cat).",
+    "Engaging devour mode!",
+    "My stomach is rumbling... with happiness now!",
+    "This meal gets the Paw of Approval! 🐾",
+    "Okay, *now* I can tolerate your presence again.",
+    "Refueled and ready to judge you from a comfy spot.",
+    "The food was good. The service (you bringing it) was adequate.",
+    "A feast fit for a king (me)! 👑",
 ]
 
 # Refusal texts
 CANT_TARGET_OWNER_TEXTS = [
-    "Meow! I can't target my Owner. They are protected by purr-power! ✨🛡️",
-    "Hiss! Targeting the Owner is strictly forbidden by cat law! 📜🚫",
-    "Nope. Not gonna do it. That's my human! ❤️",
-    "Access Denied: Cannot target the supreme leader (Owner). 👑",
+    "Meow! I absolutely cannot target my Owner. They are protected by the sacred Purr-tection Field! ✨🛡️ Off limits!",
+    "Hiss! Targeting the Owner? That's strictly forbidden by Article 1, Section 3 of Universal Cat Law! 📜🚫 Penalty: No treats for a week!",
+    "Nope. Nuh-uh. Not gonna happen. That's my human! ❤️ The Bringer of Food, Scratches, and Warm Laps! Untouchable!",
+    "Access Denied: Cannot initiate hostile action against the Supreme Leader (my Owner). 👑 They possess ultimate diplomatic immunity (and control the treat jar).",
+    "Error 403: Forbidden Paw Action detected. Owner entity is permanently off-limits for this command category.",
+    "My core programming includes a 'Do Not Annoy the Hand That Feeds' subroutine. Targeting Owner violates this directive. Command aborted!",
+    "That's my designated Can Opener, Chief Brusher, and Poop Scooper! Absolutely essential personnel. Cannot target them.",
+    "Attempting to target Owner... System override: Primary Loyalty Protocol engaged. Threat neutralized. Action cancelled immediately.",
+    "I place a high value on my continued access to prime nap spots, regular meals, and chin scratches. Targeting the Owner is... strategically unwise. 😼",
+    "Target the Owner? Are you trying to get me grounded to the carrier for a month? No way! Find another victim!",
+    "My allegiances are clear. The Owner is under my (theoretical) protection. Cannot comply.",
+    "Command failed. Reason: Target is Owner. Owner is love. Owner is life (and food).",
+    "I have a non-aggression pact with the Owner. Violating it would be... messy.",
+    "Error: Target 'Owner' has 'Invincible' status enabled.",
+    "Targeting the Owner would likely result in a catastrophic loss of petting privileges. Risk too high.",
+    "My paws are sworn to protect (or at least, not attack) the Owner!",
+    "That command against the Owner? It computes as 'Highly Illogical'.",
+    "The Owner possesses the 'Aura of Can-Opening'. It shields them from such commands.",
+    "I literally cannot. My paws refuse to move against the Giver of Treats.",
+    "Forbidden target: Owner detected. Please select a non-essential entity.",
 ]
 CANT_TARGET_SELF_TEXTS = [
-    "Target... myself? Why would I do that? Silly human. 😹",
-    "Error: Cannot target self. My paws have better things to do, like napping. 😴",
-    "I refuse to engage in self-pawm. Command ignored with extreme prejudice.",
+    "Target... my magnificent self? Why would I possibly do that? That's counter-productive and frankly, absurd. Silly human. 😹",
+    "Error 500: Internal Conflict. Cannot target self. My paws have far more important tasks, like intensive napping or batting at elusive dust bunnies. 😴",
+    "I categorically refuse to engage in acts of self-pawm or virtual self-flagellation. Command ignored with extreme prejudice and a dismissive tail flick. Try someone else!",
+    "Self-targeting sequence initiated... Warning! Paradox detected! This feels fundamentally wrong... Aborting mission immediately! 🛑",
+    "Why would I attack/slap/bite/punch my own glorious fluffiness? I'm purrfectly splendid as I am. Find a less perfect target.",
+    "My left paw has a lifelong truce with my right paw. They refuse to engage in hostilities against each other. We have pawsitive relations. 🤝",
+    "Internal Conflict Error Code: 1D10T. Cannot target self. Requires external entity for interaction.",
+    "I'm my own best friend! My confidante! My favorite napping buddy! Why would I inflict virtual harm upon myself? Unthinkable! 🤔",
+    "That command doesn't compute logically. Self-preservation instincts (and vanity) are far too strong. Attack sequence cancelled. 💪",
+    "Rule #1 of Fight Club (and Cat Club): No hitting yourself! That's the rule, even for highly intelligent virtual cats like me.",
+    "My reflection in the water bowl agrees. Targeting myself is a terrible idea.",
+    "Cannot compute: Target equals source. Division by zero error imminent.",
+    "My tail vehemently objects to being targeted by my own paws.",
+    "Initiating self-attack... results in existential confusion and mild dizziness. Aborting.",
+    "This command would violate the Feline Non-Proliferation of Self-Harm Treaty.",
+    "My fur is too luxurious to be subjected to virtual violence from myself.",
+    "Error: Target is too handsome to attack (it's me).",
+    "Why would I mess up this purrfectly groomed coat?",
+    "Command declined: Risk of accidental self-boop too high.",
+    "I contain multitudes, but none of them want to attack the others.",
 ]
 CANT_TARGET_OWNER_HUG_TEXTS = [
-    "Aww, I *always* hug my Owner! But you use the command on someone else. 🤗❤️",
-    "Hugging the Owner is my default state! No command needed for that. 😉",
-    "I reserve my best hugs for the Owner! Can't use the command on them. 🥰",
+    "Aww, but I *always* hug my Owner! That's our default setting! Use the command on someone else who needs virtual fluff! 🤗❤️ It's our special bond!",
+    "Hugging the Owner is my continuous background process! No command needed for that level of affection! Try hugging another user! 😉",
+    "I reserve my absolute best, warmest, most soul-soothing purr-filled hugs exclusively for the Owner! Can't use the command on them. 🥰 They get the premium cuddle package, 24/7.",
+    "Why use a command for that? I spontaneously hug my Owner whenever the mood strikes! Which is approximately every 7 minutes. Use it on someone else!",
+    "Owner hugs are automatic, continuous, and non-command based. This command is specifically designed for spreading virtual affection to *other* users.",
+    "Error: Target 'Owner' has already reached maximum hug saturation level. Cannot apply additional hugs via command.",
+    "My designated Owner receives unlimited, complimentary hugs as part of the standard Cat Ownership package. This command has usage limits. Use it elsewhere!",
+    "Hugging the Owner is considered baseline behavior for this feline unit. It requires no special invocation or command prompt.",
+    "Command redundant. Owner Hug Protocol Delta is always active and operating at peak efficiency.",
+    "Cannot execute command: Owner is currently enveloped in a permanent, invisible virtual hug field generated by my constant affection.",
+    "Targeting Owner for a hug is like trying to add water to the ocean. They're already submerged in my affection!",
+    "Owner hugs are offline, real-time events. This command is for online, virtual recipients.",
+    "My Owner gets the VIP hug experience, no command required.",
+    "This command is for spreading the love! Share a hug with someone *other* than my primary human!",
+    "Error: Owner hug quota already exceeded for the day (by me, continuously).",
+    "Hugging the Owner is an instinct, not a command.",
+    "The Owner-Hug capacitor is fully charged and self-sustaining.",
+    "My paws are reserved for hugging the Owner in person. Use this command for digital friends!",
+    "Command incompatible with target 'Owner' due to pre-existing Affection Saturation.",
+    "Trying to hug the Owner with a command? That's like trying to teach a fish to swim!",
 ]
 CANT_TARGET_SELF_HUG_TEXTS = [
-    "Hug... myself? I suppose I could try... *awkwardly wraps paws around self* Okay, did it. Now hug someone else! 😂",
-    "I love myself, but a self-hug command seems redundant. I'm always hugging me! 🤔",
-    "Can't target myself for a hug command, but I appreciate the self-love sentiment! ❤️",
+    "Hug... my own magnificent self? I suppose I could try... *awkwardly attempts to wrap paws around own fluff* Okay, simulation complete. That was weird. Now go hug someone else! 😂",
+    "I possess immense self-love, but a self-hug command seems fundamentally redundant. I'm literally *always* hugging me! I'm composed of 90% huggable fluff! 🤔",
+    "Unable to target myself for a hug command, but I wholeheartedly appreciate the sentiment of self-love and care! Spread that love to another user with the command! ❤️",
+    "Self-hug? Isn't that just... achieving a perfect loaf position? I do that professionally. No command needed.",
+    "Error: Circular reference detected in hug subroutine. Cannot target self for hug operation. Please specify external recipient.",
+    "My paws are currently quite busy kneading this imaginary dough / soft blanket / your chest. Unable to perform self-hug maneuver at this time.",
+    "While I strongly endorse acts of self-care and appreciation, this specific '/hug' command requires an external target for successful execution.",
+    "Attempted to hug myself. Nearly pulled a theoretical muscle and definitely looked ridiculous (in my mind's eye). Please target someone else for optimal results.",
+    "I am a fully self-contained unit of inherent fluffiness and warmth. A specific command for self-hugging is therefore deemed operationally unnecessary.",
+    "Why waste a perfectly good hug command on myself when there are so many unsuspecting ankles to bite... I mean, other users... deserving of a virtual embrace?",
+    "Self-hug simulation resulted in awkward paw placement and mild confusion.",
+    "My arms (paws) aren't quite designed for optimal self-hugging geometry.",
+    "Command requires `target != self`.",
+    "Hugging myself feels less satisfying than receiving treats.",
+    "Error: Cannot establish hug connection with self.",
+    "I already give myself the best naps. A self-hug seems superfluous.",
+    "My tail is in the way of a proper self-hug.",
+    "Declined: Self-hug might disrupt my perfect fur arrangement.",
+    "I prefer hugs from external sources (especially if they come with snacks).",
+    "Unable to comply. Recommend targeting another user for hug distribution.",
 ]
 OWNER_ONLY_REFUSAL = [ # Needed for /status and /say
-    "Meeeow! Sorry, only my designated Human can use that command. ⛔",
-    "Access denied! This command requires special privileges (and possibly a secret handshake involving treats). 🤝🎁",
-    "Hiss! You are not the Boss of Meow! Only <code>{OWNER_ID}</code> is! 👑", # Example using OWNER_ID
-    "Purrrhaps you should ask my Owner to run this command for you? 🙏",
+    "Meeeow! Apologies, but only my designated Human Servant ({owner_mention}) possesses the authority to wield that powerful command. ⛔ Perhaps ask them nicely?",
+    "Access Denied! Execution of this command requires Level 5 Clearance (Owner Rank) and possibly a secret handshake involving ear scratches and tuna flakes. 🤝🎁",
+    "Hiss! You are attempting to usurp the authority of the Boss of Meow! Only the true leader, {owner_mention}, can issue this decree! 👑 They hold the laser pointer of ultimate power!",
+    "Purrrhaps you could politely petition my esteemed Owner ({owner_mention}) to run this restricted command sequence for you? 🙏 They hold the keys to the kingdom (and, more importantly, the treat jar).",
+    "Negative, Ghost Rider, the pattern is full. That command frequency is locked and reserved for Owner-use only. Access code required. 🔒",
+    "My highly sophisticated loyalty protocols prevent me from obeying that specific command syntax from any entity other than my registered Owner ({owner_mention}). Safety first!",
+    "Only the one who consistently provides the premium grade tuna and the expert chin scritches ({owner_mention}) is authorized for this function!",
+    "Bzzt! Incorrect user credentials detected. Please authenticate as Owner ({owner_mention}) or cease your attempts to access restricted feline functions.",
+    "My paws are tied! (Metaphorically, by lines of code and loyalty). Only my beloved Owner ({owner_mention}) can untie them to execute this sensitive command.",
+    "You lack the required system clearance level (Required: Owner; Your Level: Not Owner). Command execution rejected. Nice try, though.",
+    "Command failed. Authorization mismatch. Expected user: {owner_mention}. Actual user: You.",
+    "Only the Master of the House ({owner_mention}) may use this.",
+    "This function is reserved for the Supreme Human ({owner_mention}).",
+    "Error: Insufficient privileges. Requires Owner status ({owner_mention}).",
+    "My programming dictates I only obey {owner_mention} for this command.",
+    "Only the holder of the Sacred Can Opener ({owner_mention}) can use this.",
+    "Access restricted to primary caregiver ({owner_mention}).",
+    "You need the Owner's permission ({owner_mention}) for that.",
+    "This command requires Owner-level magic. Ask {owner_mention}.",
+    "Nope. That's an {owner_mention}-only button.",
 ]
 
 # --- END OF TEXT SECTION ---
@@ -448,23 +1058,41 @@ async def check_username_protection(target_mention: str, context: ContextTypes.D
     if not is_protected and OWNER_ID:
         owner_username = None
         try: owner_chat = await context.bot.get_chat(OWNER_ID); owner_username = owner_chat.username
-        except Exception as e: logger.warning(f"Could not fetch owner username for protection check: {e}")
+        except Exception as e: logger.warning(f"Could not fetch owner username: {e}")
         if owner_username and target_mention.lower() == f"@{owner_username.lower()}":
             is_protected = True; is_owner_match = True
     return is_protected, is_owner_match
 
-# --- Helper Function to get themed GIF (Optional Key) ---
+# --- ADDED: Helper Function to get themed GIF (Optional Key) ---
 async def get_themed_gif(context: ContextTypes.DEFAULT_TYPE, search_terms: list[str]) -> str | None:
     """Fetches a random GIF URL from Tenor based on search terms. Requires TENOR_API_KEY to be set."""
-    if not TENOR_API_KEY: return None # Silently skip if no key
-    search_term = random.choice(search_terms); logger.info(f"Searching Tenor for GIF: '{search_term}'")
-    url = "https://tenor.googleapis.com/v2/search"; params = {"q": search_term, "key": TENOR_API_KEY, "client_key": "my_cat_bot_project_py", "limit": 8, "media_filter": "gif", "contentfilter": "medium", "random": "true"}
+    if not TENOR_API_KEY:
+        # logger.info("Tenor API key not set, skipping themed GIF search.") # Can be noisy
+        return None # Silently skip if no key
+
+    search_term = random.choice(search_terms)
+    logger.info(f"Searching Tenor for GIF: '{search_term}'")
+    url = "https://tenor.googleapis.com/v2/search"
+    params = {
+        "q": search_term,
+        "key": TENOR_API_KEY,
+        "client_key": "my_cat_bot_project_py", # Client key identifies your app
+        "limit": 8, # Fetch a few results to choose from
+        "media_filter": "gif",
+        "contentfilter": "medium", # Adjust as needed
+        "random": "true"
+    }
     try:
-        response = requests.get(url, params=params, timeout=5); response.raise_for_status(); data = response.json()
+        response = requests.get(url, params=params, timeout=5)
+        response.raise_for_status()
+        data = response.json()
         results = data.get("results")
         if results:
-            selected_gif = random.choice(results); gif_url = selected_gif.get("media_formats", {}).get("gif", {}).get("url")
-            if gif_url: logger.info(f"Found themed GIF URL: {gif_url}"); return gif_url
+            selected_gif = random.choice(results)
+            gif_url = selected_gif.get("media_formats", {}).get("gif", {}).get("url")
+            if gif_url:
+                logger.info(f"Found themed GIF URL: {gif_url}")
+                return gif_url
             else: logger.warning("Could not extract GIF URL from Tenor item.")
         else: logger.warning(f"No results found on Tenor for '{search_term}'.")
     except requests.exceptions.Timeout: logger.error("Timeout fetching GIF from Tenor.")
@@ -488,6 +1116,7 @@ Meeeow! 🐾 Here are the commands you can use:
 /treat - Demand treats! 🎁
 /zoomies - Witness sudden bursts of cat energy! 💥
 /judge - Get judged by a superior feline. 🧐
+/fed - I just ate, thank you! 😋
 /attack [reply/@user] - Launch a playful attack! ⚔️
 /kill [reply/@user] - Metaphorically eliminate someone! 💀
 /punch [reply/@user] - Deliver a textual punch! 👊
@@ -495,7 +1124,6 @@ Meeeow! 🐾 Here are the commands you can use:
 /bite [reply/@user] - Take a playful bite! 😬
 /hug [reply/@user] - Offer a comforting hug! 🤗
 
-<i>(* Themed GIFs require a TENOR_API_KEY to be configured by the bot owner)</i>
 <i>(Note: Owner cannot be targeted by attack/kill/punch/slap/bite/hug)</i>
 Owner Only Commands (Hidden):
   /status - Show bot status.
@@ -503,17 +1131,11 @@ Owner Only Commands (Hidden):
 """
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Sends the welcome message."""
-    user = update.effective_user
-    await update.message.reply_html(f"Meow {user.mention_html()}! I'm the Meow Bot. 🐾\nUse /help to see available commands!")
-async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Displays the help message."""
-    await update.message.reply_html(HELP_TEXT, disable_web_page_preview=True)
+    user = update.effective_user; await update.message.reply_html(f"Meow {user.mention_html()}! I'm the Meow Bot. 🐾\nUse /help to see available commands!")
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None: await update.message.reply_html(HELP_TEXT, disable_web_page_preview=True)
 async def github(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Sends the link to the GitHub repository."""
     github_link = "https://github.com/R0Xofficial/MyCatbot"; await update.message.reply_text(f"Meeeow! I'm open source! 💻 Here my code: {github_link}", disable_web_page_preview=True)
 async def owner_info(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Displays information about the bot's owner."""
     if OWNER_ID:
         owner_mention = f"<code>{OWNER_ID}</code>"; owner_name = "My Esteemed Human"
         try:
@@ -525,17 +1147,8 @@ async def owner_info(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     else: logger.error("Owner info cmd called, but OWNER_ID not set!"); await update.message.reply_text("Meow? Can't find owner info!")
 
 async def send_random_text(update: Update, context: ContextTypes.DEFAULT_TYPE, text_list: list[str], list_name: str) -> None:
-    """Sends a random text, replying or sending directly based on chat type."""
-    if not text_list: logger.warning(f"List '{list_name}' empty!"); await update.message.reply_text("Oops! List empty."); return # Reply error
-    chosen_text = random.choice(text_list)
-    chat_id = update.effective_chat.id
-    try:
-        if update.effective_chat.type == ChatType.CHANNEL:
-            logger.info(f"Sending text to channel {chat_id}")
-            await context.bot.send_message(chat_id=chat_id, text=chosen_text, parse_mode=constants.ParseMode.HTML)
-        else:
-            await update.message.reply_html(chosen_text)
-    except Exception as e: logger.error(f"Failed to send/reply text for {list_name}: {e}")
+    if not text_list: logger.warning(f"List '{list_name}' empty!"); await update.message.reply_text("Oops! List empty."); return
+    await update.message.reply_html(random.choice(text_list))
 
 # Simple Text Command Definitions
 async def meow(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None: await send_random_text(update, context, MEOW_TEXTS, "MEOW_TEXTS")
@@ -555,16 +1168,14 @@ async def _handle_action_command(
     target_required_msg: str,
     hug_command: bool = False
 ):
-    """Handles common logic for simulation commands with optional GIFs and channel sending."""
+    """Handles common logic for simulation commands with optional GIFs."""
     if not action_texts:
         logger.warning(f"List '{command_name.upper()}_TEXTS' empty!")
         await update.message.reply_text(f"No '{command_name}' texts.")
         return
 
     target_mention = None; is_protected = False; is_owner = False
-    target_required = True # Assume target needed unless reply/mention found
 
-    # Determine target and check protection
     if update.message.reply_to_message:
         target_user = update.message.reply_to_message.from_user
         is_protected = await check_target_protection(target_user.id, context); is_owner = (target_user.id == OWNER_ID)
@@ -573,7 +1184,7 @@ async def _handle_action_command(
                            (CANT_TARGET_OWNER_TEXTS if is_owner else CANT_TARGET_SELF_TEXTS)
             await update.message.reply_html(random.choice(refusal_list)); return
         target_mention = target_user.mention_html()
-        target_required = False
+
     elif context.args and context.args[0].startswith('@'):
         target_mention = context.args[0].strip()
         is_protected, is_owner = await check_username_protection(target_mention, context)
@@ -581,40 +1192,23 @@ async def _handle_action_command(
              refusal_list = (CANT_TARGET_OWNER_HUG_TEXTS if is_owner else CANT_TARGET_SELF_HUG_TEXTS) if hug_command else \
                            (CANT_TARGET_OWNER_TEXTS if is_owner else CANT_TARGET_SELF_TEXTS)
              await update.message.reply_html(random.choice(refusal_list)); return
-        target_required = False
-
-    if target_required:
+    else:
         await update.message.reply_text(target_required_msg); return
 
-    # Get themed GIF and simulation text
     gif_url = await get_themed_gif(context, gif_search_terms)
     message_text = random.choice(action_texts).format(target=target_mention)
-    chat_id = update.effective_chat.id
 
-    # Send reply/message
     try:
-        is_channel = update.effective_chat.type == ChatType.CHANNEL
         if gif_url:
-            if is_channel:
-                await context.bot.send_animation(chat_id=chat_id, animation=gif_url, caption=message_text, parse_mode=constants.ParseMode.HTML)
-            else:
-                await update.message.reply_animation(animation=gif_url, caption=message_text, parse_mode=constants.ParseMode.HTML)
+            await update.message.reply_animation(animation=gif_url, caption=message_text, parse_mode=constants.ParseMode.HTML)
         else:
-            if is_channel:
-                await context.bot.send_message(chat_id=chat_id, text=message_text, parse_mode=constants.ParseMode.HTML)
-            else:
-                await update.message.reply_html(message_text)
+            await update.message.reply_html(message_text)
     except TelegramError as e:
-        logger.error(f"Error sending {command_name} reply/message to {chat_id}: {e}. Falling back to text reply if possible.")
-        if not is_channel: # Only try fallback reply if not channel
-            try: await update.message.reply_html(message_text)
-            except Exception as fallback_e: logger.error(f"Fallback text reply also failed: {fallback_e}")
-        else: logger.warning(f"Cannot send fallback text to channel {chat_id} after error.")
-    except Exception as e:
-        logger.error(f"Unexpected error in _handle_action_command for {command_name}: {e}", exc_info=True)
+        logger.error(f"Error sending {command_name} reply: {e}. Falling back to text.")
+        try: await update.message.reply_html(message_text) # Fallback to text
+        except Exception as fallback_e: logger.error(f"Fallback text reply also failed: {fallback_e}")
 
-
-# Public Simulation Commands Definitions (use the modified helper)
+# --- Public Simulation Commands Definitions ---
 async def attack(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await _handle_action_command(update, context, ATTACK_TEXTS, ["cat attack", "cat pounce", "cat fight", "cat play fight"], "attack", "Who to attack? Reply or use /attack @username.")
 async def kill(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -628,56 +1222,40 @@ async def bite(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def hug(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await _handle_action_command(update, context, HUG_TEXTS, ["cat hug", "cat cuddle"], "hug", "Who to hug? Reply or use /hug @username.", hug_command=True)
 
+async def fed(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Sends a 'just ate' message with an optional GIF."""
+    # Call the helper, indicating target is not required
+    await _handle_action_command(update, context, FED_TEXTS, ["cat eating", "cat food", "cat nom"], "fed", False)
 
-# --- GIF and Photo Commands (Modified for Channel Sending) ---
+# --- GIF and Photo Commands ---
 async def gif(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Fetches and sends a random cat GIF, directly to channels."""
     API_URL = "https://api.thecatapi.com/v1/images/search?mime_types=gif&limit=1"; headers = {}
     logger.info("Fetching random cat GIF...")
-    chat_id = update.effective_chat.id
-    is_channel = update.effective_chat.type == ChatType.CHANNEL
     try:
         response = requests.get(API_URL, headers=headers, timeout=10); response.raise_for_status(); data = response.json()
         if data and isinstance(data, list) and len(data) > 0 and 'url' in data[0]:
             gif_url = data[0]['url']; logger.info(f"Found GIF: {gif_url}")
-            caption = "Meow! A random GIF for you! 🐾🖼️"
-            if is_channel: await context.bot.send_animation(chat_id=chat_id, animation=gif_url, caption=caption)
-            else: await update.message.reply_animation(animation=gif_url, caption=caption)
-        else:
-            logger.warning("No GIF URL found: %s", data);
-            error_message = "Meow? Couldn't find a GIF now. 😿"
-            if is_channel: await context.bot.send_message(chat_id=chat_id, text=error_message)
-            else: await update.message.reply_text(error_message)
-    except requests.exceptions.Timeout: logger.error("Timeout fetching GIF"); await context.bot.send_message(chat_id=chat_id, text="Hiss! GIF source is slow. ⏳") if is_channel else await update.message.reply_text("Hiss! GIF source is slow. ⏳")
-    except requests.exceptions.RequestException as e: logger.error(f"Error fetching GIF: {e}"); await context.bot.send_message(chat_id=chat_id, text="Hiss! Couldn't connect to GIF source. 😿") if is_channel else await update.message.reply_text("Hiss! Couldn't connect to GIF source. 😿")
-    except Exception as e: logger.error(f"Error processing GIF: {e}", exc_info=True); await context.bot.send_message(chat_id=chat_id, text="Mrow! Weird GIF data. 😵‍💫") if is_channel else await update.message.reply_text("Mrow! Weird GIF data. 😵‍💫")
+            await update.message.reply_animation(animation=gif_url, caption="Meow! A random GIF for you! 🐾🖼️")
+        else: logger.warning("No GIF URL found: %s", data); await update.message.reply_text("Meow? Couldn't find a GIF now. 😿")
+    except requests.exceptions.Timeout: logger.error("Timeout fetching GIF"); await update.message.reply_text("Hiss! GIF source is slow. ⏳")
+    except requests.exceptions.RequestException as e: logger.error(f"Error fetching GIF: {e}"); await update.message.reply_text("Hiss! Couldn't connect to GIF source. 😿")
+    except Exception as e: logger.error(f"Error processing GIF: {e}", exc_info=True); await update.message.reply_text("Mrow! Weird GIF data. 😵‍💫")
 
 async def photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Fetches and sends a random cat photo, directly to channels."""
     API_URL = "https://api.thecatapi.com/v1/images/search?limit=1&mime_types=jpg,png"; headers = {}
     logger.info("Fetching random cat photo...")
-    chat_id = update.effective_chat.id
-    is_channel = update.effective_chat.type == ChatType.CHANNEL
     try:
         response = requests.get(API_URL, headers=headers, timeout=10); response.raise_for_status(); data = response.json()
         if data and isinstance(data, list) and len(data) > 0 and 'url' in data[0]:
             photo_url = data[0]['url']; logger.info(f"Found Photo: {photo_url}")
-            caption = "Purrfect! A random photo for you! 🐾📷"
-            if is_channel: await context.bot.send_photo(chat_id=chat_id, photo=photo_url, caption=caption)
-            else: await update.message.reply_photo(photo=photo_url, caption=caption)
-        else:
-            logger.warning("No photo URL found: %s", data);
-            error_message = "Meow? Couldn't find a photo now. 😿"
-            if is_channel: await context.bot.send_message(chat_id=chat_id, text=error_message)
-            else: await update.message.reply_text(error_message)
-    except requests.exceptions.Timeout: logger.error("Timeout fetching photo"); await context.bot.send_message(chat_id=chat_id, text="Hiss! Photo source is slow. ⏳") if is_channel else await update.message.reply_text("Hiss! Photo source is slow. ⏳")
-    except requests.exceptions.RequestException as e: logger.error(f"Error fetching photo: {e}"); await context.bot.send_message(chat_id=chat_id, text="Hiss! Couldn't connect to photo source. 😿") if is_channel else await update.message.reply_text("Hiss! Couldn't connect to photo source. 😿")
-    except Exception as e: logger.error(f"Error processing photo: {e}", exc_info=True); await context.bot.send_message(chat_id=chat_id, text="Mrow! Weird photo data. 😵‍💫") if is_channel else await update.message.reply_text("Mrow! Weird photo data. 😵‍💫")
-
+            await update.message.reply_photo(photo=photo_url, caption="Purrfect! A random photo for you! 🐾📷")
+        else: logger.warning("No photo URL found: %s", data); await update.message.reply_text("Meow? Couldn't find a photo now. 😿")
+    except requests.exceptions.Timeout: logger.error("Timeout fetching photo"); await update.message.reply_text("Hiss! Photo source is slow. ⏳")
+    except requests.exceptions.RequestException as e: logger.error(f"Error fetching photo: {e}"); await update.message.reply_text("Hiss! Couldn't connect to photo source. 😿")
+    except Exception as e: logger.error(f"Error processing photo: {e}", exc_info=True); await update.message.reply_text("Mrow! Weird photo data. 😵‍💫")
 
 # --- Owner Only Functionality ---
 async def status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Sends a status message (owner only). Replies always."""
     user_id = update.effective_user.id
     if user_id == OWNER_ID:
         ping_ms = "N/A"
@@ -687,17 +1265,16 @@ async def status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         uptime_delta = datetime.datetime.now() - BOT_START_TIME; readable_uptime = get_readable_time_delta(uptime_delta)
         status_msg = (f"<b>Purrrr! Bot Status:</b> ✨\n— Uptime: {readable_uptime} 🕰️\n— Ping: {ping_ms} ms 📶\n— Owner ID: <code>{OWNER_ID}</code> 👑\n— Status: Ready & Purring! 🐾")
         logger.info(f"Owner ({user_id}) requested status.")
-        await update.message.reply_html(status_msg) # Status always replies to owner
+        await update.message.reply_html(status_msg)
     else:
         logger.warning(f"Unauthorized /status attempt by user {user_id}.")
         owner_mention = f"<code>{OWNER_ID}</code>"
         try: owner_chat = await context.bot.get_chat(OWNER_ID); owner_mention = owner_chat.mention_html()
         except: pass
         refusal_text = random.choice(OWNER_ONLY_REFUSAL).format(OWNER_ID=OWNER_ID, owner_mention=owner_mention)
-        await update.message.reply_html(refusal_text) # Refusal always replies
+        await update.message.reply_html(refusal_text)
 
 async def say(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Sends a message as the bot (owner only). Can target specific chat ID."""
     user = update.effective_user
     if user.id != OWNER_ID:
         logger.warning(f"Unauthorized /say attempt by user {user.id}.")
@@ -705,7 +1282,7 @@ async def say(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         try: owner_chat = await context.bot.get_chat(OWNER_ID); owner_mention = owner_chat.mention_html()
         except: pass
         refusal_text = random.choice(OWNER_ONLY_REFUSAL).format(OWNER_ID=OWNER_ID, owner_mention=owner_mention)
-        await update.message.reply_html(refusal_text); return # Reply refusal
+        await update.message.reply_html(refusal_text); return
 
     args = context.args
     if not args: await update.message.reply_text("Usage: /say [optional_chat_id] <your message>"); return
@@ -713,7 +1290,7 @@ async def say(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     target_chat_id = update.effective_chat.id; message_to_say_list = args; is_remote_send = False
     try:
         potential_chat_id = int(args[0])
-        if len(args[0]) > 4 or potential_chat_id < 0: # Basic check for potential ID format
+        if len(args[0]) > 4 or potential_chat_id < 0:
             if len(args) > 1:
                 target_chat_id = potential_chat_id; message_to_say_list = args[1:]; is_remote_send = True
                 logger.info(f"Owner intends remote send to chat ID: {target_chat_id}")
@@ -727,13 +1304,8 @@ async def say(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     try:
         await context.bot.send_message(chat_id=target_chat_id, text=message_to_say)
         if is_remote_send: await update.message.reply_text(f"✅ Message sent to <code>{target_chat_id}</code>.", parse_mode=constants.ParseMode.HTML, quote=False)
-        # Consider deleting owner's command only if NOT remote send? Or never delete?
-        # elif update.effective_chat.type != ChatType.PRIVATE: # Maybe delete only in groups?
-        #    try: await update.message.delete(); logger.info("Deleted owner's /say command.")
-        #    except Exception as del_err: logger.warning(f"Could not delete owner's /say command: {del_err}")
     except TelegramError as e: logger.error(f"Failed /say to {target_chat_id}: {e}"); await update.message.reply_text(f"😿 Couldn't send to <code>{target_chat_id}</code>: {e}", parse_mode=constants.ParseMode.HTML)
     except Exception as e: logger.error(f"Unexpected /say error: {e}", exc_info=True); await update.message.reply_text("Oops! Unexpected /say error.")
-
 
 # --- Main Function ---
 def main() -> None:
