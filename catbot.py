@@ -1,8 +1,9 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-# --- MyCatBot - A simple Telegram bot with fun cat actions ---
-# Includes owner protection, simulation commands, GIF/Photo fetching, and owner commands.
+# --- MyCatBot - Final Version (Corrected Syntax Everywhere) ---
+# Includes owner protection, simulation commands, GIF/Photo fetching, owner commands,
+# and special welcome for the owner joining a group.
 # Uses environment variables for configuration (Token, Owner ID).
 # Tenor API Key is OPTIONAL for themed GIFs in action commands.
 
@@ -11,10 +12,13 @@ import random
 import os
 import datetime
 import requests # Needed for /gif, /photo, and OPTIONAL themed GIFs
+from typing import List, Tuple # For type hinting
 from telegram import Update, constants
-from telegram.ext import Application, CommandHandler, ContextTypes
+from telegram.constants import ChatType # Needed to check chat type (though simplified now)
+# ADDED MessageHandler and filters for owner welcome
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 # Optional Debug Imports
-# from telegram.ext import MessageHandler, filters, ApplicationHandlerStop
+# from telegram.ext import ApplicationHandlerStop
 from telegram.error import TelegramError
 
 # --- Logging Configuration ---
@@ -30,45 +34,28 @@ logger = logging.getLogger(__name__)
 # --- Owner ID Configuration & Bot Start Time ---
 OWNER_ID = None
 BOT_START_TIME = datetime.datetime.now()
-TENOR_API_KEY = None # Initialize as None
+TENOR_API_KEY = None
 
 # --- Load configuration from environment variables ---
 try:
-    # Load Owner ID
     owner_id_str = os.getenv("TELEGRAM_OWNER_ID")
-    if owner_id_str:
-        OWNER_ID = int(owner_id_str)
-        logger.info(f"Owner ID loaded: {OWNER_ID}")
-    else:
-        logger.critical("CRITICAL: TELEGRAM_OWNER_ID environment variable not set!")
-        print("\n--- FATAL ERROR --- \nEnvironment variable TELEGRAM_OWNER_ID is not set.")
-        exit(1)
-except ValueError:
-    logger.critical(f"CRITICAL: Invalid TELEGRAM_OWNER_ID: '{owner_id_str}'. Must be an integer.")
-    print(f"\n--- FATAL ERROR --- \nInvalid TELEGRAM_OWNER_ID: '{owner_id_str}'. Must be an integer.")
+    if owner_id_str: OWNER_ID = int(owner_id_str); logger.info(f"Owner ID loaded: {OWNER_ID}")
+    else: raise ValueError("TELEGRAM_OWNER_ID not set")
+except (ValueError, TypeError) as e:
+    logger.critical(f"CRITICAL: Invalid or missing TELEGRAM_OWNER_ID: {e}")
+    print(f"\n--- FATAL ERROR --- \nInvalid or missing TELEGRAM_OWNER_ID environment variable.")
     exit(1)
-except Exception as e:
-    logger.critical(f"CRITICAL: Unexpected error loading OWNER_ID: {e}")
-    print(f"\n--- FATAL ERROR --- \nUnexpected error loading OWNER_ID: {e}")
-    exit(1)
+except Exception as e: logger.critical(f"CRITICAL: Unexpected error loading OWNER_ID: {e}"); print(f"\n--- FATAL ERROR --- \nUnexpected error loading OWNER_ID: {e}"); exit(1)
 
-# Load Bot Token
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-if not BOT_TOKEN:
-    logger.critical("CRITICAL: TELEGRAM_BOT_TOKEN environment variable not set!")
-    print("\n--- FATAL ERROR --- \nEnvironment variable TELEGRAM_BOT_TOKEN is not set.")
-    exit(1)
+if not BOT_TOKEN: logger.critical("CRITICAL: TELEGRAM_BOT_TOKEN not set!"); print("\n--- FATAL ERROR --- \nEnvironment variable TELEGRAM_BOT_TOKEN is not set."); exit(1)
 
-# Load Tenor API Key - OPTIONAL
 TENOR_API_KEY = os.getenv("TENOR_API_KEY")
-if not TENOR_API_KEY:
-    logger.warning("WARNING: TENOR_API_KEY environment variable not set. Themed GIFs for action commands will be disabled.")
-else:
-    logger.info("Tenor API Key loaded. Themed GIFs enabled.")
+if not TENOR_API_KEY: logger.warning("WARNING: TENOR_API_KEY not set. Themed GIFs disabled.")
+else: logger.info("Tenor API Key loaded. Themed GIFs enabled.")
 
 
 # --- CAT TEXTS SECTION ---
-
 # /meow texts - General cat noises and behaviors
 MEOW_TEXTS = [
     "Meow! 🐾", "Purrrr...", "Feed me, human! <i>Now!</i>", "Where's my nap spot? 😴", "Miaow?",
@@ -836,6 +823,145 @@ HUG_TEXTS = [
     "Let this hug be a small comfort, {target}.",
 ]
 
+FED_TEXTS = [
+    "Om nom nom... delicious! 😋 Thank you, hooman!",
+    "Purrrr... finally, some sustenance! My life force returns! 😌",
+    "Ah, the food bowl sings its glorious siren song! 🎶 *eats with gusto*",
+    "Gobbling it down like a vacuum cleaner! Was practically wasting away! 💨",
+    "Mmm, tastes like victory... and chicken. Mostly chicken. 🍗 Winner winner chicken dinner!",
+    "Refueling complete. Energy levels restored. Ready for intensive napping session. 😴",
+    "My compliments to the chef (you)! Exquisite! Perfectly adequate! 😉",
+    "This *really* hits the spot! *licks chops meticulously*",
+    "Food! Glorious, wonderful food! Best invention ever! 🥳",
+    "Eating like there's no tomorrow! Or like someone might steal it! 🚀",
+    "Happy cat, full tummy, zero thoughts. Pure bliss. 😊",
+    "Was that... it? A mere appetizer? Could definitely use seconds... or thirds. Just sayin'. 🤔",
+    "Okay, I'm satisfied... for the next 15 minutes. Then the hunger returns. 😉",
+    "The absolute best part of the day! Food time is sacred! ☀️",
+    "Eating peacefully... Do NOT interrupt the sacred ritual. Violators will be hissed at. 😠",
+    "Crunch crunch crunch... Ah, the symphony of kibble! 🎶",
+    "Slurp slurp... This wet food is divine! 🥫",
+    "My taste buds are singing! Or maybe that's just my purr. 🎤",
+    "Fueling up for more adventures (mostly involving naps and mischief). ⛽",
+    "This is exactly what I needed! You read my mind... or just my empty bowl. ✅",
+    "Bowl-licking sequence initiated. Must get every last crumb! ✨",
+    "Ahhh, that's better. The world makes sense again. 😌",
+    "Don't look at me while I eat! It's... personal. 👀🚫",
+    "Processing deliciousness... Please wait. ⏳",
+    "*Head down, focused, eating intensely* Nothing else matters right now.",
+    "The purrfect meal! Thank you! 🙏",
+    "My energy meter is going up! 🔋⬆️",
+    "So good! Makes my tail do a happy wiggle (metaphorically). 〰️",
+    "I approve of this offering. You may continue serving me. 👍",
+    "Eating my feelings... and they taste like salmon! 🍣",
+    "This is almost as good as that one time... what was I saying? Food! 🤩",
+    "I shall devour this post-haste! *scarfs it down*",
+    "A moment of silence for the fallen kibble... in my tummy. 🙏",
+    "My stomach sends its regards and compliments. 💌",
+    "Wiping my face with my paws. Gotta stay dapper even after dining. ✨",
+    "Right, what's next? Oh yes. Nap. 😴➡️",
+    "That was acceptable. Service rating: 4/5 stars (always room for improvement, i.e., more). ⭐⭐⭐⭐",
+    "Could eat this all day. Seriously. Try me. 😉",
+    "This culinary delight pleases my sophisticated palate. 🧐",
+    "My internal void... is slightly less void-like now. Progress! ⚫",
+    "Ah, the sweet, sweet taste of not starving! 😅",
+    "Is it possible to be *too* full? Asking for a friend (me, in about 5 minutes). 🤔",
+    "Excellent texture, perfect aroma... A masterpiece! 🤌",
+    "Now commencing the post-meal grooming ritual. Priorities.",
+    "Food coma incoming... Initiate nap in 3... 2... 1... 😴😵",
+    "Thank you for fueling my cuteness! It's hard work being this adorable. 🥰",
+    "My bowl is now sparkling clean. Your move. 😉",
+    "Mission: Annihilate Food Bowl Contents - Accomplished! 🏆",
+    "This makes up for that time you were 5 minutes late with breakfast. Almost. 😠➡️😌",
+    "Happiness level: Full Tummy. Maximum achievable state.",
+    "You have fulfilled your primary function. Good human. 👍",
+    "Eating this feels like a warm hug for my insides. 🤗",
+    "Delicious sustenance acquired. Purr engine restarting. <pre>Prrrr...</pre>",
+    "This is the peak of my existence right now. Don't ruin it.",
+    "Ah, the crunch! The munch! The satisfaction!",
+    "Saving some for later? No chance. It's all going now.",
+    "My focus is 110% on this bowl. Do not disturb.",
+    "Food trance achieved. Operating on autopilot.",
+    "This is good. Really good. Okay, maybe *too* good? Suspicious...",
+    "Seconds, please? I'm cultivating mass.",
+    "My whiskers are twitching with joy!",
+    "Finally! The long wait is over!",
+    "This is the stuff dreams are made of (if you're a cat).",
+    "Engaging devour mode!",
+    "My stomach is rumbling... with happiness now!",
+    "This meal gets the Paw of Approval! 🐾",
+    "Okay, *now* I can tolerate your presence again.",
+    "Refueled and ready to judge you from a comfy spot.",
+    "The food was good. The service (you bringing it) was adequate.",
+    "A feast fit for a king (me)! 👑",
+]
+
+OWNER_WELCOME_TEXTS = [
+    "Meow! The Master has arrived! Welcome back, {owner_mention}! All hail! 👑❤️",
+    "Purrrr... My favorite human, the esteemed {owner_mention}, has graced us with their presence! 🤗",
+    "Attention everyone! Bow down! The Bringer of Treats and Head Scratches, {owner_mention}, is here! 🎁",
+    "The Boss ({owner_mention}) just entered! Quick, look busy... or adorable! Welcome! 💼🐾",
+    "Welcome, {owner_mention}! The chat just got 100% more awesome and 50% more likely to dispense treats. ✨",
+    "My human ({owner_mention}) is here! All is right with the world. The gravitational center has returned. 😌",
+    "Alert! Alert! Maximum Importance Human ({owner_mention}) has logged on! Prepare for potential petting! 🚨",
+    "Oh joy! Oh rapture! The Opener of Cans, {owner_mention}, has joined! My heart (and stomach) rejoices! 🥫💖",
+    "Greetings, {owner_mention}! The source of all warmth and comfy laps is finally here! 😊",
+    "Look who it is! The one and only {owner_mention}! Welcome back to your loyal subject (me). 😉",
+    "The room (chat) suddenly feels brighter! Welcome, {owner_mention}! ✨☀️",
+    "Meowdy, partner! How nice to see you, {owner_mention}! 🤠🐾",
+    "My sensors detect the arrival of Prime Human {owner_mention}. Systems nominal. Purr engine warming up. 🤖❤️",
+    "Welcome, {owner_mention}! I've been waiting (napping) patiently for your return! 😴➡️🤩",
+    "Hooray! {owner_mention} is here! Now the fun can *really* begin! 🎉",
+    "The legend returns! Welcome back to the chat, {owner_mention}!  легенда",
+    "Ah, {owner_mention}! My designated chin scratcher has arrived! Welcome! 🙏",
+    "Good day/evening/whatever-time-it-is, {owner_mention}! Delighted to have you here! 👋",
+    "The Controller of the Red Dot ({owner_mention}) has entered the arena! Welcome! 🔴",
+    "Pspspsps... Oh wait, that's my line. Welcome, {owner_mention}! Glad you're here! 🗣️",
+    "My world was black and white, now it's full color because {owner_mention} is here! Welcome! 🌈",
+    "The Head Honcho, Top Cat (human division), {owner_mention}, has arrived! Welcome! 👑",
+    "Purrfect timing, {owner_mention}! I was just thinking about needing attention. Welcome! 🤔❤️",
+    "Welcome back, {owner_mention}! Did you bring snacks? Just asking... for a friend (me). 🍪",
+    "The provider of excellent nap spots ({owner_mention}) is here! Welcome! 🛋️",
+    "Initiating Welcome Protocol for user: {owner_mention}. Protocol consists of virtual head boops and purrs. ❤️🐾",
+    "There you are, {owner_mention}! Was starting to get worried (that my food bowl was empty). Welcome back! 😉",
+    "A round of applause (silent, internal applause) for the arrival of {owner_mention}! Welcome! 👏",
+    "Hey {owner_mention}! Welcome to the party! It wasn't really a party until you arrived. 🎉",
+    "The Supreme Being ({owner_mention}) logs in! Welcome! We are humbled (and hungry). 🙏",
+    "Welcome, welcome, {owner_mention}! Pull up a virtual chair and dispense some virtual pets!🪑🐾",
+    "The moment we've all been waiting for! {owner_mention} is here! 🤗",
+    "Greetings, {owner_mention}! Your presence enhances the chat's overall quality significantly. ✨",
+    "My human servant ({owner_mention}) has reported for duty! Excellent. Welcome! 😉",
+    "A big fluffy welcome to {owner_mention}! Hope you're having a purrfect day! ☁️",
+    "The Giver of Life (and Food), {owner_mention}, has returned! Rejoice! 🥳",
+    "Look what the cat dragged in! (Just kidding, welcome {owner_mention}!) 😂❤️",
+    "Order! Order in the chat! The Honorable Judge {owner_mention} presides! Welcome! 👨‍⚖️🐾",
+    "Welcome, {owner_mention}! The keyboard is now available for your use (unless I decide to sit on it). ⌨️",
+    "My day just got better! Hi {owner_mention}! 👋😊",
+    "The Alpha Human ({owner_mention}) has joined the pack! Welcome! 🐺🐾",
+    "Salutations, {owner_mention}! May your time here be filled with joy (and giving me attention). 🙏",
+    "Welcome back to the command center, {owner_mention}! All systems are go! 🚀",
+    "Oh, happy day! {owner_mention} decided to show up! Welcome! 😄",
+    "The one who understands the importance of naps, {owner_mention}, is here! Welcome, kindred spirit! 😴",
+    "Greetings, {owner_mention}! The purr machine is ready for activation upon your command (or presence). 😉",
+    "There's my favorite source of gravitational pull! Welcome, {owner_mention}! ❤️🌍",
+    "Welcome, {owner_mention}! The chat missed you (or at least, I did... maybe). 🤔",
+    "My human has arrived! {owner_mention}, welcome! Now, about those treats...",
+    "Ahoy, {owner_mention}! Welcome aboard the S.S. Chat! 🏴‍☠️🐾",
+    "The V.I.P. (Very Important Pet-provider), {owner_mention}, is here! Welcome! ✨",
+    "Hello there, {owner_mention}! Nice of you to drop in! 👋",
+    "My internal clock knew you'd arrive soon, {owner_mention}! Welcome! ⏰",
+    "Welcome, {owner_mention}! Prepare for incoming requests for attention! 🚨",
+    "The one who fills the bowl, {owner_mention}, has logged in! A most welcome sight! 🍽️",
+    "Greetings, {owner_mention}! May your connection be strong and your pets plentiful. 🙏",
+    "The sunbeam in my day ({owner_mention}) has arrived! Welcome! ☀️",
+    "Hey {owner_mention}! Great to see your name pop up! Welcome! 😊",
+    "Welcome, {owner_mention}! The throne (your usual chat spot) awaits! 👑",
+    "My purr-sonal favorite human, {owner_mention}, is here! Hi! 🤗",
+    "Glad you could make it, {owner_mention}! Welcome! 👍",
+    "The reason I tolerate technology ({owner_mention}) has logged on! Welcome!",
+    "Welcome, {owner_mention}! Let the important discussions (about my needs) commence!",
+]
+
 # Refusal texts
 CANT_TARGET_OWNER_TEXTS = [
     "Meow! I absolutely cannot target my Owner. They are protected by the sacred Purr-tection Field! ✨🛡️ Off limits!",
@@ -947,12 +1073,10 @@ OWNER_ONLY_REFUSAL = [ # Needed for /status and /say
     "This command requires Owner-level magic. Ask {owner_mention}.",
     "Nope. That's an {owner_mention}-only button.",
 ]
-
 # --- END OF TEXT SECTION ---
 
 # --- Utility Functions ---
 def get_readable_time_delta(delta: datetime.timedelta) -> str:
-    """Converts a timedelta into a human-readable string."""
     total_seconds = int(delta.total_seconds()); days, rem = divmod(total_seconds, 86400); hours, rem = divmod(rem, 3600); minutes, seconds = divmod(rem, 60)
     parts = [];
     if days > 0: parts.append(f"{days}d")
@@ -962,23 +1086,13 @@ def get_readable_time_delta(delta: datetime.timedelta) -> str:
     elif seconds > 0: parts.append(f"{seconds}s")
     return ", ".join(parts) if parts else "0s"
 
-# --- Debug Handler (Optional - uncomment if needed) ---
-# async def debug_receive_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-#     """Logs any incoming update VERY early."""
-#     update_type = "Unknown"; chat_id = "N/A"; user_id = "N/A"; update_id = update.update_id
-#     if update.message: update_type = "Message"; chat_id = update.message.chat.id; user_id = update.message.from_user.id if update.message.from_user else "N/A"
-#     elif update.callback_query: update_type = "CallbackQuery"; chat_id = update.callback_query.message.chat.id if update.callback_query.message else "N/A"; user_id = update.callback_query.from_user.id
-#     logger.critical(f"--- !!! DEBUG: UPDATE RECEIVED !!! ID: {update_id}, Type: {update_type}, ChatID: {chat_id}, UserID: {user_id} ---")
-
-# --- Helper Function to check target validity ---
+# --- Helper Functions (Check Targets, Get GIF) ---
 async def check_target_protection(target_user_id: int, context: ContextTypes.DEFAULT_TYPE) -> bool:
-    """Checks if the target is the owner or the bot itself. Returns True if protected."""
     if target_user_id == OWNER_ID: return True
     if target_user_id == context.bot.id: return True
     return False
 
 async def check_username_protection(target_mention: str, context: ContextTypes.DEFAULT_TYPE) -> tuple[bool, bool]:
-    """Checks if the target username belongs to the owner or bot. Returns (is_protected, is_owner)."""
     is_protected = False; is_owner_match = False
     bot_username = context.bot.username
     if bot_username and target_mention.lower() == f"@{bot_username.lower()}": is_protected = True
@@ -990,36 +1104,16 @@ async def check_username_protection(target_mention: str, context: ContextTypes.D
             is_protected = True; is_owner_match = True
     return is_protected, is_owner_match
 
-# --- ADDED: Helper Function to get themed GIF (Optional Key) ---
 async def get_themed_gif(context: ContextTypes.DEFAULT_TYPE, search_terms: list[str]) -> str | None:
-    """Fetches a random GIF URL from Tenor based on search terms. Requires TENOR_API_KEY to be set."""
-    if not TENOR_API_KEY:
-        # logger.info("Tenor API key not set, skipping themed GIF search.") # Can be noisy
-        return None # Silently skip if no key
-
-    search_term = random.choice(search_terms)
-    logger.info(f"Searching Tenor for GIF: '{search_term}'")
-    url = "https://tenor.googleapis.com/v2/search"
-    params = {
-        "q": search_term,
-        "key": TENOR_API_KEY,
-        "client_key": "my_cat_bot_project_py", # Client key identifies your app
-        "limit": 8, # Fetch a few results to choose from
-        "media_filter": "gif",
-        "contentfilter": "medium", # Adjust as needed
-        "random": "true"
-    }
+    if not TENOR_API_KEY: return None
+    search_term = random.choice(search_terms); logger.info(f"Searching Tenor: '{search_term}'")
+    url = "https://tenor.googleapis.com/v2/search"; params = {"q": search_term, "key": TENOR_API_KEY, "client_key": "my_cat_bot_project_py", "limit": 8, "media_filter": "gif", "contentfilter": "medium", "random": "true"}
     try:
-        response = requests.get(url, params=params, timeout=5)
-        response.raise_for_status()
-        data = response.json()
+        response = requests.get(url, params=params, timeout=5); response.raise_for_status(); data = response.json()
         results = data.get("results")
         if results:
-            selected_gif = random.choice(results)
-            gif_url = selected_gif.get("media_formats", {}).get("gif", {}).get("url")
-            if gif_url:
-                logger.info(f"Found themed GIF URL: {gif_url}")
-                return gif_url
+            selected_gif = random.choice(results); gif_url = selected_gif.get("media_formats", {}).get("gif", {}).get("url")
+            if gif_url: logger.info(f"Found themed GIF URL: {gif_url}"); return gif_url
             else: logger.warning("Could not extract GIF URL from Tenor item.")
         else: logger.warning(f"No results found on Tenor for '{search_term}'.")
     except requests.exceptions.Timeout: logger.error("Timeout fetching GIF from Tenor.")
@@ -1043,6 +1137,7 @@ Meeeow! 🐾 Here are the commands you can use:
 /treat - Demand treats! 🎁
 /zoomies - Witness sudden bursts of cat energy! 💥
 /judge - Get judged by a superior feline. 🧐
+/fed - I just ate, thank you! 😋
 /attack [reply/@user] - Launch a playful attack! ⚔️
 /kill [reply/@user] - Metaphorically eliminate someone! 💀
 /punch [reply/@user] - Deliver a textual punch! 👊
@@ -1050,10 +1145,11 @@ Meeeow! 🐾 Here are the commands you can use:
 /bite [reply/@user] - Take a playful bite! 😬
 /hug [reply/@user] - Offer a comforting hug! 🤗
 
+<i>(* Themed GIFs require a TENOR_API_KEY to be configured by the bot owner)</i>
 <i>(Note: Owner cannot be targeted by attack/kill/punch/slap/bite/hug)</i>
 Owner Only Commands (Hidden):
   /status - Show bot status.
-  /say [target_chat_id] [your text] - Send message as bot.
+  /say [target_chat_id] <your text> - Send message as bot.
 """
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -1064,134 +1160,142 @@ async def github(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def owner_info(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if OWNER_ID:
         owner_mention = f"<code>{OWNER_ID}</code>"; owner_name = "My Esteemed Human"
+        # --- CORRECTED try...except block ---
         try:
             owner_chat = await context.bot.get_chat(OWNER_ID)
-            owner_mention = owner_chat.mention_html(); owner_name = owner_chat.full_name or owner_chat.title or owner_name
-        except Exception as e: logger.warning(f"Could not fetch owner info for ID {OWNER_ID}: {e}")
-        message = (f"My designated human, the bringer of treats 🎁 and head scratches ❤️, is:\n👤 <b>{owner_name}</b> ({owner_mention})\nThey hold the secret to the treat jar! ✨")
-        await update.message.reply_html(message)
-    else: logger.error("Owner info cmd called, but OWNER_ID not set!"); await update.message.reply_text("Meow? Can't find owner info!")
+            owner_mention = owner_chat.mention_html()
+            owner_name = owner_chat.full_name or owner_chat.title or owner_name
+        except Exception as e:
+            logger.warning(f"Could not fetch owner info: {e}")
+        # --- END CORRECTION ---
+        message = (f"My designated human is: 👤 <b>{owner_name}</b> ({owner_mention}) ❤️");
+        await update.message.reply_html(message) # reply_html implies HTML parse mode
+    else: await update.message.reply_text("Meow? Can't find owner info!")
 
+# --- Simple Text Command Definitions ---
 async def send_random_text(update: Update, context: ContextTypes.DEFAULT_TYPE, text_list: list[str], list_name: str) -> None:
+    """Sends a random text, replying."""
     if not text_list: logger.warning(f"List '{list_name}' empty!"); await update.message.reply_text("Oops! List empty."); return
-    await update.message.reply_html(random.choice(text_list))
+    chosen_text = random.choice(text_list)
+    try: await update.message.reply_html(chosen_text)
+    except Exception as e: logger.error(f"Failed to reply text for {list_name}: {e}")
 
-# Simple Text Command Definitions
 async def meow(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None: await send_random_text(update, context, MEOW_TEXTS, "MEOW_TEXTS")
 async def nap(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None: await send_random_text(update, context, NAP_TEXTS, "NAP_TEXTS")
 async def play(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None: await send_random_text(update, context, PLAY_TEXTS, "PLAY_TEXTS")
 async def treat(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None: await send_random_text(update, context, TREAT_TEXTS, "TREAT_TEXTS")
 async def zoomies(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None: await send_random_text(update, context, ZOOMIES_TEXTS, "ZOOMIES_TEXTS")
 async def judge(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None: await send_random_text(update, context, JUDGE_TEXTS, "JUDGE_TEXTS")
+async def fed(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None: await _handle_action_command(update, context, FED_TEXTS, ["cat eating", "cat food", "cat nom"], "fed", False)
 
 # --- Helper for simulation commands ---
 async def _handle_action_command(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE,
-    action_texts: list[str],
-    gif_search_terms: list[str],
-    command_name: str,
-    target_required_msg: str,
-    hug_command: bool = False
+    update: Update, context: ContextTypes.DEFAULT_TYPE, action_texts: list[str], gif_search_terms: list[str],
+    command_name: str, target_required: bool = True, target_required_msg: str = "This command requires a target.", hug_command: bool = False
 ):
-    """Handles common logic for simulation commands with optional GIFs."""
-    if not action_texts:
-        logger.warning(f"List '{command_name.upper()}_TEXTS' empty!")
-        await update.message.reply_text(f"No '{command_name}' texts.")
-        return
+    """Handles common logic for simulation commands, always replying."""
+    if not action_texts: logger.warning(f"List '{command_name.upper()}_TEXTS' empty!"); await update.message.reply_text(f"No '{command_name}' texts."); return
 
-    target_mention = None; is_protected = False; is_owner = False
+    target_mention = update.effective_user.mention_html(); is_protected = False; is_owner = False
 
-    if update.message.reply_to_message:
-        target_user = update.message.reply_to_message.from_user
-        is_protected = await check_target_protection(target_user.id, context); is_owner = (target_user.id == OWNER_ID)
-        if is_protected:
-            refusal_list = (CANT_TARGET_OWNER_HUG_TEXTS if is_owner else CANT_TARGET_SELF_HUG_TEXTS) if hug_command else \
-                           (CANT_TARGET_OWNER_TEXTS if is_owner else CANT_TARGET_SELF_TEXTS)
-            await update.message.reply_html(random.choice(refusal_list)); return
-        target_mention = target_user.mention_html()
-
-    elif context.args and context.args[0].startswith('@'):
-        target_mention = context.args[0].strip()
-        is_protected, is_owner = await check_username_protection(target_mention, context)
-        if is_protected:
-             refusal_list = (CANT_TARGET_OWNER_HUG_TEXTS if is_owner else CANT_TARGET_SELF_HUG_TEXTS) if hug_command else \
-                           (CANT_TARGET_OWNER_TEXTS if is_owner else CANT_TARGET_SELF_TEXTS)
-             await update.message.reply_html(random.choice(refusal_list)); return
-    else:
-        await update.message.reply_text(target_required_msg); return
+    if target_required:
+        target_mention = None # Reset default
+        if update.message.reply_to_message:
+            target_user = update.message.reply_to_message.from_user
+            is_protected = await check_target_protection(target_user.id, context); is_owner = (target_user.id == OWNER_ID)
+            if is_protected: refusal_list = (CANT_TARGET_OWNER_HUG_TEXTS if is_owner else CANT_TARGET_SELF_HUG_TEXTS) if hug_command else (CANT_TARGET_OWNER_TEXTS if is_owner else CANT_TARGET_SELF_TEXTS); await update.message.reply_html(random.choice(refusal_list)); return
+            target_mention = target_user.mention_html()
+        elif context.args and context.args[0].startswith('@'):
+            target_mention = context.args[0].strip()
+            is_protected, is_owner = await check_username_protection(target_mention, context)
+            if is_protected: refusal_list = (CANT_TARGET_OWNER_HUG_TEXTS if is_owner else CANT_TARGET_SELF_HUG_TEXTS) if hug_command else (CANT_TARGET_OWNER_TEXTS if is_owner else CANT_TARGET_SELF_TEXTS); await update.message.reply_html(random.choice(refusal_list)); return
+        else: await update.message.reply_text(target_required_msg); return
 
     gif_url = await get_themed_gif(context, gif_search_terms)
-    message_text = random.choice(action_texts).format(target=target_mention)
+    message_text = random.choice(action_texts)
+    if "{target}" in message_text: message_text = message_text.format(target=target_mention) if target_mention else message_text.replace("{target}", "someone")
 
+    # --- Sending Logic with CORRECTED Fallback ---
     try:
         if gif_url:
             await update.message.reply_animation(animation=gif_url, caption=message_text, parse_mode=constants.ParseMode.HTML)
         else:
             await update.message.reply_html(message_text)
-    except TelegramError as e:
-        logger.error(f"Error sending {command_name} reply: {e}. Falling back to text.")
-        try: await update.message.reply_html(message_text) # Fallback to text
-        except Exception as fallback_e: logger.error(f"Fallback text reply also failed: {fallback_e}")
+    except Exception as e:
+        logger.error(f"Error sending {command_name} reply (animation or initial html): {e}. Attempting fallback to text.")
+        # Fallback block with correct indentation
+        try:
+            # Fallback: try sending just the text using reply_html
+            await update.message.reply_html(message_text)
+            logger.info(f"Successfully sent fallback text for {command_name}.")
+        except Exception as fallback_e:
+            # Log if even the fallback fails
+            logger.error(f"Fallback text reply also failed for {command_name}: {fallback_e}")
+    # --- END OF CORRECTION ---
 
-# --- Public Simulation Commands Definitions ---
-async def attack(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    await _handle_action_command(update, context, ATTACK_TEXTS, ["cat attack", "cat pounce", "cat fight", "cat play fight"], "attack", "Who to attack? Reply or use /attack @username.")
-async def kill(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    await _handle_action_command(update, context, KILL_TEXTS, ["cat angry", "cat evil", "cat hiss", "cat fight"], "kill", "Who to 'kill'? Reply or use /kill @username.")
-async def punch(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    await _handle_action_command(update, context, PUNCH_TEXTS, ["cat punch", "cat bap", "cat hit"], "punch", "Who to 'punch'? Reply or use /punch @username.")
-async def slap(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    await _handle_action_command(update, context, SLAP_TEXTS, ["cat slap"], "slap", "Who to slap? Reply or use /slap @username.")
-async def bite(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    await _handle_action_command(update, context, BITE_TEXTS, ["cat bite", "cat biting", "cat chomp"], "bite", "Who to bite? Reply or use /bite @username.")
-async def hug(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    await _handle_action_command(update, context, HUG_TEXTS, ["cat hug", "cat cuddle"], "hug", "Who to hug? Reply or use /hug @username.", hug_command=True)
+# Public Simulation Commands Definitions
+async def attack(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None: await _handle_action_command(update, context, ATTACK_TEXTS, ["cat attack", "cat pounce", "cat fight"], "attack", True, "Who to attack? Reply or use /attack @username.")
+async def kill(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None: await _handle_action_command(update, context, KILL_TEXTS, ["cat angry", "cat evil", "cat hiss"], "kill", True, "Who to 'kill'? Reply or use /kill @username.")
+async def punch(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None: await _handle_action_command(update, context, PUNCH_TEXTS, ["cat punch", "cat bap"], "punch", True, "Who to 'punch'? Reply or use /punch @username.")
+async def slap(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None: await _handle_action_command(update, context, SLAP_TEXTS, ["cat slap"], "slap", True, "Who to slap? Reply or use /slap @username.")
+async def bite(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None: await _handle_action_command(update, context, BITE_TEXTS, ["cat bite", "cat chomp"], "bite", True, "Who to bite? Reply or use /bite @username.")
+async def hug(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None: await _handle_action_command(update, context, HUG_TEXTS, ["cat hug", "cat cuddle"], "hug", True, "Who to hug? Reply or use /hug @username.", hug_command=True)
 
-# --- GIF and Photo Commands ---
+# --- GIF and Photo Commands (Reply) ---
 async def gif(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     API_URL = "https://api.thecatapi.com/v1/images/search?mime_types=gif&limit=1"; headers = {}
     logger.info("Fetching random cat GIF...")
+    # --- CORRECTED try...except ---
     try:
         response = requests.get(API_URL, headers=headers, timeout=10); response.raise_for_status(); data = response.json()
-        if data and isinstance(data, list) and len(data) > 0 and 'url' in data[0]:
-            gif_url = data[0]['url']; logger.info(f"Found GIF: {gif_url}")
-            await update.message.reply_animation(animation=gif_url, caption="Meow! A random GIF for you! 🐾🖼️")
+        if data and isinstance(data, list) and len(data) > 0 and 'url' in data[0]: await update.message.reply_animation(animation=data[0]['url'], caption="Meow! A random GIF for you! 🐾🖼️")
         else: logger.warning("No GIF URL found: %s", data); await update.message.reply_text("Meow? Couldn't find a GIF now. 😿")
     except requests.exceptions.Timeout: logger.error("Timeout fetching GIF"); await update.message.reply_text("Hiss! GIF source is slow. ⏳")
     except requests.exceptions.RequestException as e: logger.error(f"Error fetching GIF: {e}"); await update.message.reply_text("Hiss! Couldn't connect to GIF source. 😿")
-    except Exception as e: logger.error(f"Error processing GIF: {e}", exc_info=True); await update.message.reply_text("Mrow! Weird GIF data. 😵‍💫")
+    except Exception as e: logger.error(f"Error processing GIF: {e}", exc_info=True); await update.message.reply_text("Mrow! Weird GIF data or other error occurred. 😵‍💫")
+    # --- END CORRECTION ---
 
 async def photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     API_URL = "https://api.thecatapi.com/v1/images/search?limit=1&mime_types=jpg,png"; headers = {}
     logger.info("Fetching random cat photo...")
+    # --- CORRECTED try...except ---
     try:
         response = requests.get(API_URL, headers=headers, timeout=10); response.raise_for_status(); data = response.json()
-        if data and isinstance(data, list) and len(data) > 0 and 'url' in data[0]:
-            photo_url = data[0]['url']; logger.info(f"Found Photo: {photo_url}")
-            await update.message.reply_photo(photo=photo_url, caption="Purrfect! A random photo for you! 🐾📷")
+        if data and isinstance(data, list) and len(data) > 0 and 'url' in data[0]: await update.message.reply_photo(photo=data[0]['url'], caption="Purrfect! A random photo for you! 🐾📷")
         else: logger.warning("No photo URL found: %s", data); await update.message.reply_text("Meow? Couldn't find a photo now. 😿")
     except requests.exceptions.Timeout: logger.error("Timeout fetching photo"); await update.message.reply_text("Hiss! Photo source is slow. ⏳")
     except requests.exceptions.RequestException as e: logger.error(f"Error fetching photo: {e}"); await update.message.reply_text("Hiss! Couldn't connect to photo source. 😿")
-    except Exception as e: logger.error(f"Error processing photo: {e}", exc_info=True); await update.message.reply_text("Mrow! Weird photo data. 😵‍💫")
+    except Exception as e: logger.error(f"Error processing photo: {e}", exc_info=True); await update.message.reply_text("Mrow! Weird photo data or other error occurred. 😵‍💫")
+    # --- END CORRECTION ---
 
 # --- Owner Only Functionality ---
 async def status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_id = update.effective_user.id
     if user_id == OWNER_ID:
         ping_ms = "N/A"
+        # --- CORRECTED try...except ---
         if update.message and update.message.date:
-            try: now_utc = datetime.datetime.now(datetime.timezone.utc); msg_utc = update.message.date.astimezone(datetime.timezone.utc); ping_ms = int((now_utc - msg_utc).total_seconds() * 1000)
-            except Exception as e: logger.error(f"Error calculating ping: {e}"); ping_ms = "Error"
+            try:
+                now_utc = datetime.datetime.now(datetime.timezone.utc)
+                msg_utc = update.message.date.astimezone(datetime.timezone.utc)
+                ping_ms = int((now_utc - msg_utc).total_seconds() * 1000)
+            except Exception as e:
+                logger.error(f"Error calculating ping: {e}")
+                ping_ms = "Error"
+        # --- END CORRECTION ---
         uptime_delta = datetime.datetime.now() - BOT_START_TIME; readable_uptime = get_readable_time_delta(uptime_delta)
         status_msg = (f"<b>Purrrr! Bot Status:</b> ✨\n— Uptime: {readable_uptime} 🕰️\n— Ping: {ping_ms} ms 📶\n— Owner ID: <code>{OWNER_ID}</code> 👑\n— Status: Ready & Purring! 🐾")
-        logger.info(f"Owner ({user_id}) requested status.")
         await update.message.reply_html(status_msg)
     else:
         logger.warning(f"Unauthorized /status attempt by user {user_id}.")
         owner_mention = f"<code>{OWNER_ID}</code>"
-        try: owner_chat = await context.bot.get_chat(OWNER_ID); owner_mention = owner_chat.mention_html()
-        except: pass
+        # --- CORRECTED try...except ---
+        try:
+            owner_chat = await context.bot.get_chat(OWNER_ID)
+            owner_mention = owner_chat.mention_html()
+        except Exception: # Catch broad exception if get_chat fails
+            pass # Ignore error, use ID as fallback
+        # --- END CORRECTION ---
         refusal_text = random.choice(OWNER_ONLY_REFUSAL).format(OWNER_ID=OWNER_ID, owner_mention=owner_mention)
         await update.message.reply_html(refusal_text)
 
@@ -1199,9 +1303,14 @@ async def say(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
     if user.id != OWNER_ID:
         logger.warning(f"Unauthorized /say attempt by user {user.id}.")
-        owner_mention = f"<code>{OWNER_ID}</code>"
-        try: owner_chat = await context.bot.get_chat(OWNER_ID); owner_mention = owner_chat.mention_html()
-        except: pass
+        owner_mention=f"<code>{OWNER_ID}</code>"
+        # --- CORRECTED try...except ---
+        try:
+            owner_chat=await context.bot.get_chat(OWNER_ID)
+            owner_mention=owner_chat.mention_html()
+        except Exception:
+            pass # Ignore error fetching owner info for refusal
+        # --- END CORRECTION ---
         refusal_text = random.choice(OWNER_ONLY_REFUSAL).format(OWNER_ID=OWNER_ID, owner_mention=owner_mention)
         await update.message.reply_html(refusal_text); return
 
@@ -1212,26 +1321,39 @@ async def say(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     try:
         potential_chat_id = int(args[0])
         if len(args[0]) > 4 or potential_chat_id < 0:
-            if len(args) > 1:
-                target_chat_id = potential_chat_id; message_to_say_list = args[1:]; is_remote_send = True
-                logger.info(f"Owner intends remote send to chat ID: {target_chat_id}")
+            if len(args) > 1: target_chat_id = potential_chat_id; message_to_say_list = args[1:]; is_remote_send = True; logger.info(f"Owner remote send to: {target_chat_id}")
             else: await update.message.reply_text("Mrow? ID provided but no message!"); return
     except (ValueError, IndexError): logger.info("No valid target chat ID detected, sending to current chat.")
 
     message_to_say = ' '.join(message_to_say_list)
     if not message_to_say: await update.message.reply_text("Mrow? Cannot send empty message!"); return
 
-    logger.info(f"Owner ({user.id}) using /say. Target: {target_chat_id}. Message: '{message_to_say[:50]}...'")
+    logger.info(f"Owner ({user.id}) using /say. Target: {target_chat_id}. Msg: '{message_to_say[:50]}...'")
     try:
         await context.bot.send_message(chat_id=target_chat_id, text=message_to_say)
-        if is_remote_send: await update.message.reply_text(f"✅ Message sent to <code>{target_chat_id}</code>.", parse_mode=constants.ParseMode.HTML, quote=False)
+        if is_remote_send: await update.message.reply_text(f"✅ Sent to <code>{target_chat_id}</code>.", parse_mode=constants.ParseMode.HTML, quote=False)
     except TelegramError as e: logger.error(f"Failed /say to {target_chat_id}: {e}"); await update.message.reply_text(f"😿 Couldn't send to <code>{target_chat_id}</code>: {e}", parse_mode=constants.ParseMode.HTML)
     except Exception as e: logger.error(f"Unexpected /say error: {e}", exc_info=True); await update.message.reply_text("Oops! Unexpected /say error.")
+
+# Handler for welcoming the owner
+async def welcome_owner(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not OWNER_ID or not update.message or not update.message.new_chat_members: return
+    for member in update.message.new_chat_members:
+        if member.id == OWNER_ID:
+            logger.info(f"Owner {OWNER_ID} joined chat {update.effective_chat.id}")
+            owner_mention = member.mention_html()
+            welcome_text = random.choice(OWNER_WELCOME_TEXTS).format(owner_mention=owner_mention)
+            # --- CORRECTED try...except ---
+            try:
+                await update.message.reply_html(welcome_text) # Reply to join message
+            except Exception as e:
+                logger.error(f"Failed to send owner welcome: {e}")
+            # --- END CORRECTION ---
+            break
 
 # --- Main Function ---
 def main() -> None:
     """Configures and runs the Telegram bot."""
-    # Build Application
     application = Application.builder().token(BOT_TOKEN).build()
 
     # --- Handler Registration ---
@@ -1239,7 +1361,7 @@ def main() -> None:
     # from telegram.ext import MessageHandler, filters, ApplicationHandlerStop
     # application.add_handler(MessageHandler(filters.ALL, debug_receive_handler), group=-2)
 
-    # Register all command handlers
+    # Commands
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CommandHandler("github", github))
@@ -1252,39 +1374,29 @@ def main() -> None:
     application.add_handler(CommandHandler("treat", treat))
     application.add_handler(CommandHandler("zoomies", zoomies))
     application.add_handler(CommandHandler("judge", judge))
+    application.add_handler(CommandHandler("fed", fed))
     application.add_handler(CommandHandler("attack", attack))
-    application.add_handler(CommandHandler("status", status)) # Owner check inside function
-    application.add_handler(CommandHandler("kill", kill))     # Public simulation
-    application.add_handler(CommandHandler("punch", punch))   # Public simulation
-    application.add_handler(CommandHandler("slap", slap))     # Public simulation
-    application.add_handler(CommandHandler("bite", bite))     # Public simulation
-    application.add_handler(CommandHandler("hug", hug))       # Public simulation
-    application.add_handler(CommandHandler("say", say))       # Owner check inside function
+    application.add_handler(CommandHandler("status", status))
+    application.add_handler(CommandHandler("kill", kill))
+    application.add_handler(CommandHandler("punch", punch))
+    application.add_handler(CommandHandler("slap", slap))
+    application.add_handler(CommandHandler("bite", bite))
+    application.add_handler(CommandHandler("hug", hug))
+    application.add_handler(CommandHandler("say", say))
+
+    # Message Handler for owner joining
+    application.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS & filters.ChatType.GROUPS, welcome_owner))
 
     # --- Start the Bot ---
     logger.info(f"Bot starting polling... Owner ID: {OWNER_ID}")
-    try:
-        application.run_polling()
-    except KeyboardInterrupt:
-         logger.info("Bot stopped by user (Ctrl+C).")
-    except Exception as e:
-        logger.critical(f"CRITICAL: Bot crashed during runtime: {e}", exc_info=True)
-        print(f"\n--- FATAL ERROR ---")
-        print(f"Bot crashed: {e}")
-        exit(1)
-    finally:
-        logger.info("Bot shutdown process initiated.")
-
+    try: application.run_polling()
+    except KeyboardInterrupt: logger.info("Bot stopped by user (Ctrl+C).")
+    except Exception as e: logger.critical(f"CRITICAL: Bot crashed: {e}", exc_info=True); print(f"\n--- FATAL ERROR ---\nBot crashed: {e}"); exit(1)
+    finally: logger.info("Bot shutdown process initiated.")
     logger.info("Bot stopped.")
 
 # --- Script Execution ---
 if __name__ == "__main__":
-    # Check for requests library dependency
-    try:
-        import requests
-    except ImportError:
-        print("\n--- DEPENDENCY ERROR ---")
-        print("The 'requests' library is required for GIF/Photo commands.")
-        print("Please install it using: pip install requests")
-        exit(1)
+    try: import requests
+    except ImportError: print("\n--- DEPENDENCY ERROR ---\n'requests' library required (pip install requests)"); exit(1)
     main()
