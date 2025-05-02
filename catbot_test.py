@@ -1,20 +1,21 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-# --- MyCatBot - A simple Telegram bot with fun cat actions ---
+# --- Cat Bot - A simple Telegram bot with fun cat actions ---
 # Includes owner protection, simulation commands, GIF/Photo fetching, and owner commands.
 # Uses environment variables for configuration (Token, Owner ID).
+# Tenor API Key is OPTIONAL for themed GIFs in action commands.
 
 import logging
 import random
-import os       # Required for os.getenv()
-import datetime # Required for uptime/ping
-import requests # Required for /gif and /photo
-from telegram import Update, constants # Import constants
+import os
+import datetime
+import requests # Needed for /gif, /photo, and OPTIONAL themed GIFs
+from telegram import Update, constants
 from telegram.ext import Application, CommandHandler, ContextTypes
 # Optional Debug Imports
 # from telegram.ext import MessageHandler, filters, ApplicationHandlerStop
-from telegram.error import TelegramError # To catch potential errors
+from telegram.error import TelegramError
 
 # --- Logging Configuration ---
 logging.basicConfig(
@@ -23,17 +24,15 @@ logging.basicConfig(
 # Reduce log noise from underlying libraries
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("telegram.vendor.ptb_urllib3.urllib3").setLevel(logging.WARNING)
-logging.getLogger("httpcore").setLevel(logging.WARNING) # Added for httpx's dependency
-
+logging.getLogger("httpcore").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 # --- Owner ID Configuration & Bot Start Time ---
 OWNER_ID = None
-BOT_START_TIME = datetime.datetime.now() # Record bot start time
+BOT_START_TIME = datetime.datetime.now()
+TENOR_API_KEY = None # Initialize as None
 
 # --- Load configuration from environment variables ---
-# This is the SECURE way to handle sensitive data.
-# Make sure you set the variables using 'export' in the terminal!
 try:
     # Load Owner ID
     owner_id_str = os.getenv("TELEGRAM_OWNER_ID")
@@ -41,31 +40,32 @@ try:
         OWNER_ID = int(owner_id_str)
         logger.info(f"Owner ID loaded: {OWNER_ID}")
     else:
-        # Critical error if the variable is not set
         logger.critical("CRITICAL: TELEGRAM_OWNER_ID environment variable not set!")
-        print("\n--- FATAL ERROR ---")
-        print("Environment variable TELEGRAM_OWNER_ID is not set.")
-        print("Set it to your numeric Telegram User ID before starting the bot.")
-        exit(1) # Exit with a non-zero code indicates an error
+        print("\n--- FATAL ERROR --- \nEnvironment variable TELEGRAM_OWNER_ID is not set.")
+        exit(1)
 except ValueError:
     logger.critical(f"CRITICAL: Invalid TELEGRAM_OWNER_ID: '{owner_id_str}'. Must be an integer.")
-    print("\n--- FATAL ERROR ---")
-    print(f"Invalid TELEGRAM_OWNER_ID: '{owner_id_str}'. Must be an integer.")
-    exit(1) # Exit with a non-zero code indicates an error
+    print(f"\n--- FATAL ERROR --- \nInvalid TELEGRAM_OWNER_ID: '{owner_id_str}'. Must be an integer.")
+    exit(1)
 except Exception as e:
     logger.critical(f"CRITICAL: Unexpected error loading OWNER_ID: {e}")
-    print(f"\n--- FATAL ERROR --- \n{e}")
+    print(f"\n--- FATAL ERROR --- \nUnexpected error loading OWNER_ID: {e}")
     exit(1)
 
-# Load Bot Token (also via os.getenv)
+# Load Bot Token
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 if not BOT_TOKEN:
     logger.critical("CRITICAL: TELEGRAM_BOT_TOKEN environment variable not set!")
-    print("\n--- FATAL ERROR ---")
-    print("Environment variable TELEGRAM_BOT_TOKEN is not set.")
-    print("Set it using 'export' before running the bot.")
+    print("\n--- FATAL ERROR --- \nEnvironment variable TELEGRAM_BOT_TOKEN is not set.")
     exit(1)
-# logger.debug(f"DEBUG: Read token fragment: '{BOT_TOKEN[:6]}...{BOT_TOKEN[-4:]}'") # Uncomment to debug token
+
+# Load Tenor API Key - OPTIONAL
+TENOR_API_KEY = os.getenv("TENOR_API_KEY")
+if not TENOR_API_KEY:
+    logger.warning("WARNING: TENOR_API_KEY environment variable not set. Themed GIFs for action commands will be disabled.")
+else:
+    logger.info("Tenor API Key loaded. Themed GIFs enabled.")
+
 
 # --- CAT TEXTS SECTION ---
 
@@ -450,39 +450,59 @@ def get_readable_time_delta(delta: datetime.timedelta) -> str:
 # --- Helper Function to check target validity ---
 async def check_target_protection(target_user_id: int, context: ContextTypes.DEFAULT_TYPE) -> bool:
     """Checks if the target is the owner or the bot itself. Returns True if protected."""
-    if target_user_id == OWNER_ID:
-        return True # Target is owner
-    if target_user_id == context.bot.id:
-        return True # Target is self
-    return False # Target is not protected
+    if target_user_id == OWNER_ID: return True
+    if target_user_id == context.bot.id: return True
+    return False
 
 async def check_username_protection(target_mention: str, context: ContextTypes.DEFAULT_TYPE) -> tuple[bool, bool]:
-    """
-    Checks if the target username belongs to the owner or bot.
-    Returns a tuple: (is_protected, is_owner).
-    """
-    is_protected = False
-    is_owner_match = False
-
-    # Check against bot's username
+    """Checks if the target username belongs to the owner or bot. Returns (is_protected, is_owner)."""
+    is_protected = False; is_owner_match = False
     bot_username = context.bot.username
-    if bot_username and target_mention.lower() == f"@{bot_username.lower()}":
-        is_protected = True # Target is bot
-
-    # Check against owner's username
-    if not is_protected and OWNER_ID: # Only check owner if not already matched bot
+    if bot_username and target_mention.lower() == f"@{bot_username.lower()}": is_protected = True
+    if not is_protected and OWNER_ID:
         owner_username = None
-        try:
-            owner_chat = await context.bot.get_chat(OWNER_ID)
-            owner_username = owner_chat.username
-        except Exception as e:
-            logger.warning(f"Could not fetch owner username for protection check: {e}")
-
+        try: owner_chat = await context.bot.get_chat(OWNER_ID); owner_username = owner_chat.username
+        except Exception as e: logger.warning(f"Could not fetch owner username: {e}")
         if owner_username and target_mention.lower() == f"@{owner_username.lower()}":
-            is_protected = True
-            is_owner_match = True # Specifically the owner
-
+            is_protected = True; is_owner_match = True
     return is_protected, is_owner_match
+
+# --- ADDED: Helper Function to get themed GIF (Optional Key) ---
+async def get_themed_gif(context: ContextTypes.DEFAULT_TYPE, search_terms: list[str]) -> str | None:
+    """Fetches a random GIF URL from Tenor based on search terms. Requires TENOR_API_KEY to be set."""
+    if not TENOR_API_KEY:
+        # logger.info("Tenor API key not set, skipping themed GIF search.") # Can be noisy
+        return None # Silently skip if no key
+
+    search_term = random.choice(search_terms)
+    logger.info(f"Searching Tenor for GIF: '{search_term}'")
+    url = "https://tenor.googleapis.com/v2/search"
+    params = {
+        "q": search_term,
+        "key": TENOR_API_KEY,
+        "client_key": "my_cat_bot_project_py", # Client key identifies your app
+        "limit": 8, # Fetch a few results to choose from
+        "media_filter": "gif",
+        "contentfilter": "medium", # Adjust as needed
+        "random": "true"
+    }
+    try:
+        response = requests.get(url, params=params, timeout=5)
+        response.raise_for_status()
+        data = response.json()
+        results = data.get("results")
+        if results:
+            selected_gif = random.choice(results)
+            gif_url = selected_gif.get("media_formats", {}).get("gif", {}).get("url")
+            if gif_url:
+                logger.info(f"Found themed GIF URL: {gif_url}")
+                return gif_url
+            else: logger.warning("Could not extract GIF URL from Tenor item.")
+        else: logger.warning(f"No results found on Tenor for '{search_term}'.")
+    except requests.exceptions.Timeout: logger.error("Timeout fetching GIF from Tenor.")
+    except requests.exceptions.RequestException as e: logger.error(f"Error fetching GIF from Tenor: {e}")
+    except Exception as e: logger.error(f"Unexpected error in get_themed_gif: {e}", exc_info=True)
+    return None
 
 # --- Command Handlers ---
 HELP_TEXT = """
@@ -500,24 +520,24 @@ Meeeow! 🐾 Here are the commands you can use:
 /treat - Demand treats! 🎁
 /zoomies - Witness sudden bursts of cat energy! 💥
 /judge - Get judged by a superior feline. 🧐
-/attack [reply/@user] - Launch a playful attack! ⚔️
-/kill [reply/@user] - Metaphorically eliminate someone! 💀
-/punch [reply/@user] - Deliver a textual punch! 👊
-/slap [reply/@user] - Administer a swift slap! 👋
-/bite [reply/@user] - Take a playful bite! 😬
-/hug [reply/@user] - Offer a comforting hug! 🤗
+/attack [reply/@user] - Launch a playful attack! ⚔️ (Sim, +GIF if API key set)
+/kill [reply/@user] - Metaphorically eliminate someone! 💀 (Sim, +GIF if API key set)
+/punch [reply/@user] - Deliver a textual punch! 👊 (Sim, +GIF if API key set)
+/slap [reply/@user] - Administer a swift slap! 👋 (Sim, +GIF if API key set)
+/bite [reply/@user] - Take a playful bite! 😬 (Sim, +GIF if API key set)
+/hug [reply/@user] - Offer a comforting hug! 🤗 (Sim, +GIF if API key set)
 
 <i>(Note: Owner cannot be targeted by attack/kill/punch/slap/bite/hug)</i>
 Owner Only Commands (Hidden):
   /status - Show bot status.
-  /say [target_chat_id] [your text] - Send message as bot [target_chat_id is optional].
+  /say [target_chat_id] <your text> - Send message as bot.
 """
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user; await update.message.reply_html(f"Meow {user.mention_html()}! I'm the Meow Bot. 🐾\nUse /help to see available commands!")
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None: await update.message.reply_html(HELP_TEXT, disable_web_page_preview=True)
 async def github(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    github_link = "https://github.com/R0Xofficial/MyCatbot"; await update.message.reply_text(f"Meeeow! I'm open source! 💻 Find my code: {github_link}", disable_web_page_preview=True)
+    github_link = "https://github.com/R0Xofficial/MyCatbot"; await update.message.reply_text(f"Meeeow! I'm open source! 💻 Find my code:\n{github_link}", disable_web_page_preview=True)
 async def owner_info(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if OWNER_ID:
         owner_mention = f"<code>{OWNER_ID}</code>"; owner_name = "My Esteemed Human"
@@ -525,7 +545,7 @@ async def owner_info(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
             owner_chat = await context.bot.get_chat(OWNER_ID)
             owner_mention = owner_chat.mention_html(); owner_name = owner_chat.full_name or owner_chat.title or owner_name
         except Exception as e: logger.warning(f"Could not fetch owner info for ID {OWNER_ID}: {e}")
-        message = (f"My designated human, the bringer of treats 🎁 and head scratches ❤️, is:\n👤 <b>{owner_name}</b> ({owner_mention})\nThey hold the secret to the treat jar! ✨")
+        message = (f"My designated human is: 👤 <b>{owner_name}</b> ({owner_mention}) ❤️")
         await update.message.reply_html(message)
     else: logger.error("Owner info cmd called, but OWNER_ID not set!"); await update.message.reply_text("Meow? Can't find owner info!")
 
@@ -541,96 +561,69 @@ async def treat(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None: awa
 async def zoomies(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None: await send_random_text(update, context, ZOOMIES_TEXTS, "ZOOMIES_TEXTS")
 async def judge(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None: await send_random_text(update, context, JUDGE_TEXTS, "JUDGE_TEXTS")
 
-# Public Simulation Commands with Improved Owner Protection
+# --- Helper for simulation commands ---
+async def _handle_action_command(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+    action_texts: list[str],
+    gif_search_terms: list[str],
+    command_name: str,
+    target_required_msg: str,
+    hug_command: bool = False
+):
+    """Handles common logic for simulation commands with optional GIFs."""
+    if not action_texts:
+        logger.warning(f"List '{command_name.upper()}_TEXTS' empty!")
+        await update.message.reply_text(f"No '{command_name}' texts.")
+        return
+
+    target_mention = None; is_protected = False; is_owner = False
+
+    if update.message.reply_to_message:
+        target_user = update.message.reply_to_message.from_user
+        is_protected = await check_target_protection(target_user.id, context); is_owner = (target_user.id == OWNER_ID)
+        if is_protected:
+            refusal_list = (CANT_TARGET_OWNER_HUG_TEXTS if is_owner else CANT_TARGET_SELF_HUG_TEXTS) if hug_command else \
+                           (CANT_TARGET_OWNER_TEXTS if is_owner else CANT_TARGET_SELF_TEXTS)
+            await update.message.reply_html(random.choice(refusal_list)); return
+        target_mention = target_user.mention_html()
+
+    elif context.args and context.args[0].startswith('@'):
+        target_mention = context.args[0].strip()
+        is_protected, is_owner = await check_username_protection(target_mention, context)
+        if is_protected:
+             refusal_list = (CANT_TARGET_OWNER_HUG_TEXTS if is_owner else CANT_TARGET_SELF_HUG_TEXTS) if hug_command else \
+                           (CANT_TARGET_OWNER_TEXTS if is_owner else CANT_TARGET_SELF_TEXTS)
+             await update.message.reply_html(random.choice(refusal_list)); return
+    else:
+        await update.message.reply_text(target_required_msg); return
+
+    gif_url = await get_themed_gif(context, gif_search_terms)
+    message_text = random.choice(action_texts).format(target=target_mention)
+
+    try:
+        if gif_url:
+            await update.message.reply_animation(animation=gif_url, caption=message_text, parse_mode=constants.ParseMode.HTML)
+        else:
+            await update.message.reply_html(message_text)
+    except TelegramError as e:
+        logger.error(f"Error sending {command_name} reply: {e}. Falling back to text.")
+        try: await update.message.reply_html(message_text) # Fallback to text
+        except Exception as fallback_e: logger.error(f"Fallback text reply also failed: {fallback_e}")
+
+# --- Public Simulation Commands Definitions ---
 async def attack(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    if not ATTACK_TEXTS: logger.warning("List 'ATTACK_TEXTS' empty!"); await update.message.reply_text("No attack ideas."); return
-    target_mention = None; is_protected = False; is_owner = False
-    if update.message.reply_to_message:
-        target_user = update.message.reply_to_message.from_user
-        is_protected = await check_target_protection(target_user.id, context); is_owner = (target_user.id == OWNER_ID)
-        if is_protected: await update.message.reply_html(random.choice(CANT_TARGET_OWNER_TEXTS if is_owner else CANT_TARGET_SELF_TEXTS)); return
-        target_mention = target_user.mention_html()
-    elif context.args and context.args[0].startswith('@'):
-        target_mention = context.args[0].strip()
-        is_protected, is_owner = await check_username_protection(target_mention, context)
-        if is_protected: await update.message.reply_html(random.choice(CANT_TARGET_OWNER_TEXTS if is_owner else CANT_TARGET_SELF_TEXTS)); return
-    else: await update.message.reply_text("Who to attack? Reply or use /attack @username."); return
-    await update.message.reply_html(random.choice(ATTACK_TEXTS).format(target=target_mention))
-
+    await _handle_action_command(update, context, ATTACK_TEXTS, ["cat attack", "cat pounce", "cat fight", "cat play fight"], "attack", "Who to attack? Reply or use /attack @username.")
 async def kill(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    if not KILL_TEXTS: logger.warning("List 'KILL_TEXTS' empty!"); await update.message.reply_text("No 'kill' texts."); return
-    target_mention = None; is_protected = False; is_owner = False
-    if update.message.reply_to_message:
-        target_user = update.message.reply_to_message.from_user
-        is_protected = await check_target_protection(target_user.id, context); is_owner = (target_user.id == OWNER_ID)
-        if is_protected: await update.message.reply_html(random.choice(CANT_TARGET_OWNER_TEXTS if is_owner else CANT_TARGET_SELF_TEXTS)); return
-        target_mention = target_user.mention_html()
-    elif context.args and context.args[0].startswith('@'):
-        target_mention = context.args[0].strip()
-        is_protected, is_owner = await check_username_protection(target_mention, context)
-        if is_protected: await update.message.reply_html(random.choice(CANT_TARGET_OWNER_TEXTS if is_owner else CANT_TARGET_SELF_TEXTS)); return
-    else: await update.message.reply_text("Who to 'kill'? Reply or use /kill @username."); return
-    await update.message.reply_html(random.choice(KILL_TEXTS).format(target=target_mention))
-
+    await _handle_action_command(update, context, KILL_TEXTS, ["cat angry", "cat evil", "cat hiss", "cat fight"], "kill", "Who to 'kill'? Reply or use /kill @username.")
 async def punch(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    if not PUNCH_TEXTS: logger.warning("List 'PUNCH_TEXTS' empty!"); await update.message.reply_text("No 'punch' texts."); return
-    target_mention = None; is_protected = False; is_owner = False
-    if update.message.reply_to_message:
-        target_user = update.message.reply_to_message.from_user
-        is_protected = await check_target_protection(target_user.id, context); is_owner = (target_user.id == OWNER_ID)
-        if is_protected: await update.message.reply_html(random.choice(CANT_TARGET_OWNER_TEXTS if is_owner else CANT_TARGET_SELF_TEXTS)); return
-        target_mention = target_user.mention_html()
-    elif context.args and context.args[0].startswith('@'):
-        target_mention = context.args[0].strip()
-        is_protected, is_owner = await check_username_protection(target_mention, context)
-        if is_protected: await update.message.reply_html(random.choice(CANT_TARGET_OWNER_TEXTS if is_owner else CANT_TARGET_SELF_TEXTS)); return
-    else: await update.message.reply_text("Who to 'punch'? Reply or use /punch @username."); return
-    await update.message.reply_html(random.choice(PUNCH_TEXTS).format(target=target_mention))
-
+    await _handle_action_command(update, context, PUNCH_TEXTS, ["cat punch", "cat bap", "cat hit"], "punch", "Who to 'punch'? Reply or use /punch @username.")
 async def slap(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    if not SLAP_TEXTS: logger.warning("List 'SLAP_TEXTS' empty!"); await update.message.reply_text("No 'slap' texts."); return
-    target_mention = None; is_protected = False; is_owner = False
-    if update.message.reply_to_message:
-        target_user = update.message.reply_to_message.from_user
-        is_protected = await check_target_protection(target_user.id, context); is_owner = (target_user.id == OWNER_ID)
-        if is_protected: await update.message.reply_html(random.choice(CANT_TARGET_OWNER_TEXTS if is_owner else CANT_TARGET_SELF_TEXTS)); return
-        target_mention = target_user.mention_html()
-    elif context.args and context.args[0].startswith('@'):
-        target_mention = context.args[0].strip()
-        is_protected, is_owner = await check_username_protection(target_mention, context)
-        if is_protected: await update.message.reply_html(random.choice(CANT_TARGET_OWNER_TEXTS if is_owner else CANT_TARGET_SELF_TEXTS)); return
-    else: await update.message.reply_text("Who to slap? Reply or use /slap @username."); return
-    await update.message.reply_html(random.choice(SLAP_TEXTS).format(target=target_mention))
-
+    await _handle_action_command(update, context, SLAP_TEXTS, ["cat slap"], "slap", "Who to slap? Reply or use /slap @username.")
 async def bite(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    if not BITE_TEXTS: logger.warning("List 'BITE_TEXTS' empty!"); await update.message.reply_text("No 'bite' texts."); return
-    target_mention = None; is_protected = False; is_owner = False
-    if update.message.reply_to_message:
-        target_user = update.message.reply_to_message.from_user
-        is_protected = await check_target_protection(target_user.id, context); is_owner = (target_user.id == OWNER_ID)
-        if is_protected: await update.message.reply_html(random.choice(CANT_TARGET_OWNER_TEXTS if is_owner else CANT_TARGET_SELF_TEXTS)); return
-        target_mention = target_user.mention_html()
-    elif context.args and context.args[0].startswith('@'):
-        target_mention = context.args[0].strip()
-        is_protected, is_owner = await check_username_protection(target_mention, context)
-        if is_protected: await update.message.reply_html(random.choice(CANT_TARGET_OWNER_TEXTS if is_owner else CANT_TARGET_SELF_TEXTS)); return
-    else: await update.message.reply_text("Who to bite? Reply or use /bite @username."); return
-    await update.message.reply_html(random.choice(BITE_TEXTS).format(target=target_mention))
-
+    await _handle_action_command(update, context, BITE_TEXTS, ["cat bite", "cat biting", "cat chomp"], "bite", "Who to bite? Reply or use /bite @username.")
 async def hug(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    if not HUG_TEXTS: logger.warning("List 'HUG_TEXTS' empty!"); await update.message.reply_text("No 'hug' texts."); return
-    target_mention = None; is_protected = False; is_owner = False
-    if update.message.reply_to_message:
-        target_user = update.message.reply_to_message.from_user
-        is_protected = await check_target_protection(target_user.id, context); is_owner = (target_user.id == OWNER_ID)
-        if is_protected: await update.message.reply_html(random.choice(CANT_TARGET_OWNER_HUG_TEXTS if is_owner else CANT_TARGET_SELF_HUG_TEXTS)); return
-        target_mention = target_user.mention_html()
-    elif context.args and context.args[0].startswith('@'):
-        target_mention = context.args[0].strip()
-        is_protected, is_owner = await check_username_protection(target_mention, context)
-        if is_protected: await update.message.reply_html(random.choice(CANT_TARGET_OWNER_HUG_TEXTS if is_owner else CANT_TARGET_SELF_HUG_TEXTS)); return
-    else: await update.message.reply_text("Who to hug? Reply or use /hug @username."); return
-    await update.message.reply_html(random.choice(HUG_TEXTS).format(target=target_mention))
+    await _handle_action_command(update, context, HUG_TEXTS, ["cat hug", "cat cuddle"], "hug", "Who to hug? Reply or use /hug @username.", hug_command=True)
 
 # --- GIF and Photo Commands ---
 async def gif(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -673,14 +666,20 @@ async def status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await update.message.reply_html(status_msg)
     else:
         logger.warning(f"Unauthorized /status attempt by user {user_id}.")
-        refusal_text = random.choice(OWNER_ONLY_REFUSAL).format(OWNER_ID=OWNER_ID)
+        owner_mention = f"<code>{OWNER_ID}</code>"
+        try: owner_chat = await context.bot.get_chat(OWNER_ID); owner_mention = owner_chat.mention_html()
+        except: pass
+        refusal_text = random.choice(OWNER_ONLY_REFUSAL).format(OWNER_ID=OWNER_ID, owner_mention=owner_mention)
         await update.message.reply_html(refusal_text)
 
 async def say(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
     if user.id != OWNER_ID:
         logger.warning(f"Unauthorized /say attempt by user {user.id}.")
-        refusal_text = random.choice(OWNER_ONLY_REFUSAL).format(OWNER_ID=OWNER_ID)
+        owner_mention = f"<code>{OWNER_ID}</code>"
+        try: owner_chat = await context.bot.get_chat(OWNER_ID); owner_mention = owner_chat.mention_html()
+        except: pass
+        refusal_text = random.choice(OWNER_ONLY_REFUSAL).format(OWNER_ID=OWNER_ID, owner_mention=owner_mention)
         await update.message.reply_html(refusal_text); return
 
     args = context.args
@@ -762,7 +761,7 @@ if __name__ == "__main__":
         import requests
     except ImportError:
         print("\n--- DEPENDENCY ERROR ---")
-        print("The 'requests' library is required for /gif and /photo commands.")
+        print("The 'requests' library is required for GIF/Photo commands.")
         print("Please install it using: pip install requests")
         exit(1)
     main()
