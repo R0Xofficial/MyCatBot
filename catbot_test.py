@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-# --- Cat Bot - Final Version with Owner Welcome ---
+# --- Cat Bot - Final Version (Corrected Syntax) ---
 # Includes owner protection, simulation commands, GIF/Photo fetching, owner commands,
 # and special welcome for the owner joining a group.
 # Uses environment variables for configuration (Token, Owner ID).
@@ -1137,7 +1137,7 @@ Meeeow! 🐾 Here are the commands you can use:
 /treat - Demand treats! 🎁
 /zoomies - Witness sudden bursts of cat energy! 💥
 /judge - Get judged by a superior feline. 🧐
-/fed - I just ate, thank you! 😋 (+GIF*)
+/fed - I just ate, thank you! 😋
 /attack [reply/@user] - Launch a playful attack! ⚔️
 /kill [reply/@user] - Metaphorically eliminate someone! 💀
 /punch [reply/@user] - Deliver a textual punch! 👊
@@ -1167,7 +1167,7 @@ async def owner_info(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
 
 # --- Simple Text Command Definitions ---
 async def send_random_text(update: Update, context: ContextTypes.DEFAULT_TYPE, text_list: list[str], list_name: str) -> None:
-    """Sends a random text, replying."""
+    """Sends a random text, replying (simpler version)."""
     if not text_list: logger.warning(f"List '{list_name}' empty!"); await update.message.reply_text("Oops! List empty."); return
     chosen_text = random.choice(text_list)
     try: await update.message.reply_html(chosen_text)
@@ -1187,10 +1187,7 @@ async def _handle_action_command(
     command_name: str, target_required: bool = True, target_required_msg: str = "This command requires a target.", hug_command: bool = False
 ):
     """Handles common logic for simulation commands, always replying."""
-    if not action_texts:
-        logger.warning(f"List '{command_name.upper()}_TEXTS' empty!")
-        await update.message.reply_text(f"No '{command_name}' texts.")
-        return
+    if not action_texts: logger.warning(f"List '{command_name.upper()}_TEXTS' empty!"); await update.message.reply_text(f"No '{command_name}' texts."); return
 
     target_mention = update.effective_user.mention_html(); is_protected = False; is_owner = False
 
@@ -1199,45 +1196,24 @@ async def _handle_action_command(
         if update.message.reply_to_message:
             target_user = update.message.reply_to_message.from_user
             is_protected = await check_target_protection(target_user.id, context); is_owner = (target_user.id == OWNER_ID)
-            if is_protected:
-                refusal_list = (CANT_TARGET_OWNER_HUG_TEXTS if is_owner else CANT_TARGET_SELF_HUG_TEXTS) if hug_command else \
-                               (CANT_TARGET_OWNER_TEXTS if is_owner else CANT_TARGET_SELF_TEXTS)
-                await update.message.reply_html(random.choice(refusal_list)); return
+            if is_protected: refusal_list = (CANT_TARGET_OWNER_HUG_TEXTS if is_owner else CANT_TARGET_SELF_HUG_TEXTS) if hug_command else (CANT_TARGET_OWNER_TEXTS if is_owner else CANT_TARGET_SELF_TEXTS); await update.message.reply_html(random.choice(refusal_list)); return
             target_mention = target_user.mention_html()
         elif context.args and context.args[0].startswith('@'):
             target_mention = context.args[0].strip()
             is_protected, is_owner = await check_username_protection(target_mention, context)
-            if is_protected:
-                 refusal_list = (CANT_TARGET_OWNER_HUG_TEXTS if is_owner else CANT_TARGET_SELF_HUG_TEXTS) if hug_command else \
-                               (CANT_TARGET_OWNER_TEXTS if is_owner else CANT_TARGET_SELF_TEXTS)
-                 await update.message.reply_html(random.choice(refusal_list)); return
-        else:
-            await update.message.reply_text(target_required_msg); return
+            if is_protected: refusal_list = (CANT_TARGET_OWNER_HUG_TEXTS if is_owner else CANT_TARGET_SELF_HUG_TEXTS) if hug_command else (CANT_TARGET_OWNER_TEXTS if is_owner else CANT_TARGET_SELF_TEXTS); await update.message.reply_html(random.choice(refusal_list)); return
+        else: await update.message.reply_text(target_required_msg); return
     # else: target not required for this command (like /fed)
 
     gif_url = await get_themed_gif(context, gif_search_terms)
     message_text = random.choice(action_texts)
-    # Safely format if target is needed and exists
-    if "{target}" in message_text:
-         # Use target_mention if available, otherwise provide a default/fallback
-         effective_target = target_mention if target_mention else "someone"
-         message_text = message_text.format(target=effective_target)
+    if "{target}" in message_text: message_text = message_text.format(target=target_mention) if target_mention else message_text.replace("{target}", "someone")
 
     try:
-        if gif_url:
-            await update.message.reply_animation(animation=gif_url, caption=message_text, parse_mode=constants.ParseMode.HTML)
-        else:
-            await update.message.reply_html(message_text)
-    except Exception as e:
-        logger.error(f"Error sending {command_name} reply (animation or initial html): {e}. Attempting fallback to text.")
-        # --- CORRECTED FALLBACK BLOCK ---
-        try:
-            # Fallback: try sending just the text using reply_html
-            await update.message.reply_html(message_text)
-            logger.info(f"Successfully sent fallback text for {command_name}.")
-        except Exception as fallback_e:
-            # Log if even the fallback fails
-            logger.error(f"Fallback text reply also failed for {command_name}: {fallback_e}")
+        if gif_url: await update.message.reply_animation(animation=gif_url, caption=message_text, parse_mode=constants.ParseMode.HTML)
+        else: await update.message.reply_html(message_text)
+    except Exception as e: logger.error(f"Error sending {command_name} reply: {e}"); try: await update.message.reply_html(message_text) # Fallback
+    except Exception as fallback_e: logger.error(f"Fallback text reply also failed: {fallback_e}")
 
 # Public Simulation Commands Definitions
 async def attack(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None: await _handle_action_command(update, context, ATTACK_TEXTS, ["cat attack", "cat pounce", "cat fight"], "attack", True, "Who to attack? Reply or use /attack @username.")
@@ -1297,7 +1273,7 @@ async def say(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     target_chat_id = update.effective_chat.id; message_to_say_list = args; is_remote_send = False
     try:
         potential_chat_id = int(args[0])
-        if len(args[0]) > 4 or potential_chat_id < 0:
+        if len(args[0]) > 4 or potential_chat_id < 0: # Basic check for potential ID format
             if len(args) > 1: target_chat_id = potential_chat_id; message_to_say_list = args[1:]; is_remote_send = True; logger.info(f"Owner remote send to: {target_chat_id}")
             else: await update.message.reply_text("Mrow? ID provided but no message!"); return
     except (ValueError, IndexError): logger.info("No valid target chat ID detected, sending to current chat.")
