@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-# --- Cat Bot - Final Version (Corrected Syntax) ---
+# --- MyCatBot - Final Version (Corrected Syntax Everywhere) ---
 # Includes owner protection, simulation commands, GIF/Photo fetching, owner commands,
 # and special welcome for the owner joining a group.
 # Uses environment variables for configuration (Token, Owner ID).
@@ -1160,14 +1160,21 @@ async def github(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def owner_info(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if OWNER_ID:
         owner_mention = f"<code>{OWNER_ID}</code>"; owner_name = "My Esteemed Human"
-        try: owner_chat = await context.bot.get_chat(OWNER_ID); owner_mention = owner_chat.mention_html(); owner_name = owner_chat.full_name or owner_chat.title or owner_name
-        except Exception as e: logger.warning(f"Could not fetch owner info: {e}")
-        message = (f"My designated human is: 👤 <b>{owner_name}</b> ({owner_mention}) ❤️"); await update.message.reply_html(message)
+        # --- CORRECTED try...except block ---
+        try:
+            owner_chat = await context.bot.get_chat(OWNER_ID)
+            owner_mention = owner_chat.mention_html()
+            owner_name = owner_chat.full_name or owner_chat.title or owner_name
+        except Exception as e:
+            logger.warning(f"Could not fetch owner info: {e}")
+        # --- END CORRECTION ---
+        message = (f"My designated human is: 👤 <b>{owner_name}</b> ({owner_mention}) ❤️");
+        await update.message.reply_html(message) # reply_html implies HTML parse mode
     else: await update.message.reply_text("Meow? Can't find owner info!")
 
 # --- Simple Text Command Definitions ---
 async def send_random_text(update: Update, context: ContextTypes.DEFAULT_TYPE, text_list: list[str], list_name: str) -> None:
-    """Sends a random text, replying (simpler version)."""
+    """Sends a random text, replying."""
     if not text_list: logger.warning(f"List '{list_name}' empty!"); await update.message.reply_text("Oops! List empty."); return
     chosen_text = random.choice(text_list)
     try: await update.message.reply_html(chosen_text)
@@ -1179,7 +1186,7 @@ async def play(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None: awai
 async def treat(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None: await send_random_text(update, context, TREAT_TEXTS, "TREAT_TEXTS")
 async def zoomies(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None: await send_random_text(update, context, ZOOMIES_TEXTS, "ZOOMIES_TEXTS")
 async def judge(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None: await send_random_text(update, context, JUDGE_TEXTS, "JUDGE_TEXTS")
-async def fed(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None: await _handle_action_command(update, context, FED_TEXTS, ["cat eating", "cat food", "cat nom"], "fed", False) # Target not required
+async def fed(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None: await _handle_action_command(update, context, FED_TEXTS, ["cat eating", "cat food", "cat nom"], "fed", False)
 
 # --- Helper for simulation commands ---
 async def _handle_action_command(
@@ -1187,49 +1194,28 @@ async def _handle_action_command(
     command_name: str, target_required: bool = True, target_required_msg: str = "This command requires a target.", hug_command: bool = False
 ):
     """Handles common logic for simulation commands, always replying."""
-    if not action_texts:
-        logger.warning(f"List '{command_name.upper()}_TEXTS' empty!")
-        await update.message.reply_text(f"No '{command_name}' texts.")
-        return
+    if not action_texts: logger.warning(f"List '{command_name.upper()}_TEXTS' empty!"); await update.message.reply_text(f"No '{command_name}' texts."); return
 
-    target_mention = update.effective_user.mention_html() # Default if target not required
-    is_protected = False
-    is_owner = False
+    target_mention = update.effective_user.mention_html(); is_protected = False; is_owner = False
 
     if target_required:
         target_mention = None # Reset default
         if update.message.reply_to_message:
             target_user = update.message.reply_to_message.from_user
-            is_protected = await check_target_protection(target_user.id, context)
-            is_owner = (target_user.id == OWNER_ID)
-            if is_protected:
-                refusal_list = (CANT_TARGET_OWNER_HUG_TEXTS if is_owner else CANT_TARGET_SELF_HUG_TEXTS) if hug_command else \
-                               (CANT_TARGET_OWNER_TEXTS if is_owner else CANT_TARGET_SELF_TEXTS)
-                await update.message.reply_html(random.choice(refusal_list))
-                return
+            is_protected = await check_target_protection(target_user.id, context); is_owner = (target_user.id == OWNER_ID)
+            if is_protected: refusal_list = (CANT_TARGET_OWNER_HUG_TEXTS if is_owner else CANT_TARGET_SELF_HUG_TEXTS) if hug_command else (CANT_TARGET_OWNER_TEXTS if is_owner else CANT_TARGET_SELF_TEXTS); await update.message.reply_html(random.choice(refusal_list)); return
             target_mention = target_user.mention_html()
         elif context.args and context.args[0].startswith('@'):
             target_mention = context.args[0].strip()
             is_protected, is_owner = await check_username_protection(target_mention, context)
-            if is_protected:
-                 refusal_list = (CANT_TARGET_OWNER_HUG_TEXTS if is_owner else CANT_TARGET_SELF_HUG_TEXTS) if hug_command else \
-                               (CANT_TARGET_OWNER_TEXTS if is_owner else CANT_TARGET_SELF_TEXTS)
-                 await update.message.reply_html(random.choice(refusal_list))
-                 return
-        else:
-            await update.message.reply_text(target_required_msg)
-            return
-    # else: target not required for this command (like /fed)
+            if is_protected: refusal_list = (CANT_TARGET_OWNER_HUG_TEXTS if is_owner else CANT_TARGET_SELF_HUG_TEXTS) if hug_command else (CANT_TARGET_OWNER_TEXTS if is_owner else CANT_TARGET_SELF_TEXTS); await update.message.reply_html(random.choice(refusal_list)); return
+        else: await update.message.reply_text(target_required_msg); return
 
     gif_url = await get_themed_gif(context, gif_search_terms)
     message_text = random.choice(action_texts)
-    # Safely format if target is needed and exists
-    if "{target}" in message_text:
-         # Use target_mention if available, otherwise provide a default/fallback
-         effective_target = target_mention if target_mention else "someone"
-         message_text = message_text.format(target=effective_target)
+    if "{target}" in message_text: message_text = message_text.format(target=target_mention) if target_mention else message_text.replace("{target}", "someone")
 
-    # --- Sending Logic with Corrected Fallback ---
+    # --- Sending Logic with CORRECTED Fallback ---
     try:
         if gif_url:
             await update.message.reply_animation(animation=gif_url, caption=message_text, parse_mode=constants.ParseMode.HTML)
@@ -1237,7 +1223,7 @@ async def _handle_action_command(
             await update.message.reply_html(message_text)
     except Exception as e:
         logger.error(f"Error sending {command_name} reply (animation or initial html): {e}. Attempting fallback to text.")
-        # --- CORRECTED FALLBACK BLOCK ---
+        # Fallback block with correct indentation
         try:
             # Fallback: try sending just the text using reply_html
             await update.message.reply_html(message_text)
@@ -1245,6 +1231,7 @@ async def _handle_action_command(
         except Exception as fallback_e:
             # Log if even the fallback fails
             logger.error(f"Fallback text reply also failed for {command_name}: {fallback_e}")
+    # --- END OF CORRECTION ---
 
 # Public Simulation Commands Definitions
 async def attack(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None: await _handle_action_command(update, context, ATTACK_TEXTS, ["cat attack", "cat pounce", "cat fight"], "attack", True, "Who to attack? Reply or use /attack @username.")
@@ -1256,80 +1243,76 @@ async def hug(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None: await
 
 # --- GIF and Photo Commands (Reply) ---
 async def gif(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Fetches and sends a random cat GIF, replying."""
     API_URL = "https://api.thecatapi.com/v1/images/search?mime_types=gif&limit=1"; headers = {}
     logger.info("Fetching random cat GIF...")
-    # --- CORRECTED try...except block ---
+    # --- CORRECTED try...except ---
     try:
-        response = requests.get(API_URL, headers=headers, timeout=10)
-        response.raise_for_status()
-        data = response.json()
-        if data and isinstance(data, list) and len(data) > 0 and 'url' in data[0]:
-            gif_url = data[0]['url']
-            logger.info(f"Found GIF: {gif_url}")
-            await update.message.reply_animation(animation=gif_url, caption="Meow! A random GIF for you! 🐾🖼️")
-        else:
-            logger.warning("No GIF URL found: %s", data)
-            await update.message.reply_text("Meow? Couldn't find a GIF now. 😿")
-    except requests.exceptions.Timeout:
-        logger.error("Timeout fetching GIF")
-        await update.message.reply_text("Hiss! GIF source is slow. ⏳")
-    except requests.exceptions.RequestException as e:
-        logger.error(f"Error fetching GIF: {e}")
-        await update.message.reply_text("Hiss! Couldn't connect to GIF source. 😿")
-    except Exception as e: # Catch other errors like JSON parsing or unexpected issues
-        logger.error(f"Error processing GIF: {e}", exc_info=True)
-        await update.message.reply_text("Mrow! Weird GIF data or other error occurred. 😵‍💫")
-    # --- END OF CORRECTION ---
+        response = requests.get(API_URL, headers=headers, timeout=10); response.raise_for_status(); data = response.json()
+        if data and isinstance(data, list) and len(data) > 0 and 'url' in data[0]: await update.message.reply_animation(animation=data[0]['url'], caption="Meow! A random GIF for you! 🐾🖼️")
+        else: logger.warning("No GIF URL found: %s", data); await update.message.reply_text("Meow? Couldn't find a GIF now. 😿")
+    except requests.exceptions.Timeout: logger.error("Timeout fetching GIF"); await update.message.reply_text("Hiss! GIF source is slow. ⏳")
+    except requests.exceptions.RequestException as e: logger.error(f"Error fetching GIF: {e}"); await update.message.reply_text("Hiss! Couldn't connect to GIF source. 😿")
+    except Exception as e: logger.error(f"Error processing GIF: {e}", exc_info=True); await update.message.reply_text("Mrow! Weird GIF data or other error occurred. 😵‍💫")
+    # --- END CORRECTION ---
 
 async def photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Fetches and sends a random cat photo, replying."""
     API_URL = "https://api.thecatapi.com/v1/images/search?limit=1&mime_types=jpg,png"; headers = {}
     logger.info("Fetching random cat photo...")
-    # --- CORRECTED try...except block ---
+    # --- CORRECTED try...except ---
     try:
-        response = requests.get(API_URL, headers=headers, timeout=10)
-        response.raise_for_status()
-        data = response.json()
-        if data and isinstance(data, list) and len(data) > 0 and 'url' in data[0]:
-            photo_url = data[0]['url']
-            logger.info(f"Found Photo: {photo_url}")
-            await update.message.reply_photo(photo=photo_url, caption="Purrfect! A random photo for you! 🐾📷")
-        else:
-            logger.warning("No photo URL found: %s", data)
-            await update.message.reply_text("Meow? Couldn't find a photo now. 😿")
-    except requests.exceptions.Timeout:
-        logger.error("Timeout fetching photo")
-        await update.message.reply_text("Hiss! Photo source is slow. ⏳")
-    except requests.exceptions.RequestException as e:
-        logger.error(f"Error fetching photo: {e}")
-        await update.message.reply_text("Hiss! Couldn't connect to photo source. 😿")
-    except Exception as e: # Catch other errors
-        logger.error(f"Error processing photo: {e}", exc_info=True)
-        await update.message.reply_text("Mrow! Weird photo data or other error occurred. 😵‍💫")
+        response = requests.get(API_URL, headers=headers, timeout=10); response.raise_for_status(); data = response.json()
+        if data and isinstance(data, list) and len(data) > 0 and 'url' in data[0]: await update.message.reply_photo(photo=data[0]['url'], caption="Purrfect! A random photo for you! 🐾📷")
+        else: logger.warning("No photo URL found: %s", data); await update.message.reply_text("Meow? Couldn't find a photo now. 😿")
+    except requests.exceptions.Timeout: logger.error("Timeout fetching photo"); await update.message.reply_text("Hiss! Photo source is slow. ⏳")
+    except requests.exceptions.RequestException as e: logger.error(f"Error fetching photo: {e}"); await update.message.reply_text("Hiss! Couldn't connect to photo source. 😿")
+    except Exception as e: logger.error(f"Error processing photo: {e}", exc_info=True); await update.message.reply_text("Mrow! Weird photo data or other error occurred. 😵‍💫")
+    # --- END CORRECTION ---
 
 # --- Owner Only Functionality ---
 async def status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_id = update.effective_user.id
     if user_id == OWNER_ID:
         ping_ms = "N/A"
+        # --- CORRECTED try...except ---
         if update.message and update.message.date:
-            try: now_utc = datetime.datetime.now(datetime.timezone.utc); msg_utc = update.message.date.astimezone(datetime.timezone.utc); ping_ms = int((now_utc - msg_utc).total_seconds() * 1000)
-            except Exception as e: logger.error(f"Error calculating ping: {e}"); ping_ms = "Error"
+            try:
+                now_utc = datetime.datetime.now(datetime.timezone.utc)
+                msg_utc = update.message.date.astimezone(datetime.timezone.utc)
+                ping_ms = int((now_utc - msg_utc).total_seconds() * 1000)
+            except Exception as e:
+                logger.error(f"Error calculating ping: {e}")
+                ping_ms = "Error"
+        # --- END CORRECTION ---
         uptime_delta = datetime.datetime.now() - BOT_START_TIME; readable_uptime = get_readable_time_delta(uptime_delta)
         status_msg = (f"<b>Purrrr! Bot Status:</b> ✨\n— Uptime: {readable_uptime} 🕰️\n— Ping: {ping_ms} ms 📶\n— Owner ID: <code>{OWNER_ID}</code> 👑\n— Status: Ready & Purring! 🐾")
-        await update.message.reply_html(status_msg) # Status always replies
+        await update.message.reply_html(status_msg)
     else:
         logger.warning(f"Unauthorized /status attempt by user {user_id}.")
-        owner_mention = f"<code>{OWNER_ID}</code>"; try: owner_chat = await context.bot.get_chat(OWNER_ID); owner_mention = owner_chat.mention_html()
-        except: pass; refusal_text = random.choice(OWNER_ONLY_REFUSAL).format(OWNER_ID=OWNER_ID, owner_mention=owner_mention)
-        await update.message.reply_html(refusal_text) # Refusal always replies
+        owner_mention = f"<code>{OWNER_ID}</code>"
+        # --- CORRECTED try...except ---
+        try:
+            owner_chat = await context.bot.get_chat(OWNER_ID)
+            owner_mention = owner_chat.mention_html()
+        except Exception: # Catch broad exception if get_chat fails
+            pass # Ignore error, use ID as fallback
+        # --- END CORRECTION ---
+        refusal_text = random.choice(OWNER_ONLY_REFUSAL).format(OWNER_ID=OWNER_ID, owner_mention=owner_mention)
+        await update.message.reply_html(refusal_text)
 
 async def say(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
     if user.id != OWNER_ID:
-        logger.warning(f"Unauthorized /say attempt by user {user.id}."); owner_mention=f"<code>{OWNER_ID}</code>"; try: owner_chat=await context.bot.get_chat(OWNER_ID); owner_mention=owner_chat.mention_html()
-        except: pass; refusal_text = random.choice(OWNER_ONLY_REFUSAL).format(OWNER_ID=OWNER_ID, owner_mention=owner_mention); await update.message.reply_html(refusal_text); return
+        logger.warning(f"Unauthorized /say attempt by user {user.id}.")
+        owner_mention=f"<code>{OWNER_ID}</code>"
+        # --- CORRECTED try...except ---
+        try:
+            owner_chat=await context.bot.get_chat(OWNER_ID)
+            owner_mention=owner_chat.mention_html()
+        except Exception:
+            pass # Ignore error fetching owner info for refusal
+        # --- END CORRECTION ---
+        refusal_text = random.choice(OWNER_ONLY_REFUSAL).format(OWNER_ID=OWNER_ID, owner_mention=owner_mention)
+        await update.message.reply_html(refusal_text); return
 
     args = context.args
     if not args: await update.message.reply_text("Usage: /say [optional_chat_id] <your message>"); return
@@ -1337,7 +1320,7 @@ async def say(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     target_chat_id = update.effective_chat.id; message_to_say_list = args; is_remote_send = False
     try:
         potential_chat_id = int(args[0])
-        if len(args[0]) > 4 or potential_chat_id < 0: # Basic check for potential ID format
+        if len(args[0]) > 4 or potential_chat_id < 0:
             if len(args) > 1: target_chat_id = potential_chat_id; message_to_say_list = args[1:]; is_remote_send = True; logger.info(f"Owner remote send to: {target_chat_id}")
             else: await update.message.reply_text("Mrow? ID provided but no message!"); return
     except (ValueError, IndexError): logger.info("No valid target chat ID detected, sending to current chat.")
@@ -1354,16 +1337,18 @@ async def say(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 # Handler for welcoming the owner
 async def welcome_owner(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Welcomes the owner when they join a group."""
     if not OWNER_ID or not update.message or not update.message.new_chat_members: return
-
     for member in update.message.new_chat_members:
         if member.id == OWNER_ID:
             logger.info(f"Owner {OWNER_ID} joined chat {update.effective_chat.id}")
             owner_mention = member.mention_html()
             welcome_text = random.choice(OWNER_WELCOME_TEXTS).format(owner_mention=owner_mention)
-            try: await update.message.reply_html(welcome_text) # Reply to join message
-            except Exception as e: logger.error(f"Failed to send owner welcome: {e}")
+            # --- CORRECTED try...except ---
+            try:
+                await update.message.reply_html(welcome_text) # Reply to join message
+            except Exception as e:
+                logger.error(f"Failed to send owner welcome: {e}")
+            # --- END CORRECTION ---
             break
 
 # --- Main Function ---
