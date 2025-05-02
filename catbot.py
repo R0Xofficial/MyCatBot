@@ -912,7 +912,7 @@ OWNER_WELCOME_TEXTS = [
     "My sensors detect the arrival of Prime Human {owner_mention}. Systems nominal. Purr engine warming up. 🤖❤️",
     "Welcome, {owner_mention}! I've been waiting (napping) patiently for your return! 😴➡️🤩",
     "Hooray! {owner_mention} is here! Now the fun can *really* begin! 🎉",
-    "The legend returns! Welcome back to the chat, {owner_mention}!  легенда",
+    "The legend returns! Welcome back to the chat, {owner_mention}!",
     "Ah, {owner_mention}! My designated chin scratcher has arrived! Welcome! 🙏",
     "Good day/evening/whatever-time-it-is, {owner_mention}! Delighted to have you here! 👋",
     "The Controller of the Red Dot ({owner_mention}) has entered the arena! Welcome! 🔴",
