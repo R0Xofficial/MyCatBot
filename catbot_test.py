@@ -1331,14 +1331,15 @@ def main() -> None:
     application.add_handler(CommandHandler("treat", treat))
     application.add_handler(CommandHandler("zoomies", zoomies))
     application.add_handler(CommandHandler("judge", judge))
+    application.add_handler(CommandHandler("fed", fed))
     application.add_handler(CommandHandler("attack", attack))
-    application.add_handler(CommandHandler("status", status)) # Owner check inside function
-    application.add_handler(CommandHandler("kill", kill))     # Public simulation
-    application.add_handler(CommandHandler("punch", punch))   # Public simulation
-    application.add_handler(CommandHandler("slap", slap))     # Public simulation
-    application.add_handler(CommandHandler("bite", bite))     # Public simulation
-    application.add_handler(CommandHandler("hug", hug))       # Public simulation
-    application.add_handler(CommandHandler("say", say))       # Owner check inside function
+    application.add_handler(CommandHandler("status", status))
+    application.add_handler(CommandHandler("kill", kill))
+    application.add_handler(CommandHandler("punch", punch))
+    application.add_handler(CommandHandler("slap", slap))
+    application.add_handler(CommandHandler("bite", bite))
+    application.add_handler(CommandHandler("hug", hug))
+    application.add_handler(CommandHandler("say", say))
 
     # --- Start the Bot ---
     logger.info(f"Bot starting polling... Owner ID: {OWNER_ID}")
