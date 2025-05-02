@@ -9,14 +9,11 @@ Meet **MyCatBot**, the playful and quirky cat-themed Telegram bot that will make
 - **Simple and Fun Commands**: Easy-to-use commands for everyone, whether you're looking to chat or just have a laugh.
 - **Owner Commands**: Exclusive commands for the bot's owner to manage things and keep the cat-spiracy under control.
 
-## Environment
---- Cat Bot Environment Setup ---
+## How to run
 
-export TELEGRAM_BOT_TOKEN="HERE_PASTE_YOUR_TRUE_BOT_TOKEN"
+1. Set your environment in env.sh
 
-export TELEGRAM_OWNER_ID="HERE_PASTE_YOUR_TRUE_NUMERICAL_ID"
-
-export TENOR_API_KEY="HERE_PASTE_YOUR_API_KEY_TENOR" 
+2. Run this command **cd ~/catbot && . ./env.sh && python catbot.py**
 
 ## Commands
 /start - Shows the welcome message. ✨
