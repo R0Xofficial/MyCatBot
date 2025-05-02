@@ -1149,7 +1149,7 @@ Meeeow! 🐾 Here are the commands you can use:
 <i>(Note: Owner cannot be targeted by attack/kill/punch/slap/bite/hug)</i>
 Owner Only Commands (Hidden):
   /status - Show bot status.
-  /say [target_chat_id] <your text> - Send message as bot.
+  /say [target_chat_id] [your text] - Send message as bot.
 """
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
