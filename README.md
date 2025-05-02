@@ -55,7 +55,7 @@ export TENOR_API_KEY="HERE_PASTE_YOUR_API_KEY_TENOR"
 
 /hug [reply/@user] - Offer a comforting hug!🤗
 
-(Note: Owner cannot be targeted by attack/kill/punch/slap/bite)
+(Note: Owner cannot be targeted by attack/kill/punch/slap/bite/hug)
 Owner Only Commands (Hidden):
 
   /status - Show bot status.
