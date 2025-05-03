@@ -1,6 +1,6 @@
-# MyCatBot - Your Fun, Furry Assistant
+# MyCatbot - Your Fun, Furry Assistant
 
-Meet **MyCatBot**, the playful and quirky cat-themed Telegram bot that will make your chats more fun! Whether you want to hear a random meow, trigger a zoomie attack, or just get some cuddles, this bot is here to make your day better — one paw at a time!
+Meet **MyCatbot**, the playful and quirky cat-themed Telegram bot that will make your chats more fun! Whether you want to hear a random meow, trigger a zoomie attack, or just get some cuddles, this bot is here to make your day better — one paw at a time!
 
 ## Features
 
