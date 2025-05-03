@@ -1287,8 +1287,23 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None: use
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None: await update.message.reply_html(HELP_TEXT, disable_web_page_preview=True)
 async def github(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None: github_link = "https://github.com/R0Xofficial/MyCatbot"; await update.message.reply_text(f"Meeeow! I'm open source! 💻 Here my code: {github_link}", disable_web_page_preview=True)
 async def owner_info(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    if OWNER_ID: owner_mention = f"<code>{OWNER_ID}</code>"; owner_name = "My Esteemed Human"; try: owner_chat = await context.bot.get_chat(OWNER_ID); owner_mention = owner_chat.mention_html(); owner_name = owner_chat.full_name or owner_chat.title or owner_name; except Exception as e: logger.warning(f"Could not fetch owner info: {e}"); message = (f"My designated human is: 👤 <b>{owner_name}</b> ({owner_mention}) ❤️"); await update.message.reply_html(message)
-    else: await update.message.reply_text("Meow? Can't find owner info!")
+    """Displays information about the bot's owner."""
+    if OWNER_ID:
+        owner_mention = f"<code>{OWNER_ID}</code>"
+        owner_name = "My Esteemed Human"
+        try:
+            owner_chat = await context.bot.get_chat(OWNER_ID)
+            owner_mention = owner_chat.mention_html()
+            owner_name = owner_chat.full_name or owner_chat.title or owner_name
+            logger.info(f"Successfully fetched owner info for ID {OWNER_ID}")
+        except Exception as e:
+            logger.warning(f"Could not fetch owner info for ID {OWNER_ID}, using ID as fallback: {e}")
+
+        message = (f"My designated human is: 👤 <b>{owner_name}</b> ({owner_mention}) ❤️")
+        await update.message.reply_html(message)
+    else:
+        logger.error("Owner info command called, but OWNER_ID is somehow None!")
+        await update.message.reply_text("Meow? Critical error: Owner ID not configured!")
 
 # --- Simple Text Command Definitions ---
 async def send_random_text(update: Update, context: ContextTypes.DEFAULT_TYPE, text_list: list[str], list_name: str) -> None:
