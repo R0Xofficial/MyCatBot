@@ -1220,20 +1220,35 @@ async def check_username_protection(target_mention: str, context: ContextTypes.D
     return is_owner_match
 
 async def get_themed_gif(context: ContextTypes.DEFAULT_TYPE, search_terms: list[str]) -> str | None:
-    # ... (get_themed_gif function remains the same) ...
+    """Fetches a random GIF URL from Tenor based on search terms. Requires TENOR_API_KEY to be set."""
     if not TENOR_API_KEY: return None
     search_term = random.choice(search_terms); logger.info(f"Searching Tenor: '{search_term}'")
     url = "https://tenor.googleapis.com/v2/search"; params = {"q": search_term, "key": TENOR_API_KEY, "client_key": "my_cat_bot_project_py", "limit": 8, "media_filter": "gif", "contentfilter": "medium", "random": "true"}
     try:
-        response = requests.get(url, params=params, timeout=5); response.raise_for_status(); data = response.json()
+        response = requests.get(url, params=params, timeout=5)
+        response.raise_for_status()
+        data = response.json()
         results = data.get("results")
-        if results: selected_gif = random.choice(results); gif_url = selected_gif.get("media_formats", {}).get("gif", {}).get("url");
-        if gif_url: logger.info(f"Found themed GIF URL: {gif_url}"); return gif_url
-        else: logger.warning("Could not extract GIF URL from Tenor item.")
-        else: logger.warning(f"No results found on Tenor for '{search_term}'.")
-    except requests.exceptions.Timeout: logger.error("Timeout fetching GIF from Tenor.")
-    except requests.exceptions.RequestException as e: logger.error(f"Error fetching GIF from Tenor: {e}")
-    except Exception as e: logger.error(f"Unexpected error in get_themed_gif: {e}", exc_info=True)
+        if results:
+            selected_gif = random.choice(results)
+            media_formats = selected_gif.get("media_formats", {})
+            gif_media = media_formats.get("gif", {})
+            gif_url = gif_media.get("url")
+            if gif_url:
+                logger.info(f"Found themed GIF URL: {gif_url}")
+                return gif_url
+            else:
+                logger.warning("Could not extract GIF URL from Tenor result item structure.")
+        else:
+            logger.warning(f"No results found on Tenor for '{search_term}'.")
+    except requests.exceptions.Timeout:
+        logger.error("Timeout fetching GIF from Tenor.")
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Error fetching GIF from Tenor: {e}")
+    except ValueError as e:
+        logger.error(f"Error decoding JSON response from Tenor: {e}")
+    except Exception as e:
+        logger.error(f"Unexpected error in get_themed_gif: {e}", exc_info=True)
     return None
 
 # --- Command Handlers ---
