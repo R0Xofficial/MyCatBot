@@ -1448,48 +1448,155 @@ async def photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         logger.error(f"Error processing photo: {e}", exc_info=True)
         await update.message.reply_text("Mrow! Weird photo data or other error occurred. 😵‍💫")
 
-# --- Owner Only Functionality ---
+# --- Owner Only Functionality (Corrected Syntax) ---
 async def status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Sends a status message (owner only). Replies always."""
     user_id = update.effective_user.id
     if user_id == OWNER_ID:
-        ping_ms = "N/A"; try: now_utc = datetime.datetime.now(datetime.timezone.utc); msg_utc = update.message.date.astimezone(datetime.timezone.utc); ping_ms = int((now_utc - msg_utc).total_seconds() * 1000); except Exception as e: logger.error(f"Error calculating ping: {e}"); ping_ms = "Error";
-        uptime_delta = datetime.datetime.now() - BOT_START_TIME; readable_uptime = get_readable_time_delta(uptime_delta); status_msg = (f"<b>Purrrr! Bot Status:</b> ✨\n— Uptime: {readable_uptime} 🕰️\n— Ping: {ping_ms} ms 📶\n— Owner ID: <code>{OWNER_ID}</code> 👑\n— Status: Ready & Purring! 🐾"); await update.message.reply_html(status_msg)
-    else: logger.warning(f"Unauthorized /status attempt by user {user_id}."); owner_mention = f"<code>{OWNER_ID}</code>"; try: owner_chat = await context.bot.get_chat(OWNER_ID); owner_mention = owner_chat.mention_html(); except: pass; refusal_text = random.choice(OWNER_ONLY_REFUSAL).format(OWNER_ID=OWNER_ID, owner_mention=owner_mention); await update.message.reply_html(refusal_text)
+        ping_ms = "N/A"
+        if update.message and update.message.date:
+            try:
+                now_utc = datetime.datetime.now(datetime.timezone.utc)
+                msg_utc = update.message.date.astimezone(datetime.timezone.utc)
+                ping_ms = int((now_utc - msg_utc).total_seconds() * 1000)
+            except Exception as e:
+                logger.error(f"Error calculating ping: {e}")
+                ping_ms = "Error"
+        uptime_delta = datetime.datetime.now() - BOT_START_TIME
+        readable_uptime = get_readable_time_delta(uptime_delta)
+        status_msg = (
+            f"<b>Purrrr! Bot Status:</b> ✨\n"
+            f"— Uptime: {readable_uptime} 🕰️\n"
+            f"— Ping: {ping_ms} ms 📶\n"
+            f"— Owner ID: <code>{OWNER_ID}</code> 👑\n"
+            f"— Status: Ready & Purring! 🐾"
+        )
+        await update.message.reply_html(status_msg)
+    else:
+        logger.warning(f"Unauthorized /status attempt by user {user_id}.")
+        owner_mention = f"<code>{OWNER_ID}</code>"
+        try:
+            owner_chat = await context.bot.get_chat(OWNER_ID)
+            owner_mention = owner_chat.mention_html()
+        except Exception:
+            pass # Ignore error, use ID as fallback
+        refusal_text = random.choice(OWNER_ONLY_REFUSAL).format(OWNER_ID=OWNER_ID, owner_mention=owner_mention)
+        await update.message.reply_html(refusal_text)
 
 async def say(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Sends a message as the bot (owner only). Can target specific chat ID."""
     user = update.effective_user
-    if user.id != OWNER_ID: logger.warning(f"Unauthorized /say attempt by user {user.id}."); owner_mention=f"<code>{OWNER_ID}</code>"; try: owner_chat=await context.bot.get_chat(OWNER_ID); owner_mention=owner_chat.mention_html(); except: pass; refusal_text = random.choice(OWNER_ONLY_REFUSAL).format(OWNER_ID=OWNER_ID, owner_mention=owner_mention); await update.message.reply_html(refusal_text); return
-    args = context.args; if not args: await update.message.reply_text("Usage: /say [optional_chat_id] <your message>"); return
-    target_chat_id = update.effective_chat.id; message_to_say_list = args; is_remote_send = False
-    try: potential_chat_id = int(args[0]); if len(args[0]) > 4 or potential_chat_id < 0: if len(args) > 1: target_chat_id = potential_chat_id; message_to_say_list = args[1:]; is_remote_send = True; logger.info(f"Owner remote send to: {target_chat_id}"); else: await update.message.reply_text("Mrow? ID provided but no message!"); return
-    except (ValueError, IndexError): logger.info("No valid target chat ID detected, sending to current chat.")
-    message_to_say = ' '.join(message_to_say_list); if not message_to_say: await update.message.reply_text("Mrow? Cannot send empty message!"); return
-    logger.info(f"Owner ({user.id}) using /say. Target: {target_chat_id}. Msg: '{message_to_say[:50]}...'"); try: await context.bot.send_message(chat_id=target_chat_id, text=message_to_say); if is_remote_send: await update.message.reply_text(f"✅ Sent to <code>{target_chat_id}</code>.", parse_mode=constants.ParseMode.HTML, quote=False);
-    except TelegramError as e: logger.error(f"Failed /say to {target_chat_id}: {e}"); await update.message.reply_text(f"😿 Couldn't send to <code>{target_chat_id}</code>: {e}", parse_mode=constants.ParseMode.HTML)
-    except Exception as e: logger.error(f"Unexpected /say error: {e}", exc_info=True); await update.message.reply_text("Oops! Unexpected /say error.")
+    if user.id != OWNER_ID:
+        logger.warning(f"Unauthorized /say attempt by user {user.id}.")
+        owner_mention=f"<code>{OWNER_ID}</code>"
+        try:
+            owner_chat=await context.bot.get_chat(OWNER_ID)
+            owner_mention=owner_chat.mention_html()
+        except Exception:
+            pass # Ignore error fetching owner info for refusal
+        refusal_text = random.choice(OWNER_ONLY_REFUSAL).format(OWNER_ID=OWNER_ID, owner_mention=owner_mention)
+        await update.message.reply_html(refusal_text)
+        return
 
-async def leave_group(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    user = update.effective_user
-    if user.id != OWNER_ID: logger.warning(f"Unauthorized /leave attempt by user {user.id}."); owner_mention=f"<code>{OWNER_ID}</code>"; try: owner_chat=await context.bot.get_chat(OWNER_ID); owner_mention=owner_chat.mention_html(); except: pass; refusal_text = random.choice(OWNER_ONLY_REFUSAL).format(OWNER_ID=OWNER_ID, owner_mention=owner_mention); await update.message.reply_html(refusal_text); return
+    args = context.args
+    if not args:
+        await update.message.reply_text("Usage: /say [optional_chat_id] <your message>")
+        return
 
-    args = context.args; target_chat_id = update.effective_chat.id; is_remote_leave = False
-    chat_title = update.effective_chat.title if update.effective_chat.title else "this chat" # Get current chat title
-
-    if args:
-        try: potential_chat_id = int(args[0]);
-        if len(args[0]) > 4 or potential_chat_id < 0: target_chat_id = potential_chat_id; is_remote_leave = True; logger.info(f"Owner intends remote leave from chat ID: {target_chat_id}"); chat_title = f"chat {target_chat_id}" # Use ID if remote
-        else: logger.info("Numeric arg for /leave not recognised as target ID. Leaving current chat.")
-        except (ValueError, IndexError): logger.warning(f"Non-numeric arg '{args[0]}' for /leave. Leaving current chat.")
-
-    farewell_message = random.choice(LEAVE_TEXTS).format(chat_title=chat_title); can_send = True
-    try: await context.bot.send_message(chat_id=target_chat_id, text=farewell_message); logger.info(f"Sent farewell to chat {target_chat_id}")
-    except Exception as e: logger.error(f"Failed send farewell to {target_chat_id}: {e}"); if is_remote_leave: await update.message.reply_text(f"😿 Couldn't send farewell to <code>{target_chat_id}</code> ({e}). Leaving anyway...", parse_mode=constants.ParseMode.HTML); can_send = False
+    target_chat_id = update.effective_chat.id
+    message_to_say_list = args
+    is_remote_send = False
 
     try:
-        if await context.bot.leave_chat(chat_id=target_chat_id): logger.info(f"Owner ({user.id}) made bot leave chat {target_chat_id}"); if is_remote_leave or not can_send: await update.message.reply_text(f"✅ Left chat <code>{target_chat_id}</code>.", parse_mode=constants.ParseMode.HTML, quote=False)
-        else: logger.warning(f"leave_chat returned False for {target_chat_id}."); if is_remote_leave or not can_send: await update.message.reply_text(f"❓ Couldn't confirm leaving <code>{target_chat_id}</code>.", parse_mode=constants.ParseMode.HTML, quote=False)
-    except TelegramError as e: logger.error(f"Failed to leave chat {target_chat_id}: {e}"); await update.message.reply_text(f"😿 Error leaving <code>{target_chat_id}</code>: {e}", parse_mode=constants.ParseMode.HTML)
-    except Exception as e: logger.error(f"Unexpected error leaving chat {target_chat_id}: {e}", exc_info=True); await update.message.reply_text("Oops! Unexpected error leaving chat.")
+        potential_chat_id = int(args[0])
+        if len(args[0]) > 4 or potential_chat_id < 0:
+            if len(args) > 1: # Check if there's a message after the ID
+                target_chat_id = potential_chat_id
+                message_to_say_list = args[1:] # Message starts from the second arg
+                is_remote_send = True
+                logger.info(f"Owner intends remote send to chat ID: {target_chat_id}")
+            else:
+                await update.message.reply_text("Mrow? ID provided but no message!")
+                return
+    except (ValueError, IndexError):
+        logger.info("No valid target chat ID detected, sending to current chat.")
+
+    message_to_say = ' '.join(message_to_say_list)
+    if not message_to_say:
+        await update.message.reply_text("Mrow? Cannot send empty message!")
+        return
+
+    logger.info(f"Owner ({user.id}) using /say. Target: {target_chat_id}. Msg: '{message_to_say[:50]}...'")
+    try:
+        await context.bot.send_message(chat_id=target_chat_id, text=message_to_say)
+        if is_remote_send:
+            await update.message.reply_text(f"✅ Sent to <code>{target_chat_id}</code>.", parse_mode=constants.ParseMode.HTML, quote=False)
+    except TelegramError as e:
+        logger.error(f"Failed /say to {target_chat_id}: {e}")
+        await update.message.reply_text(f"😿 Couldn't send to <code>{target_chat_id}</code>: {e}", parse_mode=constants.ParseMode.HTML)
+    except Exception as e:
+        logger.error(f"Unexpected /say error: {e}", exc_info=True)
+        await update.message.reply_text("Oops! Unexpected /say error.")
+
+async def leave_group(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Makes the bot leave a chat (owner only)."""
+    user = update.effective_user
+    if user.id != OWNER_ID:
+        logger.warning(f"Unauthorized /leave attempt by user {user.id}.")
+        owner_mention=f"<code>{OWNER_ID}</code>"
+        try:
+            owner_chat=await context.bot.get_chat(OWNER_ID)
+            owner_mention=owner_chat.mention_html()
+        except Exception:
+            pass # Ignore error fetching owner info for refusal
+        refusal_text = random.choice(OWNER_ONLY_REFUSAL).format(OWNER_ID=OWNER_ID, owner_mention=owner_mention)
+        await update.message.reply_html(refusal_text)
+        return
+
+    args = context.args
+    target_chat_id = update.effective_chat.id
+    is_remote_leave = False
+    chat_title = update.effective_chat.title if update.effective_chat.title else "this chat"
+
+    if args:
+        try:
+            potential_chat_id = int(args[0])
+            if len(args[0]) > 4 or potential_chat_id < 0: # Basic check for potential ID format
+                 target_chat_id = potential_chat_id
+                 is_remote_leave = True
+                 logger.info(f"Owner intends remote leave from chat ID: {target_chat_id}")
+                 chat_title = f"chat {target_chat_id}" # Use ID if remote
+            else:
+                 logger.info("Numeric argument provided for /leave, but not recognised as target ID. Leaving current chat.")
+        except (ValueError, IndexError):
+             logger.warning(f"Non-numeric argument '{args[0]}' provided to /leave. Leaving current chat.")
+
+    farewell_message = random.choice(LEAVE_TEXTS).format(chat_title=chat_title)
+    can_send = True
+    try:
+        await context.bot.send_message(chat_id=target_chat_id, text=farewell_message)
+        logger.info(f"Sent farewell message to chat {target_chat_id}")
+    except Exception as e:
+        logger.error(f"Failed send farewell to {target_chat_id}: {e}")
+        if is_remote_leave:
+             await update.message.reply_text(f"😿 Couldn't send farewell to <code>{target_chat_id}</code> ({e}). Leaving anyway...", parse_mode=constants.ParseMode.HTML)
+        can_send = False
+
+    try:
+        if await context.bot.leave_chat(chat_id=target_chat_id):
+            logger.info(f"Owner ({user.id}) made bot leave chat {target_chat_id}")
+            if is_remote_leave or not can_send: # Give confirmation if remote or if farewell failed
+                 await update.message.reply_text(f"✅ Left chat <code>{target_chat_id}</code>.", parse_mode=constants.ParseMode.HTML, quote=False)
+        else:
+            logger.warning(f"leave_chat returned False for chat {target_chat_id}. Maybe already left?")
+            if is_remote_leave or not can_send:
+                 await update.message.reply_text(f"❓ Couldn't confirm leaving <code>{target_chat_id}</code>.", parse_mode=constants.ParseMode.HTML, quote=False)
+    except TelegramError as e:
+        logger.error(f"Failed to leave chat {target_chat_id}: {e}")
+        await update.message.reply_text(f"😿 Error leaving <code>{target_chat_id}</code>: {e}", parse_mode=constants.ParseMode.HTML)
+    except Exception as e:
+        logger.error(f"Unexpected error leaving chat {target_chat_id}: {e}", exc_info=True)
+        await update.message.reply_text("Oops! Unexpected error leaving chat.")
 
 
 # Welcome a OWNER
