@@ -1616,7 +1616,6 @@ async def say(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         logger.error(f"Unexpected error during /say execution: {e}", exc_info=True)
         await update.message.reply_text("Oops! An unexpected error occurred while trying to send the message.")
 
-# --- NOWA FUNKCJA /leave ---
 async def leave_chat(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Makes the bot leave the current or a specified chat (Owner Only)."""
     user = update.effective_user
@@ -1718,7 +1717,6 @@ async def leave_chat(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
          # Other unexpected errors
          logger.error(f"Unexpected error during leave process for {target_chat_id}: {e}", exc_info=True)
          await update.message.reply_text(f"💥 Unexpected error leaving chat <b>{safe_chat_title}</b> (<code>{target_chat_id}</code>). Check logs.", parse_mode=ParseMode.HTML)
-# --- KONIEC FUNKCJI /leave ---
 
 
 # Handler for welcoming the owner when they join a group
@@ -1779,7 +1777,7 @@ def main() -> None:
     # Owner Only Commands
     application.add_handler(CommandHandler("status", status))
     application.add_handler(CommandHandler("say", say))
-    application.add_handler(CommandHandler("leave", leave_chat)) # Nowy handler
+    application.add_handler(CommandHandler("leave", leave_chat))
 
     # Message Handler for owner joining (runs on status updates in groups)
     logger.info("Registering message handlers...")
