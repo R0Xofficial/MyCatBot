@@ -1327,69 +1327,64 @@ async def zoomies(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None: a
 async def judge(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None: await send_random_text(update, context, JUDGE_TEXTS, "JUDGE_TEXTS")
 async def fed(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None: await _handle_action_command(update, context, FED_TEXTS, ["cat eating", "cat food", "cat nom"], "fed", False)
 
-# --- MODIFIED Helper for simulation commands ---
+# --- Helper for simulation commands ---
 async def _handle_action_command(
     update: Update, context: ContextTypes.DEFAULT_TYPE, action_texts: list[str], gif_search_terms: list[str],
     command_name: str, target_required: bool = True, target_required_msg: str = "This command requires a target.",
     hug_command: bool = False, pat_command: bool = False, allow_self_target: bool = False
 ):
     """Handles common logic for simulation commands, always replying."""
-    if not action_texts: logger.warning(f"List '{command_name.upper()}_TEXTS' empty!"); await update.message.reply_text(f"No '{command_name}' texts."); return
+    if not action_texts:
+        logger.warning(f"List '{command_name.upper()}_TEXTS' empty!")
+        await update.message.reply_text(f"No '{command_name}' texts.")
+        return
 
-    target_mention = update.effective_user.mention_html(); # Default if target not required
-    target_is_self = False # Flag to track if target is the bot
+    target_mention = update.effective_user.mention_html(); target_is_self = False;
 
     if target_required:
         target_mention = None # Reset default
         if update.message.reply_to_message:
-            target_user = update.message.reply_to_message.from_user
-            target_user_id = target_user.id
-
-            # Check owner protection FIRST
-            if await check_target_protection(target_user_id):
+            target_user = update.message.reply_to_message.from_user; target_user_id = target_user.id
+            if await check_target_protection(target_user_id): # Check owner
                 refusal_list = CANT_TARGET_OWNER_HUG_TEXTS if hug_command else (CANT_TARGET_OWNER_PAT_TEXTS if pat_command else CANT_TARGET_OWNER_TEXTS)
                 await update.message.reply_html(random.choice(refusal_list)); return
-
-            # Check self protection ONLY if self-target is NOT allowed
-            if not allow_self_target and target_user_id == context.bot.id:
-                 refusal_list = CANT_TARGET_SELF_HUG_TEXTS if hug_command else CANT_TARGET_SELF_TEXTS
-                 await update.message.reply_html(random.choice(refusal_list)); return
-
-            target_mention = target_user.mention_html()
-            if target_user_id == context.bot.id: target_is_self = True # Set flag if target is bot
-
+            if not allow_self_target and target_user_id == context.bot.id: # Check self
+                refusal_list = CANT_TARGET_SELF_HUG_TEXTS if hug_command else CANT_TARGET_SELF_TEXTS
+                await update.message.reply_html(random.choice(refusal_list)); return
+            target_mention = target_user.mention_html(); target_is_self = (target_user_id == context.bot.id)
         elif context.args and context.args[0].startswith('@'):
             target_mention = context.args[0].strip()
-            # Check owner protection FIRST
-            if await check_username_protection(target_mention, context):
+            is_owner = await check_username_protection(target_mention, context) # Check owner username
+            bot_username = context.bot.username
+            is_self = bot_username and target_mention.lower() == f"@{bot_username.lower()}"
+            if is_owner: # Check owner first
                  refusal_list = CANT_TARGET_OWNER_HUG_TEXTS if hug_command else (CANT_TARGET_OWNER_PAT_TEXTS if pat_command else CANT_TARGET_OWNER_TEXTS)
                  await update.message.reply_html(random.choice(refusal_list)); return
-
-            # Check self protection ONLY if self-target is NOT allowed
-            bot_username = context.bot.username
-            if not allow_self_target and bot_username and target_mention.lower() == f"@{bot_username.lower()}":
+            if not allow_self_target and is_self: # Then check self
                  refusal_list = CANT_TARGET_SELF_HUG_TEXTS if hug_command else CANT_TARGET_SELF_TEXTS
                  await update.message.reply_html(random.choice(refusal_list)); return
+            if is_self: target_is_self = True
+        else:
+            await update.message.reply_text(target_required_msg); return
 
-            if bot_username and target_mention.lower() == f"@{bot_username.lower()}": target_is_self = True # Set flag if target is bot
-
-        else: await update.message.reply_text(target_required_msg); return
-
-    # --- Prepare and Send ---
-    # Select correct text list if patting self
     current_action_texts = PAT_SELF_TEXTS if (pat_command and target_is_self) else action_texts
-
     gif_url = await get_themed_gif(context, gif_search_terms)
-    message_text = random.choice(current_action_texts) # Use potentially modified text list
+    message_text = random.choice(current_action_texts)
     if "{target}" in message_text: message_text = message_text.format(target=target_mention) if target_mention else message_text.replace("{target}", "someone")
 
+    # --- Sending Logic with Fallback ---
     try:
-        if gif_url: await update.message.reply_animation(animation=gif_url, caption=message_text, parse_mode=constants.ParseMode.HTML)
-        else: await update.message.reply_html(message_text)
+        if gif_url:
+            await update.message.reply_animation(animation=gif_url, caption=message_text, parse_mode=constants.ParseMode.HTML)
+        else:
+            await update.message.reply_html(message_text)
     except Exception as e:
-        logger.error(f"Error sending {command_name} reply: {e}. Fallback."); try: await update.message.reply_html(message_text)
-        except Exception as fallback_e: logger.error(f"Fallback failed: {fallback_e}")
-
+        logger.error(f"Error sending {command_name} reply (animation or initial html): {e}. Attempting fallback to text.")
+        try:
+            await update.message.reply_html(message_text)
+            logger.info(f"Successfully sent fallback text for {command_name}.")
+        except Exception as fallback_e:
+            logger.error(f"Fallback text reply also failed for {command_name}: {fallback_e}")
 
 # Public Simulation Commands Definitions
 async def attack(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None: await _handle_action_command(update, context, ATTACK_TEXTS, ["cat attack", "cat pounce", "cat fight"], "attack", True, "Who to attack? Reply or use /attack @username.")
