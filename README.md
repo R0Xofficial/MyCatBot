@@ -68,3 +68,5 @@ Owner Only Commands (Hidden):
   /status - Show bot status.
   
   /say [target_chat_id] [your text] - Send message as bot [target_chat_id is optional].
+
+  /leave [optional_chat_id] - Make the bot leave a chat.
