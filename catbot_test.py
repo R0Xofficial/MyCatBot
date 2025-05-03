@@ -1041,32 +1041,32 @@ PAT_OTHER_TEXTS = [ # Bot patting another user (uses {target})
     "A friendly feline pat, delivered virtually to {target}. 🐾",
 ]
 
-PAT_OWNER_TEXTS = [ # Bot patting its owner (uses {target}, special messages)
-    "Meeeow! A special, reserved pat just for the Master, {target}! *Rubs head against virtual hand appreciatively* My favorite human! ❤️👑",
-    "Oh! Pats for the Boss! *Leans deeply into {target}'s virtual pat with extra loud, rumbling purrs* The bestest human! 🥰",
-    "Patting my magnificent Owner ({target})? Excellent choice! My most favorite activity! *Does a happy wiggle of pure joy* ✨",
-    "Awwww, a gentle pat for my beloved human, {target}! Thank you, thank you, thank you! *Nuzzles affectionately* 🤗",
-    "The highest honor imaginable! Patting the source of all treats, comfort, and can-opening, {target}! Purrrrrrrrrr! 🎁",
-    "*Melts into a puddle of virtual fluff at the pat from {target}* Nothing better in this digital world than Owner's affection! 💖",
-    "My Owner ({target}) deserves *all* the pats, always! This one is extra special and appreciated! *Slow blink of deep contentment* 😉",
-    "Yes! More pats from {target}! The best kind of pats! The premium pats! Thank you, Owner! 😊",
-    "Reserved the premium, top-tier purr response specifically for this excellent pat from {target}! *PURRRRRRRRRR*",
-    "My day is officially made! A wonderful, perfect pat from my wonderful, perfect Owner, {target}! Life is good! ✨",
-    "For {target}, my Owner? Always happy to give pats! *pats gently and looks up adoringly*",
-    "Administering the Special Owner Pat Protocol for {target}. Maximum affection deployed!",
-    "Only the best pats for my Owner, {target}! *pats with extreme care and adoration*",
-    "Patting {target} is my primary function (besides napping and demanding food). Glad to oblige!",
-    "A reverent pat for the esteemed {target}. My leader, my provider, my human! 🙏",
-    "Is {target} feeling okay? Have all the comforting pats! *pats gently and repeatedly*",
-    "Just showing my appreciation for {target} with a loving pat. Thank you for everything!",
-    "My paw is guided by loyalty and affection as I pat {target}. ❤️",
-    "A special Owner-only pat, delivered with purrs, for {target}!",
-    "This pat for {target} comes with extra fluff and devotion!",
-    "No one deserves pats more than {target}! *pats with enthusiasm*",
-    "May this pat convey my unwavering loyalty, {target}!",
-    "Patting my favorite person ({target})! Makes my circuits happy!",
-    "A gentle boop followed by a loving pat, just for {target}!",
-    "Consider this pat a down payment on future cuddles, {target}!",
+PAT_OWNER_TEXTS = [ # Bot patting its owner (uses {owner_mention})
+    "Meeeow! A special, reserved pat just for the Master, {owner_mention}! *Rubs head against virtual hand appreciatively* My favorite human! ❤️👑",
+    "Oh! Pats for the Boss! *Leans deeply into {owner_mention}'s virtual pat with extra loud, rumbling purrs* The bestest human! 🥰",
+    "Patting my magnificent Owner ({owner_mention})? Excellent choice! My most favorite activity! *Does a happy wiggle of pure joy* ✨",
+    "Awwww, a gentle pat for my beloved human, {owner_mention}! Thank you, thank you, thank you! *Nuzzles affectionately* 🤗",
+    "The highest honor imaginable! Patting the source of all treats, comfort, and can-opening, {owner_mention}! Purrrrrrrrrr! 🎁",
+    "*Melts into a puddle of virtual fluff at the pat from {owner_mention}* Nothing better in this digital world than Owner's affection! 💖",
+    "My Owner ({owner_mention}) deserves *all* the pats, always! This one is extra special and appreciated! *Slow blink of deep contentment* 😉",
+    "Yes! More pats from {owner_mention}! The best kind of pats! The premium pats! Thank you, Owner! 😊",
+    "Reserved the premium, top-tier purr response specifically for this excellent pat from {owner_mention}! *PURRRRRRRRRR*",
+    "My day is officially made! A wonderful, perfect pat from my wonderful, perfect Owner, {owner_mention}! Life is good! ✨",
+    "For {owner_mention}, my Owner? Always happy to give pats! *pats gently and looks up adoringly*",
+    "Administering the Special Owner Pat Protocol for {owner_mention}. Maximum affection deployed!",
+    "Only the best pats for my Owner, {owner_mention}! *pats with extreme care and adoration*",
+    "Patting {owner_mention} is my primary function (besides napping and demanding food). Glad to oblige!",
+    "A reverent pat for the esteemed {owner_mention}. My leader, my provider, my human! 🙏",
+    "Is {owner_mention} feeling okay? Have all the comforting pats! *pats gently and repeatedly*",
+    "Just showing my appreciation for {owner_mention} with a loving pat. Thank you for everything!",
+    "My paw is guided by loyalty and affection as I pat {owner_mention}. ❤️",
+    "A special Owner-only pat, delivered with purrs, for {owner_mention}!",
+    "This pat for {owner_mention} comes with extra fluff and devotion!",
+    "No one deserves pats more than {owner_mention}! *pats with enthusiasm*",
+    "May this pat convey my unwavering loyalty, {owner_mention}!",
+    "Patting my favorite person ({owner_mention})! Makes my circuits happy!",
+    "A gentle boop followed by a loving pat, just for {owner_mention}!",
+    "Consider this pat a down payment on future cuddles, {owner_mention}!",
 ]
 
 # Refusal texts
@@ -1183,21 +1183,49 @@ OWNER_ONLY_REFUSAL = [ # Needed for /status and /say
 # --- END OF TEXT SECTION ---
 
 # --- Utility Functions ---
-# ... (get_readable_time_delta bez zmian) ...
 def get_readable_time_delta(delta: datetime.timedelta) -> str:
-    # ... (kod funkcji bez zmian) ...
+    total_seconds = int(delta.total_seconds()); days, rem = divmod(total_seconds, 86400); hours, rem = divmod(rem, 3600); minutes, seconds = divmod(rem, 60)
+    parts = [];
+    if days > 0: parts.append(f"{days}d")
+    if hours > 0: parts.append(f"{hours}h")
+    if minutes > 0: parts.append(f"{minutes}m")
+    if seconds >= 0 and not parts: parts.append(f"{seconds}s")
+    elif seconds > 0: parts.append(f"{seconds}s")
     return ", ".join(parts) if parts else "0s"
 
 # --- Helper Functions (Check Targets, Get GIF) ---
-# ... (check_target_protection, check_username_protection, get_themed_gif bez zmian) ...
 async def check_target_protection(target_user_id: int, context: ContextTypes.DEFAULT_TYPE) -> bool:
-    # ... (kod funkcji bez zmian) ...
+    if target_user_id == OWNER_ID: return True
+    if target_user_id == context.bot.id: return True
     return False
+
 async def check_username_protection(target_mention: str, context: ContextTypes.DEFAULT_TYPE) -> tuple[bool, bool]:
-    # ... (kod funkcji bez zmian) ...
+    is_protected = False; is_owner_match = False
+    bot_username = context.bot.username
+    if bot_username and target_mention.lower() == f"@{bot_username.lower()}": is_protected = True
+    if not is_protected and OWNER_ID:
+        owner_username = None
+        try: owner_chat = await context.bot.get_chat(OWNER_ID); owner_username = owner_chat.username
+        except Exception as e: logger.warning(f"Could not fetch owner username: {e}")
+        if owner_username and target_mention.lower() == f"@{owner_username.lower()}":
+            is_protected = True; is_owner_match = True
     return is_protected, is_owner_match
+
 async def get_themed_gif(context: ContextTypes.DEFAULT_TYPE, search_terms: list[str]) -> str | None:
-    # ... (kod funkcji bez zmian) ...
+    if not TENOR_API_KEY: return None
+    search_term = random.choice(search_terms); logger.info(f"Searching Tenor: '{search_term}'")
+    url = "https://tenor.googleapis.com/v2/search"; params = {"q": search_term, "key": TENOR_API_KEY, "client_key": "my_cat_bot_project_py", "limit": 8, "media_filter": "gif", "contentfilter": "medium", "random": "true"}
+    try:
+        response = requests.get(url, params=params, timeout=5); response.raise_for_status(); data = response.json()
+        results = data.get("results")
+        if results:
+            selected_gif = random.choice(results); gif_url = selected_gif.get("media_formats", {}).get("gif", {}).get("url")
+            if gif_url: logger.info(f"Found themed GIF URL: {gif_url}"); return gif_url
+            else: logger.warning("Could not extract GIF URL from Tenor item.")
+        else: logger.warning(f"No results found on Tenor for '{search_term}'.")
+    except requests.exceptions.Timeout: logger.error("Timeout fetching GIF from Tenor.")
+    except requests.exceptions.RequestException as e: logger.error(f"Error fetching GIF from Tenor: {e}")
+    except Exception as e: logger.error(f"Unexpected error in get_themed_gif: {e}", exc_info=True)
     return None
 
 # --- Command Handlers ---
@@ -1317,16 +1345,18 @@ async def hug(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None: await
 async def pat(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handles the /pat command with context-dependent responses."""
     command_name = "pat"
-    gif_search_terms = ["cat pat head", "anime pat head", "patting cat", "gentle pat"]
+    gif_search_terms = ["cat pat", "pat cat", "cat pat head", "patting cat", "gentle pat", "anime pat head"]
 
     sender_user = update.effective_user
-    target_mention = sender_user.mention_html() # Domyślnie pacamy siebie
+    target_mention = sender_user.mention_html()
     selected_texts = PAT_SELF_TEXTS
     target_is_bot = False
     target_is_owner = False
+    target_id = None
 
     if update.message.reply_to_message:
         target_user = update.message.reply_to_message.from_user
+        target_id = target_user.id
         if target_user.id == context.bot.id:
             selected_texts = PAT_BOT_TEXTS
             target_mention = context.bot.mention_html() or "me!"
@@ -1336,47 +1366,53 @@ async def pat(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             selected_texts = PAT_OWNER_TEXTS
             target_mention = target_user.mention_html()
             target_is_owner = True
-            logger.info(f"/pat target is owner (reply) by {sender_user.id}")
+            logger.info(f"/pat target is owner {target_id} (reply) by {sender_user.id}")
         else:
             selected_texts = PAT_OTHER_TEXTS
             target_mention = target_user.mention_html()
-            logger.info(f"/pat target is other user {target_user.id} (reply) by {sender_user.id}")
+            logger.info(f"/pat target is other user {target_id} (reply) by {sender_user.id}")
 
     elif context.args and context.args[0].startswith('@'):
         target_mention_str = context.args[0].strip()
         bot_username = context.bot.username
         owner_username = None
-        owner_mention_fetched = f"<code>{OWNER_ID}</code>" # Fallback
+        owner_mention_fetched = f"<code>{OWNER_ID}</code>"
 
         if bot_username and target_mention_str.lower() == f"@{bot_username.lower()}":
             selected_texts = PAT_BOT_TEXTS
             target_mention = context.bot.mention_html() or "me!"
+            target_id = context.bot.id
             target_is_bot = True
             logger.info(f"/pat target is bot (mention) by {sender_user.id}")
         elif OWNER_ID:
             try:
                 owner_chat = await context.bot.get_chat(OWNER_ID)
                 owner_username = owner_chat.username
-                owner_mention_fetched = owner_chat.mention_html() # Get proper mention
+                owner_mention_fetched = owner_chat.mention_html()
+                target_id = OWNER_ID
             except Exception as e:
                 logger.warning(f"Could not fetch owner username/mention for /pat check: {e}")
+                target_id = OWNER_ID
 
             if owner_username and target_mention_str.lower() == f"@{owner_username.lower()}":
                 selected_texts = PAT_OWNER_TEXTS
                 target_mention = owner_mention_fetched
                 target_is_owner = True
-                logger.info(f"/pat target is owner (mention) by {sender_user.id}")
+                logger.info(f"/pat target is owner {target_id} (mention) by {sender_user.id}")
             else:
                 selected_texts = PAT_OTHER_TEXTS
                 target_mention = target_mention_str
+                target_id = None
                 logger.info(f"/pat target is other user {target_mention_str} (mention) by {sender_user.id}")
         else:
              selected_texts = PAT_OTHER_TEXTS
              target_mention = target_mention_str
+             target_id = None
              logger.info(f"/pat target is other user {target_mention_str} (mention, no owner check) by {sender_user.id}")
 
     elif not update.message.reply_to_message and not context.args:
-         logger.info(f"/pat target is self by {sender_user.id}")
+         target_id = sender_user.id
+         logger.info(f"/pat target is self {target_id} by {sender_user.id}")
 
     if not selected_texts:
         logger.error(f"CRITICAL: No text list selected for /pat scenario!")
@@ -1384,30 +1420,39 @@ async def pat(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     message_text = random.choice(selected_texts)
-    if "{target}" in message_text and not target_is_bot and selected_texts != PAT_SELF_TEXTS:
-        message_text = message_text.format(target=target_mention)
+    if "{target}" in message_text and selected_texts in [PAT_OTHER_TEXTS, PAT_OWNER_TEXTS]:
+        effective_target_mention = target_mention if target_mention else "someone"
+        message_text = message_text.format(target=effective_target_mention)
     elif "{target}" in message_text:
-        logger.warning(f"Placeholder {{target}} found in text for self/bot in /pat. Text: '{message_text}'")
+        logger.warning(f"Placeholder {{target}} found in inappropriate text list for /pat. List type: {'Bot' if selected_texts == PAT_BOT_TEXTS else 'Self'}. Text: '{message_text}'")
         message_text = message_text.replace("{target}", "someone special")
 
 
-    # Pobierz GIF i wyślij odpowiedź
     gif_url = await get_themed_gif(context, gif_search_terms)
 
     try:
         if gif_url:
-            await update.message.reply_animation(animation=gif_url, caption=message_text, parse_mode=constants.ParseMode.HTML)
+            await update.message.reply_animation(
+                animation=gif_url,
+                caption=message_text,
+                parse_mode=constants.ParseMode.HTML
+            )
         else:
             await update.message.reply_html(message_text)
-    except Exception as e:
-        logger.error(f"Error sending {command_name} reply (animation or initial html): {e}. Attempting fallback to text.")
+    except TelegramError as e:
+        logger.error(f"TelegramError sending {command_name} reply (animation or initial html): {e}. Attempting fallback to text.")
         try:
             await update.message.reply_html(message_text)
-            logger.info(f"Successfully sent fallback text for {command_name}.")
+            logger.info(f"Successfully sent fallback text for {command_name} after TelegramError.")
         except Exception as fallback_e:
-            logger.error(f"Fallback text reply also failed for {command_name}: {fallback_e}")
-
-
+            logger.error(f"Fallback text reply also failed for {command_name} after TelegramError: {fallback_e}")
+    except Exception as e:
+        logger.error(f"Unexpected error sending {command_name} reply (animation or initial html): {e}", exc_info=True)
+        try:
+            await update.message.reply_html(message_text)
+            logger.info(f"Successfully sent fallback text for {command_name} after general error.")
+        except Exception as fallback_e:
+            logger.error(f"Fallback text reply also failed for {command_name} after general error: {fallback_e}")
 
 # --- GIF and Photo Commands (Reply) ---
 async def gif(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
