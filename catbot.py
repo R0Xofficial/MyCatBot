@@ -1482,50 +1482,30 @@ async def photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 # --- Owner Only Functionality ---
 async def status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Displays bot status (Owner Only)."""
     user_id = update.effective_user.id
-    if user_id != OWNER_ID:
+    if user_id == OWNER_ID:
+        ping_ms = "N/A"
+        if update.message and update.message.date:
+            try:
+                now_utc = datetime.datetime.now(datetime.timezone.utc)
+                msg_utc = update.message.date.astimezone(datetime.timezone.utc)
+                ping_ms = int((now_utc - msg_utc).total_seconds() * 1000)
+            except Exception as e:
+                logger.error(f"Error calculating ping: {e}")
+                ping_ms = "Error"
+        uptime_delta = datetime.datetime.now() - BOT_START_TIME; readable_uptime = get_readable_time_delta(uptime_delta)
+        status_msg = (f"<b>Purrrr! Bot Status:</b> ✨\n— Uptime: {readable_uptime} 🕰️\n— Ping: {ping_ms} ms 📶\n— Owner ID: <code>{OWNER_ID}</code> 👑\n— Status: Ready & Purring! 🐾")
+        await update.message.reply_html(status_msg)
+    else:
         logger.warning(f"Unauthorized /status attempt by user {user_id}.")
         owner_mention = f"<code>{OWNER_ID}</code>"
         try:
             owner_chat = await context.bot.get_chat(OWNER_ID)
             owner_mention = owner_chat.mention_html()
-        except Exception: pass # Ignore errors fetching owner mention for refusal msg
-        refusal_text = random.choice(OWNER_ONLY_REFUSAL).format(owner_mention=owner_mention)
+        except Exception:
+            pass
+        refusal_text = random.choice(OWNER_ONLY_REFUSAL).format(OWNER_ID=OWNER_ID, owner_mention=owner_mention)
         await update.message.reply_html(refusal_text)
-        return
-
-    # Calculate Ping
-    ping_ms_str = "N/A"
-    if update.message and update.message.date:
-        try:
-            now_utc = datetime.datetime.now(datetime.timezone.utc)
-            # Ensure message date is timezone-aware (it usually is)
-            msg_utc = update.message.date.astimezone(datetime.timezone.utc)
-            delta_ping = now_utc - msg_utc
-            ping_ms = int(delta_ping.total_seconds() * 1000)
-            # Add a sanity check for ping
-            if 0 <= ping_ms < 60000: # Ping shouldn't be negative or excessively large
-                ping_ms_str = f"{ping_ms} ms"
-            else:
-                 ping_ms_str = f"~{ping_ms} ms (?)" # Indicate potentially unreliable value
-        except Exception as e:
-            logger.error(f"Error calculating ping: {e}")
-            ping_ms_str = "Error"
-
-    # Calculate Uptime
-    uptime_delta = datetime.datetime.now() - BOT_START_TIME
-    readable_uptime = get_readable_time_delta(uptime_delta)
-
-    # Construct Status Message
-    status_msg = (
-        f"<b>Purrrr! Bot Status:</b> ✨\n"
-        f"— Uptime: {readable_uptime} 🕰️\n"
-        f"— Ping: {ping_ms_str} 📶\n"
-        f"— Owner ID: <code>{OWNER_ID}</code> 👑\n"
-        f"— Status: Ready & Purring! 🐾"
-    )
-    await update.message.reply_html(status_msg)
 
 async def say(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Sends a message as the bot to the current or specified chat (Owner Only)."""
