@@ -1307,7 +1307,17 @@ async def owner_info(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
 
 # --- Simple Text Command Definitions ---
 async def send_random_text(update: Update, context: ContextTypes.DEFAULT_TYPE, text_list: list[str], list_name: str) -> None:
-    if not text_list: logger.warning(f"List '{list_name}' empty!"); await update.message.reply_text("Oops! List empty."); return; chosen_text = random.choice(text_list); try: await update.message.reply_html(chosen_text); except Exception as e: logger.error(f"Failed to reply text for {list_name}: {e}")
+    """Sends a random text, replying."""
+    if not text_list:
+        logger.warning(f"List '{list_name}' empty!")
+        await update.message.reply_text("Oops! List empty.")
+        return
+
+    chosen_text = random.choice(text_list)
+    try:
+        await update.message.reply_html(chosen_text)
+    except Exception as e:
+        logger.error(f"Failed to reply text for {list_name}: {e}")
 
 async def meow(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None: await send_random_text(update, context, MEOW_TEXTS, "MEOW_TEXTS")
 async def nap(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None: await send_random_text(update, context, NAP_TEXTS, "NAP_TEXTS")
