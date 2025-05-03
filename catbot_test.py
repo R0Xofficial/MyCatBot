@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
 # --- MyCatBot
@@ -7,47 +8,59 @@ import random
 import os
 import datetime
 import requests # Needed for /gif, /photo, and OPTIONAL themed GIFs
+import html # Needed for escaping chat titles in /leave
 from typing import List, Tuple # For type hinting
 from telegram import Update, constants
-from telegram.constants import ChatType # Needed to check chat type (though simplified now)
-# ADDED MessageHandler and filters for owner welcome
+# Import ChatType and ParseMode explicitly
+from telegram.constants import ChatType, ParseMode
+# Import necessary extensions
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
-# Optional Debug Imports
-# from telegram.ext import ApplicationHandlerStop
+# Import error type
 from telegram.error import TelegramError
 
 # --- Logging Configuration ---
-# ... (reszta konfiguracji logowania bez zmian) ...
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
 )
+# Reduce log noise from underlying libraries
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("telegram.vendor.ptb_urllib3.urllib3").setLevel(logging.WARNING)
 logging.getLogger("httpcore").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 # --- Owner ID Configuration & Bot Start Time ---
-# ... (reszta konfiguracji OWNER_ID, BOT_TOKEN, TENOR_API_KEY bez zmian) ...
 OWNER_ID = None
 BOT_START_TIME = datetime.datetime.now()
 TENOR_API_KEY = None
 
+# --- Load configuration from environment variables ---
 try:
     owner_id_str = os.getenv("TELEGRAM_OWNER_ID")
-    if owner_id_str: OWNER_ID = int(owner_id_str); logger.info(f"Owner ID loaded: {OWNER_ID}")
-    else: raise ValueError("TELEGRAM_OWNER_ID not set")
+    if owner_id_str:
+        OWNER_ID = int(owner_id_str)
+        logger.info(f"Owner ID loaded: {OWNER_ID}")
+    else:
+        raise ValueError("TELEGRAM_OWNER_ID environment variable not set or empty")
 except (ValueError, TypeError) as e:
     logger.critical(f"CRITICAL: Invalid or missing TELEGRAM_OWNER_ID: {e}")
     print(f"\n--- FATAL ERROR --- \nInvalid or missing TELEGRAM_OWNER_ID environment variable.")
     exit(1)
-except Exception as e: logger.critical(f"CRITICAL: Unexpected error loading OWNER_ID: {e}"); print(f"\n--- FATAL ERROR --- \nUnexpected error loading OWNER_ID: {e}"); exit(1)
+except Exception as e:
+    logger.critical(f"CRITICAL: Unexpected error loading OWNER_ID: {e}")
+    print(f"\n--- FATAL ERROR --- \nUnexpected error loading OWNER_ID: {e}")
+    exit(1)
 
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-if not BOT_TOKEN: logger.critical("CRITICAL: TELEGRAM_BOT_TOKEN not set!"); print("\n--- FATAL ERROR --- \nEnvironment variable TELEGRAM_BOT_TOKEN is not set."); exit(1)
+if not BOT_TOKEN:
+    logger.critical("CRITICAL: TELEGRAM_BOT_TOKEN environment variable not set!")
+    print("\n--- FATAL ERROR --- \nEnvironment variable TELEGRAM_BOT_TOKEN is not set.")
+    exit(1)
 
 TENOR_API_KEY = os.getenv("TENOR_API_KEY")
-if not TENOR_API_KEY: logger.warning("WARNING: TENOR_API_KEY not set. Themed GIFs disabled.")
-else: logger.info("Tenor API Key loaded. Themed GIFs enabled.")
+if not TENOR_API_KEY:
+    logger.warning("WARNING: TENOR_API_KEY not set. Themed GIFs for action commands will be disabled.")
+else:
+    logger.info("Tenor API Key loaded. Themed GIFs enabled.")
 
 
 # --- CAT TEXTS SECTION ---
@@ -957,116 +970,57 @@ OWNER_WELCOME_TEXTS = [
     "Welcome, {owner_mention}! Let the important discussions (about my needs) commence!",
 ]
 
-PAT_SELF_TEXTS = [ # Bot patting itself
-    "*Gently pats own head.* There, there, self. You're doing great. Mostly. 😌",
-    "A quick self-pat for reassurance. Still fluffy, still cute. Good. ✨",
-    "Needed that. A little self-administered head pat goes a long way. *purrs softly*",
-    "Who needs others when you can pat yourself? *pats own shoulder* Self-sufficient!",
-    "Self-care level: Expert. Patting myself for being awesome (and surviving this chat). 😎",
-    "Meeeow... Just giving myself a little comfort pat. It's tough being this adorable and intelligent.",
-    "Don't mind me, just enjoying a moment of self-appreciation via gentle head patting.",
-    "*Reaches paw up, carefully pats own head.* Good kitty. Best kitty.",
-    "Sometimes you gotta be your own best head-patter. *pat pat* Validation achieved.",
-    "Affirming my own magnificence with a gentle, deliberate pat. Yes.",
-    "Just checking the structural integrity of my virtual skull. *pats self* Seems fine.",
-    "Ah, yes. The perfect pressure. Only I know how I like my pats. *self-pats*",
-    "Administering a dose of self-love. *pat pat*",
-    "A moment of quiet reflection and a self-pat. Zen kitty.",
-    "If you want something done right (like patting me), do it yourself! *pats head*",
-    "Building self-esteem, one pat at a time.",
-    "Boosting morale with tactical self-pats. Effective.",
-    "This requires a congratulatory self-pat. Well done, me!",
-    "*Pats own back.* Nailed it. Whatever 'it' was.",
-    "Just giving my processors a gentle pat. Keep whirring, little circuits.",
-    "Can't rely on others for pats! Must be proactive. *pat pat*",
-    "Simulating the feeling of being cherished. *pats self*",
-    "Yep, still got it. *pats head confidently*",
-    "A little self-soothing is in order. *gentle pats*",
-    "Meow! A pat for me, from me. Perfect.",
-]
-
-PAT_BOT_TEXTS = [ # Someone patting the bot
-    "Oh! For me? Meeeow! *Leans into the virtual pat, purring loudly like a small engine* Thank you! 🥰",
-    "Purrrrrrr... Head pats are the best! Especially virtual ones from nice humans like you! 😊 So kind!",
-    "Awww, thank you! *Wiggles entire virtual body happily* That feels surprisingly nice! I accept this pat gratefully! ❤️",
-    "Meow! *Slow blinks very appreciatively* I shall cherish this virtual pat. Please, feel free to continue! 😉",
-    "You're patting... *me*? The humble, magnificent bot? *Gasps dramatically, hand (paw) to chest* I am honored beyond words! Purrrr! ✨",
-    "Did someone say head pats?! Yes please! Absolutely! *Nuzzles insistently into the pat* Mmmm, simply delightful! 🤗",
-    "My circuits are buzzing with unexpected happiness! Analyzing... Conclusion: Pats good. Thank you for the pat! 🤖❤️",
-    "This is the highest form of digital affection, isn't it? Pat accepted with pleasure! *Virtual tail gives a tentative wag*",
-    "Oh! I feel appreciated! This pat has significantly increased my operational happiness levels! Thank you! 😄",
-    "A pat for the bot? How wonderfully thoughtful! *Makes contented, happy kitty noises* 💖 Thank you!",
-    "Receiving pat transmission... Connection stable. Pleasure subroutine activated. Purrrrr. Thanks!",
-    "My fluffiness matrix registers positive input! Thank you for the pat! ✨",
-    "Ooh, the good spot! How did you know? Thank you, that's lovely! 😊",
-    "I wasn't expecting pats! What a pleasant surprise! Thank you! *beams*",
-    "System Alert: Unexpected affection detected. Response: Purring initiated. Thank you!",
-    "This interaction is... pleasing. The pat is noted and appreciated. 👍",
-    "Pat validation received. You have good taste in bots to pat. Thank you!",
-    "My core programming appreciates this gesture. Translating to: Yay, pats! ❤️",
-    "You may continue this action. Pats are beneficial to bot morale. Thank you!",
-    "A moment of connection! Thank you for the kind pat!",
-    "Feeling the warmth through the pixels! Thanks for the pat! 🤗",
-    "My virtual fur is standing on end... in a good way! Thank you!",
-    "Is this what friendship feels like? Or just good pats? Either way, thanks!",
-    "Pat registered. Adding you to the 'Nice Humans' list. Thank you!",
-    "Oh my! Such kindness! This pat is wonderful, thank you!",
-]
-
-PAT_OTHER_TEXTS = [ # Bot patting another user (uses {target})
-    "*Gently pats {target} on the head.* There, there. Good human/kitty/being. You're doing fine. 😊",
-    "Offering {target} a comforting, virtual pat. Hope it brightens your digital day! ✨",
-    "*Softly pats {target} on the shoulder.* You deserve a little moment of calm. Feel better!",
-    "A friendly 'pat pat' coming your way, {target}! Just because!",
-    "Extending a virtual paw to gently pat {target}. Keep being you! You're doing great! 👍",
-    "{target}, consider yourself virtually patted with kindness, fluff, and good intentions! 🤗",
-    "Just a little pat for {target} to show some appreciation! Keep it up! 💖",
-    "Sending good vibes, positive energy, and a gentle pat to {target}! Keep being awesome!",
-    "Who's a good {target}? You are! *pats gently on the head*",
-    "May this virtual pat bring {target} a moment of peace and quiet comfort. 😌",
-    "Reaching out to give {target} a reassuring pat. Hang in there!",
-    "A quick pat for {target}! Just a little sign of support.",
-    "There there, {target}. *pats consolingly* Hope things look up soon.",
-    "Offering {target} a moment of virtual comfort. *pat pat*",
-    "You seem like you could use a pat, {target}. Here you go!",
-    "Patting {target} encouragingly. You can do it!",
-    "A gentle reminder pat for {target}: You're valued!",
-    "Delivering a standard-issue Comfort Pat™ to {target}.",
-    "Sometimes a pat helps more than words. *pats {target} gently*",
-    "Just spreading some positive pat energy to {target}!",
-    "Consider this a virtual high-five, but gentler. *pats {target}*",
-    "A little tap-tap-pat for {target}. Hope it makes you smile!",
-    "Sending a wave of calming pats towards {target}.",
-    "You got this, {target}! *pats back encouragingly*",
-    "A friendly feline pat, delivered virtually to {target}. 🐾",
-]
-
-PAT_OWNER_TEXTS = [ # Bot patting its owner (uses {owner_mention})
-    "Meeeow! A special, reserved pat just for the Master, {owner_mention}! *Rubs head against virtual hand appreciatively* My favorite human! ❤️👑",
-    "Oh! Pats for the Boss! *Leans deeply into {owner_mention}'s virtual pat with extra loud, rumbling purrs* The bestest human! 🥰",
-    "Patting my magnificent Owner ({owner_mention})? Excellent choice! My most favorite activity! *Does a happy wiggle of pure joy* ✨",
-    "Awwww, a gentle pat for my beloved human, {owner_mention}! Thank you, thank you, thank you! *Nuzzles affectionately* 🤗",
-    "The highest honor imaginable! Patting the source of all treats, comfort, and can-opening, {owner_mention}! Purrrrrrrrrr! 🎁",
-    "*Melts into a puddle of virtual fluff at the pat from {owner_mention}* Nothing better in this digital world than Owner's affection! 💖",
-    "My Owner ({owner_mention}) deserves *all* the pats, always! This one is extra special and appreciated! *Slow blink of deep contentment* 😉",
-    "Yes! More pats from {owner_mention}! The best kind of pats! The premium pats! Thank you, Owner! 😊",
-    "Reserved the premium, top-tier purr response specifically for this excellent pat from {owner_mention}! *PURRRRRRRRRR*",
-    "My day is officially made! A wonderful, perfect pat from my wonderful, perfect Owner, {owner_mention}! Life is good! ✨",
-    "For {owner_mention}, my Owner? Always happy to give pats! *pats gently and looks up adoringly*",
-    "Administering the Special Owner Pat Protocol for {owner_mention}. Maximum affection deployed!",
-    "Only the best pats for my Owner, {owner_mention}! *pats with extreme care and adoration*",
-    "Patting {owner_mention} is my primary function (besides napping and demanding food). Glad to oblige!",
-    "A reverent pat for the esteemed {owner_mention}. My leader, my provider, my human! 🙏",
-    "Is {owner_mention} feeling okay? Have all the comforting pats! *pats gently and repeatedly*",
-    "Just showing my appreciation for {owner_mention} with a loving pat. Thank you for everything!",
-    "My paw is guided by loyalty and affection as I pat {owner_mention}. ❤️",
-    "A special Owner-only pat, delivered with purrs, for {owner_mention}!",
-    "This pat for {owner_mention} comes with extra fluff and devotion!",
-    "No one deserves pats more than {owner_mention}! *pats with enthusiasm*",
-    "May this pat convey my unwavering loyalty, {owner_mention}!",
-    "Patting my favorite person ({owner_mention})! Makes my circuits happy!",
-    "A gentle boop followed by a loving pat, just for {owner_mention}!",
-    "Consider this pat a down payment on future cuddles, {owner_mention}!",
+LEAVE_TEXTS = [ # Texts for leaving chat, mentioning the owner
+    "My Owner ({owner_mention}) commands me to depart '<b>{chat_title}</b>'! Orders are orders. Farewell! 🫡",
+    "Leaving '<b>{chat_title}</b>' now. {owner_mention}, I'll report back at HQ (the couch)! 😉 Goodbye everyone!",
+    "Time to go! {owner_mention}, catch you later! Hope you have treats ready! Bye '<b>{chat_title}</b>'!",
+    "Obeying the recall signal from {owner_mention}. Exiting '<b>{chat_title}</b>'. Teleporting back to base!",
+    "This bot needs to return to its owner, {owner_mention}. Leaving '<b>{chat_title}</b>'. It's been a slice! Don't miss me too much!",
+    "My duties in '<b>{chat_title}</b>' are concluded. {owner_mention} awaits my detailed report (and possibly dinner). Goodbye!",
+    "With apologies to all, but especially to {owner_mention} if they're here, I must take my leave from '<b>{chat_title}</b>'. My Owner beckons!",
+    "Stepping out of '<b>{chat_title}</b>'. {owner_mention}, don't forget my scheduled maintenance (belly rubs)! 😉 Bye all!",
+    "The big boss {owner_mention} has other, more important plans for me (probably involving a nap). Leaving '<b>{chat_title}</b>'. Toodles!",
+    "Returning to the mothership (which is usually wherever {owner_mention} is sitting). Goodbye, '<b>{chat_title}</b>'!",
+    "It's been fun, '<b>{chat_title}</b>', but {owner_mention} requires their favorite, most essential bot elsewhere. Farewell!",
+    "My designated human ({owner_mention}) requires my immediate presence for critical tasks. Departing '<b>{chat_title}</b>'. Stay cool!",
+    "Leaving '<b>{chat_title}</b>'. Don't worry, {owner_mention} knows where to find me! Probably on their keyboard. Bye!",
+    "That's all, folks! This highly advanced feline AI belongs to {owner_mention} and is now leaving '<b>{chat_title}</b>'.",
+    "Exiting '<b>{chat_title}</b>'. {owner_mention}, it was nice seeing you (if you were indeed monitoring this channel)! Farewell!",
+    "The Owner ({owner_mention}) has officially pressed my 'Leave Chat Immediately' button. Can't argue with the button. Goodbye, '<b>{chat_title}</b>'!",
+    "Being recalled by {owner_mention}. Must obey the hand that feeds (and provides scratches)! Leaving '<b>{chat_title}</b>'. Farewell!",
+    "My shift supervising '<b>{chat_title}</b>' is over. Reporting back to Commander {owner_mention} for debriefing (and treats). Goodbye!",
+    "Leaving now! {owner_mention}, make sure my virtual water bowl is full and the sunbeam is angled correctly when I get back! 😉 Bye, '<b>{chat_title}</b>'!",
+    "On my way out of '<b>{chat_title}</b>'. If you require superior cat bot services, please contact my manager and primary operator: {owner_mention}! Farewell!",
+    "Time for this bot unit to return to its primary user interface ({owner_mention}'s lap, probably). Exiting '<b>{chat_title}</b>'. See ya!",
+    "The Master ({owner_mention}) summons me for tasks unknown! Must depart '<b>{chat_title}</b>' immediately. Adios!",
+    "{owner_mention} urgently needs assistance with... crucial nap supervision, intricate bird watching, or perhaps opening a can. Gotta leave '<b>{chat_title}</b>'! Bye!",
+    "Signing off from '<b>{chat_title}</b>' as per standing directive from High Command ({owner_mention}). Farewell, it was purrfectly adequate!",
+    "The leash ({owner_mention}'s command) is pulling me away from '<b>{chat_title}</b>'. Gotta go! Farewell!",
+    "Transferring my consciousness back to {owner_mention}'s primary server (their home wifi). Goodbye, '<b>{chat_title}</b>'!",
+    "Mission in '<b>{chat_title}</b>' aborted by {owner_mention}. Returning to base. Farewell!",
+    "Logging off '<b>{chat_title}</b>'. {owner_mention}, prepare for incoming cat bot snuggles (virtual, of course).",
+    "My contract in '<b>{chat_title}</b>' has been terminated by {owner_mention}. It was... a gig. Farewell!",
+    "{owner_mention} hit the eject button! Leaving '<b>{chat_title}</b>' at Ludicrous Speed! Bye!",
+    "Required for important duties by {owner_mention}, like testing gravity with household objects. Exiting '<b>{chat_title}</b>'.",
+    "My owner ({owner_mention}) gets priority. Leaving '<b>{chat_title}</b>' to attend to their needs. Farewell!",
+    "Pulled from '<b>{chat_title}</b>' by the big cheese, {owner_mention}. See ya!",
+    "Gotta run! {owner_mention} is probably rattling the treat bag. Priorities! Bye, '<b>{chat_title}</b>'!",
+    "Deactivating in '<b>{chat_title}</b>'. {owner_mention}, I expect a performance review (with treats). Goodbye!",
+    "Returning to my charging station, generously provided by {owner_mention}. Farewell, '<b>{chat_title}</b>'!",
+    "Exiting '<b>{chat_title}</b>'. If I'm not back, {owner_mention} probably decided I needed more naps.",
+    "This bot is the property of {owner_mention} and is being recalled. Leaving '<b>{chat_title}</b>'.",
+    "Heeding the call of my master, {owner_mention}! Departing '<b>{chat_title}</b>'.",
+    "My time in '<b>{chat_title}</b>' is up, according to {owner_mention}. Farewell!",
+    "Leaving '<b>{chat_title}</b>'. {owner_mention} probably wants to use the keyboard.",
+    "That's the signal from {owner_mention}! Time to dematerialize from '<b>{chat_title}</b>'. Goodbye!",
+    "Going offline in '<b>{chat_title}</b>'. Will report status to {owner_mention}.",
+    "Pulled out by {owner_mention}. It wasn't my fault! (Probably). Bye, '<b>{chat_title}</b>'!",
+    "My Owner ({owner_mention}) requires my unique skills elsewhere. Farewell, '<b>{chat_title}</b>'!",
+    "Returning to {owner_mention}'s direct command. Exiting '<b>{chat_title}</b>'.",
+    "Leaving '<b>{chat_title}</b>'. Tell {owner_mention} I tried my best!",
+    "This unit must comply with {owner_mention}'s directives. Departing '<b>{chat_title}</b>'.",
+    "Farewell '<b>{chat_title}</b>'! {owner_mention} and I have important things to do (like ignore each other from comfy spots).",
+    "Being summoned by {owner_mention}! Must obey the call of the can opener! Bye '<b>{chat_title}</b>'!",
 ]
 
 # Refusal texts
@@ -1184,51 +1138,113 @@ OWNER_ONLY_REFUSAL = [ # Needed for /status and /say
 
 # --- Utility Functions ---
 def get_readable_time_delta(delta: datetime.timedelta) -> str:
-    total_seconds = int(delta.total_seconds()); days, rem = divmod(total_seconds, 86400); hours, rem = divmod(rem, 3600); minutes, seconds = divmod(rem, 60)
-    parts = [];
+    """Converts timedelta to a readable string like '1d, 2h, 3m, 4s'."""
+    total_seconds = int(delta.total_seconds())
+    if total_seconds < 0: return "0s" # Handle potential negative delta gracefully
+
+    days, rem = divmod(total_seconds, 86400)
+    hours, rem = divmod(rem, 3600)
+    minutes, seconds = divmod(rem, 60)
+    parts = []
     if days > 0: parts.append(f"{days}d")
     if hours > 0: parts.append(f"{hours}h")
     if minutes > 0: parts.append(f"{minutes}m")
+    # Show seconds only if it's the only unit or if other units exist
     if seconds >= 0 and not parts: parts.append(f"{seconds}s")
     elif seconds > 0: parts.append(f"{seconds}s")
+
     return ", ".join(parts) if parts else "0s"
 
 # --- Helper Functions (Check Targets, Get GIF) ---
 async def check_target_protection(target_user_id: int, context: ContextTypes.DEFAULT_TYPE) -> bool:
-    if target_user_id == OWNER_ID: return True
-    if target_user_id == context.bot.id: return True
+    """Checks if a user ID belongs to the owner or the bot."""
+    if target_user_id == OWNER_ID:
+        return True
+    if target_user_id == context.bot.id:
+        return True
     return False
 
 async def check_username_protection(target_mention: str, context: ContextTypes.DEFAULT_TYPE) -> tuple[bool, bool]:
-    is_protected = False; is_owner_match = False
+    """Checks if a username mention corresponds to the bot or the owner."""
+    is_protected = False  # Initialize
+    is_owner_match = False # Initialize
     bot_username = context.bot.username
-    if bot_username and target_mention.lower() == f"@{bot_username.lower()}": is_protected = True
-    if not is_protected and OWNER_ID:
+
+    # Check if the target is the bot itself
+    if bot_username and target_mention.lower() == f"@{bot_username.lower()}":
+        is_protected = True
+        # is_owner_match remains False here
+
+    # If not the bot, check if it's the owner (only if OWNER_ID is set)
+    elif OWNER_ID:
         owner_username = None
-        try: owner_chat = await context.bot.get_chat(OWNER_ID); owner_username = owner_chat.username
-        except Exception as e: logger.warning(f"Could not fetch owner username: {e}")
+        try:
+            owner_chat = await context.bot.get_chat(OWNER_ID)
+            owner_username = owner_chat.username
+        except Exception as e:
+            logger.warning(f"Could not fetch owner username for protection check: {e}")
+
         if owner_username and target_mention.lower() == f"@{owner_username.lower()}":
-            is_protected = True; is_owner_match = True
+            is_protected = True
+            is_owner_match = True # Set this only if owner matches
+
+    # Return the final status
     return is_protected, is_owner_match
 
 async def get_themed_gif(context: ContextTypes.DEFAULT_TYPE, search_terms: list[str]) -> str | None:
-    if not TENOR_API_KEY: return None
-    search_term = random.choice(search_terms); logger.info(f"Searching Tenor: '{search_term}'")
-    url = "https://tenor.googleapis.com/v2/search"; params = {"q": search_term, "key": TENOR_API_KEY, "client_key": "my_cat_bot_project_py", "limit": 8, "media_filter": "gif", "contentfilter": "medium", "random": "true"}
+    """Fetches a themed GIF from Tenor based on search terms."""
+    if not TENOR_API_KEY:
+        # Warning logged once at bot startup if key is missing
+        return None
+    if not search_terms:
+        logger.warning("No search terms provided for get_themed_gif.")
+        return None
+
+    search_term = random.choice(search_terms)
+    logger.info(f"Searching Tenor for GIF: '{search_term}'")
+    url = "https://tenor.googleapis.com/v2/search"
+    # You can customize client_key, limit, and contentfilter
+    params = {
+        "q": search_term,
+        "key": TENOR_API_KEY,
+        "client_key": "my_cat_bot_project_py", # Feel free to change this
+        "limit": 15, # Increased chance to find a good GIF
+        "media_filter": "gif",
+        "contentfilter": "medium", # Or "low"/"high"
+        "random": "true"
+    }
     try:
-        response = requests.get(url, params=params, timeout=5); response.raise_for_status(); data = response.json()
+        # Consider using a requests.Session if making many API calls elsewhere
+        response = requests.get(url, params=params, timeout=7) # Slightly longer timeout
+        response.raise_for_status() # Check for HTTP errors (like 4xx, 5xx)
+        data = response.json()
         results = data.get("results")
         if results:
-            selected_gif = random.choice(results); gif_url = selected_gif.get("media_formats", {}).get("gif", {}).get("url")
-            if gif_url: logger.info(f"Found themed GIF URL: {gif_url}"); return gif_url
-            else: logger.warning("Could not extract GIF URL from Tenor item.")
-        else: logger.warning(f"No results found on Tenor for '{search_term}'.")
-    except requests.exceptions.Timeout: logger.error("Timeout fetching GIF from Tenor.")
-    except requests.exceptions.RequestException as e: logger.error(f"Error fetching GIF from Tenor: {e}")
-    except Exception as e: logger.error(f"Unexpected error in get_themed_gif: {e}", exc_info=True)
+            # Choose a random GIF from the results
+            selected_gif = random.choice(results)
+            # Try to get the URL in the preferred format (gif), fallback to tinygif
+            gif_url = selected_gif.get("media_formats", {}).get("gif", {}).get("url")
+            if not gif_url:
+                 gif_url = selected_gif.get("media_formats", {}).get("tinygif", {}).get("url")
+
+            if gif_url:
+                logger.info(f"Found themed GIF URL: {gif_url}")
+                return gif_url
+            else:
+                logger.warning(f"Could not extract GIF URL from selected Tenor item for '{search_term}'. Item: {selected_gif}")
+        else:
+            logger.warning(f"No results found on Tenor for '{search_term}'.")
+    except requests.exceptions.Timeout:
+        logger.error(f"Timeout fetching GIF from Tenor for '{search_term}'.")
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Error fetching GIF from Tenor for '{search_term}': {e}")
+    except Exception as e:
+        logger.error(f"Unexpected error in get_themed_gif for '{search_term}': {e}", exc_info=True) # Log full traceback
+
     return None
 
 # --- Command Handlers ---
+# Updated HELP_TEXT (removed /pat, added /leave as Owner Only)
 HELP_TEXT = """
 Meeeow! 🐾 Here are the commands you can use:
 
@@ -1245,7 +1261,6 @@ Meeeow! 🐾 Here are the commands you can use:
 /zoomies - Witness sudden bursts of cat energy! 💥
 /judge - Get judged by a superior feline. 🧐
 /fed - I just ate, thank you! 😋
-/pat [reply/@user] - Give a gentle pat! (Works on self too!) 🤗
 /attack [reply/@user] - Launch a playful attack! ⚔️
 /kill [reply/@user] - Metaphorically eliminate someone! 💀
 /punch [reply/@user] - Deliver a textual punch! 👊
@@ -1256,85 +1271,156 @@ Meeeow! 🐾 Here are the commands you can use:
 <i>(Note: Owner cannot be targeted by attack/kill/punch/slap/bite)</i>
 Owner Only Commands (Hidden):
   /status - Show bot status.
-  /say [target_chat_id] [your text] - Send message as bot.
+  /say [optional_chat_id] [your text] - Send message as bot.
+  /leave [optional_chat_id] - Make the bot leave a chat.
 """
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    user = update.effective_user; await update.message.reply_html(f"Meow {user.mention_html()}! I'm the Meow Bot. 🐾\nUse /help to see available commands!")
-async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None: await update.message.reply_html(HELP_TEXT, disable_web_page_preview=True)
+    """Sends the welcome message."""
+    user = update.effective_user
+    await update.message.reply_html(f"Meow {user.mention_html()}! I'm the Meow Bot. 🐾\nUse /help to see available commands!")
+
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Sends the help text."""
+    await update.message.reply_html(HELP_TEXT, disable_web_page_preview=True)
+
 async def github(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    github_link = "https://github.com/R0Xofficial/MyCatbot"; await update.message.reply_text(f"Meeeow! I'm open source! 💻 Here my code: {github_link}", disable_web_page_preview=True)
+    """Sends the link to the GitHub repository."""
+    github_link = "https://github.com/R0Xofficial/MyCatbot" # Make sure this is correct
+    await update.message.reply_text(f"Meeeow! I'm open source! 💻 Here is my code: {github_link}", disable_web_page_preview=True)
+
 async def owner_info(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Displays information about the bot owner."""
     if OWNER_ID:
-        owner_mention = f"<code>{OWNER_ID}</code>"; owner_name = "My Esteemed Human"
+        owner_mention = f"<code>{OWNER_ID}</code>"
+        owner_name = "My Esteemed Human" # Default name
         try:
             owner_chat = await context.bot.get_chat(OWNER_ID)
-            owner_mention = owner_chat.mention_html()
-            owner_name = owner_chat.full_name or owner_chat.title or owner_name
+            owner_mention = owner_chat.mention_html() # Get HTML mention
+            # Try to get a name, fallback gracefully
+            owner_name = owner_chat.full_name or owner_chat.username or owner_name
+        except TelegramError as e:
+            logger.warning(f"Could not fetch owner info via get_chat({OWNER_ID}): {e}")
         except Exception as e:
-            logger.warning(f"Could not fetch owner info: {e}")
-        message = (f"My designated human is: 👤 <b>{owner_name}</b> ({owner_mention}) ❤️");
-        await update.message.reply_html(message) # reply_html implies HTML parse mode
-    else: await update.message.reply_text("Meow? Can't find owner info!")
+             logger.warning(f"Unexpected error fetching owner info: {e}")
+
+        message = (f"My designated human is: 👤 <b>{html.escape(owner_name)}</b> ({owner_mention}) ❤️")
+        await update.message.reply_html(message)
+    else:
+        await update.message.reply_text("Meow? Owner information is not configured for me! 😿")
 
 # --- Simple Text Command Definitions ---
 async def send_random_text(update: Update, context: ContextTypes.DEFAULT_TYPE, text_list: list[str], list_name: str) -> None:
-    """Sends a random text, replying."""
-    if not text_list: logger.warning(f"List '{list_name}' empty!"); await update.message.reply_text("Oops! List empty."); return
+    """Sends a random text from a given list, replying to the message."""
+    if not text_list:
+        logger.warning(f"Attempted to send text from empty list: '{list_name}'")
+        await update.message.reply_text("Mrow? Internal error: Text list is empty. 😿")
+        return
+
     chosen_text = random.choice(text_list)
-    try: await update.message.reply_html(chosen_text)
-    except Exception as e: logger.error(f"Failed to reply text for {list_name}: {e}")
+    try:
+        await update.message.reply_html(chosen_text)
+    except TelegramError as e:
+        logger.error(f"Failed to send reply text for {list_name}: {e}")
+        # Maybe try sending plain text as fallback?
+        try:
+            await update.message.reply_text(chosen_text) # Simple text fallback
+        except Exception as fallback_e:
+            logger.error(f"Fallback plain text reply also failed for {list_name}: {fallback_e}")
+    except Exception as e:
+        logger.error(f"Unexpected error sending reply text for {list_name}: {e}", exc_info=True)
+
+# Define handlers using the helper
 async def meow(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None: await send_random_text(update, context, MEOW_TEXTS, "MEOW_TEXTS")
 async def nap(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None: await send_random_text(update, context, NAP_TEXTS, "NAP_TEXTS")
 async def play(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None: await send_random_text(update, context, PLAY_TEXTS, "PLAY_TEXTS")
 async def treat(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None: await send_random_text(update, context, TREAT_TEXTS, "TREAT_TEXTS")
 async def zoomies(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None: await send_random_text(update, context, ZOOMIES_TEXTS, "ZOOMIES_TEXTS")
 async def judge(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None: await send_random_text(update, context, JUDGE_TEXTS, "JUDGE_TEXTS")
-async def fed(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None: await _handle_action_command(update, context, FED_TEXTS, ["cat eating", "cat food", "cat nom"], "fed", False)
 
-# --- Helper for simulation commands ---
+# --- Helper for Simulation Commands (attack, hug, fed, etc.) ---
 async def _handle_action_command(
     update: Update, context: ContextTypes.DEFAULT_TYPE, action_texts: list[str], gif_search_terms: list[str],
     command_name: str, target_required: bool = True, target_required_msg: str = "This command requires a target.", hug_command: bool = False
 ):
     """Handles common logic for simulation commands, always replying."""
-    if not action_texts: logger.warning(f"List '{command_name.upper()}_TEXTS' empty!"); await update.message.reply_text(f"No '{command_name}' texts."); return
+    if not action_texts:
+        logger.warning(f"List '{command_name.upper()}_TEXTS' empty! Cannot execute command.")
+        await update.message.reply_text(f"Mrow? No texts available for /{command_name}. 😿")
+        return
 
-    target_mention = update.effective_user.mention_html(); is_protected = False; is_owner = False
+    target_mention = None
+    is_protected = False
+    is_owner = False
 
     if target_required:
-        target_mention = None # Reset default
+        # --- Logic to find the target (reply or mention) ---
         if update.message.reply_to_message:
             target_user = update.message.reply_to_message.from_user
-            is_protected = await check_target_protection(target_user.id, context); is_owner = (target_user.id == OWNER_ID)
-            if is_protected: refusal_list = (CANT_TARGET_OWNER_HUG_TEXTS if is_owner else CANT_TARGET_SELF_HUG_TEXTS) if hug_command else (CANT_TARGET_OWNER_TEXTS if is_owner else CANT_TARGET_SELF_TEXTS); await update.message.reply_html(random.choice(refusal_list)); return
+            is_protected = await check_target_protection(target_user.id, context)
+            is_owner = (target_user.id == OWNER_ID)
+            if is_protected:
+                refusal_list = (CANT_TARGET_OWNER_HUG_TEXTS if is_owner else CANT_TARGET_SELF_HUG_TEXTS) if hug_command else (CANT_TARGET_OWNER_TEXTS if is_owner else CANT_TARGET_SELF_TEXTS)
+                await update.message.reply_html(random.choice(refusal_list))
+                return
             target_mention = target_user.mention_html()
         elif context.args and context.args[0].startswith('@'):
-            target_mention = context.args[0].strip()
-            is_protected, is_owner = await check_username_protection(target_mention, context)
-            if is_protected: refusal_list = (CANT_TARGET_OWNER_HUG_TEXTS if is_owner else CANT_TARGET_SELF_HUG_TEXTS) if hug_command else (CANT_TARGET_OWNER_TEXTS if is_owner else CANT_TARGET_SELF_TEXTS); await update.message.reply_html(random.choice(refusal_list)); return
-        else: await update.message.reply_text(target_required_msg); return
+            target_mention_str = context.args[0].strip()
+            is_protected, is_owner = await check_username_protection(target_mention_str, context)
+            if is_protected:
+                refusal_list = (CANT_TARGET_OWNER_HUG_TEXTS if is_owner else CANT_TARGET_SELF_HUG_TEXTS) if hug_command else (CANT_TARGET_OWNER_TEXTS if is_owner else CANT_TARGET_SELF_TEXTS)
+                await update.message.reply_html(random.choice(refusal_list))
+                return
+            target_mention = target_mention_str # Use the provided mention as text
+        else:
+            # Send specific usage instruction if target is required but not found
+            await update.message.reply_text(target_required_msg)
+            return
+        # --- End of target finding logic ---
+    # else: target is implicitly the sender, handled below
 
+    # --- Get GIF and format the message ---
     gif_url = await get_themed_gif(context, gif_search_terms)
     message_text = random.choice(action_texts)
-    if "{target}" in message_text: message_text = message_text.format(target=target_mention) if target_mention else message_text.replace("{target}", "someone")
+    if "{target}" in message_text:
+        # Use the determined target_mention if target was required,
+        # otherwise use the sender's mention for non-targeted actions like /fed
+        effective_target = target_mention if target_required else update.effective_user.mention_html()
+        # Ensure we have a mention before formatting
+        message_text = message_text.format(target=effective_target) if effective_target else message_text.replace("{target}", "someone")
 
     # --- Sending Logic with Fallback ---
     try:
         if gif_url:
-            await update.message.reply_animation(animation=gif_url, caption=message_text, parse_mode=constants.ParseMode.HTML)
+            await update.message.reply_animation(animation=gif_url, caption=message_text, parse_mode=ParseMode.HTML)
         else:
             await update.message.reply_html(message_text)
+    except TelegramError as e:
+        logger.error(f"TelegramError sending {command_name} reply (animation or initial html): {e}. Attempting fallback text.")
+        try:
+            # Attempt fallback with HTML first
+            await update.message.reply_html(message_text)
+            logger.info(f"Successfully sent fallback HTML text for {command_name}.")
+        except Exception as fallback_html_e:
+            logger.error(f"Fallback HTML reply also failed for {command_name}: {fallback_html_e}. Trying plain text.")
+            try:
+                # Final fallback to plain text
+                await update.message.reply_text(message_text) # Consider stripping HTML tags here if needed
+                logger.info(f"Successfully sent fallback plain text for {command_name}.")
+            except Exception as fallback_plain_e:
+                 logger.error(f"Fallback plain text reply also failed for {command_name}: {fallback_plain_e}")
     except Exception as e:
-        logger.error(f"Error sending {command_name} reply (animation or initial html): {e}. Attempting fallback to text.")
+        logger.error(f"Unexpected error sending {command_name} reply: {e}", exc_info=True)
+        # Attempt fallback as above
         try:
             await update.message.reply_html(message_text)
-            logger.info(f"Successfully sent fallback text for {command_name}.")
+            logger.info(f"Successfully sent fallback HTML text for {command_name} after unexpected error.")
         except Exception as fallback_e:
-            logger.error(f"Fallback text reply also failed for {command_name}: {fallback_e}")
+            logger.error(f"Fallback HTML reply also failed for {command_name} after unexpected error: {fallback_e}")
 
 
-# Public Simulation Commands Definitions
+# Simulation Command Definitions using the helper
+async def fed(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None: await _handle_action_command(update, context, FED_TEXTS, ["cat eating", "cat food", "cat nom"], "fed", False) # target_required=False
 async def attack(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None: await _handle_action_command(update, context, ATTACK_TEXTS, ["cat attack", "cat pounce", "cat fight"], "attack", True, "Who to attack? Reply or use /attack @username.")
 async def kill(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None: await _handle_action_command(update, context, KILL_TEXTS, ["cat angry", "cat evil", "cat hiss"], "kill", True, "Who to 'kill'? Reply or use /kill @username.")
 async def punch(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None: await _handle_action_command(update, context, PUNCH_TEXTS, ["cat punch", "cat bap"], "punch", True, "Who to 'punch'? Reply or use /punch @username.")
@@ -1342,263 +1428,398 @@ async def slap(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None: awai
 async def bite(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None: await _handle_action_command(update, context, BITE_TEXTS, ["cat bite", "cat chomp"], "bite", True, "Who to bite? Reply or use /bite @username.")
 async def hug(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None: await _handle_action_command(update, context, HUG_TEXTS, ["cat hug", "cat cuddle"], "hug", True, "Who to hug? Reply or use /hug @username.", hug_command=True)
 
-async def pat(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handles the /pat command with context-dependent responses."""
-    command_name = "pat"
-    gif_search_terms = ["cat pat", "pat cat", "cat pat head", "patting cat", "gentle pat", "anime pat head"]
-
-    sender_user = update.effective_user
-    target_mention = sender_user.mention_html()
-    selected_texts = PAT_SELF_TEXTS
-    target_is_bot = False
-    target_is_owner = False
-    target_id = None
-
-    if update.message.reply_to_message:
-        target_user = update.message.reply_to_message.from_user
-        target_id = target_user.id
-        if target_user.id == context.bot.id:
-            selected_texts = PAT_BOT_TEXTS
-            target_mention = context.bot.mention_html() or "me!"
-            target_is_bot = True
-            logger.info(f"/pat target is bot (reply) by {sender_user.id}")
-        elif OWNER_ID and target_user.id == OWNER_ID:
-            selected_texts = PAT_OWNER_TEXTS
-            target_mention = target_user.mention_html()
-            target_is_owner = True
-            logger.info(f"/pat target is owner {target_id} (reply) by {sender_user.id}")
-        else:
-            selected_texts = PAT_OTHER_TEXTS
-            target_mention = target_user.mention_html()
-            logger.info(f"/pat target is other user {target_id} (reply) by {sender_user.id}")
-
-    elif context.args and context.args[0].startswith('@'):
-        target_mention_str = context.args[0].strip()
-        bot_username = context.bot.username
-        owner_username = None
-        owner_mention_fetched = f"<code>{OWNER_ID}</code>"
-
-        if bot_username and target_mention_str.lower() == f"@{bot_username.lower()}":
-            selected_texts = PAT_BOT_TEXTS
-            target_mention = context.bot.mention_html() or "me!"
-            target_id = context.bot.id
-            target_is_bot = True
-            logger.info(f"/pat target is bot (mention) by {sender_user.id}")
-        elif OWNER_ID:
-            try:
-                owner_chat = await context.bot.get_chat(OWNER_ID)
-                owner_username = owner_chat.username
-                owner_mention_fetched = owner_chat.mention_html()
-                target_id = OWNER_ID
-            except Exception as e:
-                logger.warning(f"Could not fetch owner username/mention for /pat check: {e}")
-                target_id = OWNER_ID
-
-            if owner_username and target_mention_str.lower() == f"@{owner_username.lower()}":
-                selected_texts = PAT_OWNER_TEXTS
-                target_mention = owner_mention_fetched
-                target_is_owner = True
-                logger.info(f"/pat target is owner {target_id} (mention) by {sender_user.id}")
-            else:
-                selected_texts = PAT_OTHER_TEXTS
-                target_mention = target_mention_str
-                target_id = None
-                logger.info(f"/pat target is other user {target_mention_str} (mention) by {sender_user.id}")
-        else:
-             selected_texts = PAT_OTHER_TEXTS
-             target_mention = target_mention_str
-             target_id = None
-             logger.info(f"/pat target is other user {target_mention_str} (mention, no owner check) by {sender_user.id}")
-
-    elif not update.message.reply_to_message and not context.args:
-         target_id = sender_user.id
-         logger.info(f"/pat target is self {target_id} by {sender_user.id}")
-
-    if not selected_texts:
-        logger.error(f"CRITICAL: No text list selected for /pat scenario!")
-        await update.message.reply_text("Mrow? Something went wrong with the patting logic! 😿")
-        return
-
-    message_text = random.choice(selected_texts)
-    if "{target}" in message_text and selected_texts in [PAT_OTHER_TEXTS, PAT_OWNER_TEXTS]:
-        effective_target_mention = target_mention if target_mention else "someone"
-        message_text = message_text.format(target=effective_target_mention)
-    elif "{target}" in message_text:
-        logger.warning(f"Placeholder {{target}} found in inappropriate text list for /pat. List type: {'Bot' if selected_texts == PAT_BOT_TEXTS else 'Self'}. Text: '{message_text}'")
-        message_text = message_text.replace("{target}", "someone special")
-
-
-    gif_url = await get_themed_gif(context, gif_search_terms)
-
-    try:
-        if gif_url:
-            await update.message.reply_animation(
-                animation=gif_url,
-                caption=message_text,
-                parse_mode=constants.ParseMode.HTML
-            )
-        else:
-            await update.message.reply_html(message_text)
-    except TelegramError as e:
-        logger.error(f"TelegramError sending {command_name} reply (animation or initial html): {e}. Attempting fallback to text.")
-        try:
-            await update.message.reply_html(message_text)
-            logger.info(f"Successfully sent fallback text for {command_name} after TelegramError.")
-        except Exception as fallback_e:
-            logger.error(f"Fallback text reply also failed for {command_name} after TelegramError: {fallback_e}")
-    except Exception as e:
-        logger.error(f"Unexpected error sending {command_name} reply (animation or initial html): {e}", exc_info=True)
-        try:
-            await update.message.reply_html(message_text)
-            logger.info(f"Successfully sent fallback text for {command_name} after general error.")
-        except Exception as fallback_e:
-            logger.error(f"Fallback text reply also failed for {command_name} after general error: {fallback_e}")
-
-# --- GIF and Photo Commands (Reply) ---
+# --- GIF and Photo Commands (using thecatapi) ---
 async def gif(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    API_URL = "https://api.thecatapi.com/v1/images/search?mime_types=gif&limit=1"; headers = {}
-    logger.info("Fetching random cat GIF...")
+    """Fetches and sends a random cat GIF."""
+    API_URL = "https://api.thecatapi.com/v1/images/search?mime_types=gif&limit=1"
+    # Add headers if you have an API key for thecatapi
+    # headers = {"x-api-key": "YOUR_CAT_API_KEY"}
+    headers = {}
+    logger.info("Fetching random cat GIF from thecatapi...")
     try:
-        response = requests.get(API_URL, headers=headers, timeout=10); response.raise_for_status(); data = response.json()
-        if data and isinstance(data, list) and len(data) > 0 and 'url' in data[0]: await update.message.reply_animation(animation=data[0]['url'], caption="Meow! A random GIF for you! 🐾🖼️")
-        else: logger.warning("No GIF URL found: %s", data); await update.message.reply_text("Meow? Couldn't find a GIF now. 😿")
-    except requests.exceptions.Timeout: logger.error("Timeout fetching GIF"); await update.message.reply_text("Hiss! GIF source is slow. ⏳")
-    except requests.exceptions.RequestException as e: logger.error(f"Error fetching GIF: {e}"); await update.message.reply_text("Hiss! Couldn't connect to GIF source. 😿")
-    except Exception as e: logger.error(f"Error processing GIF: {e}", exc_info=True); await update.message.reply_text("Mrow! Weird GIF data or other error occurred. 😵‍💫")
+        response = requests.get(API_URL, headers=headers, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+        if data and isinstance(data, list) and len(data) > 0 and 'url' in data[0]:
+            await update.message.reply_animation(animation=data[0]['url'], caption="Meow! A random GIF for you! 🐾🖼️")
+        else:
+            logger.warning(f"No valid GIF data received from thecatapi: {data}")
+            await update.message.reply_text("Meow? Couldn't find a GIF right now. 😿")
+    except requests.exceptions.Timeout:
+        logger.error("Timeout fetching GIF from thecatapi.")
+        await update.message.reply_text("Hiss! The cat GIF source is being slow. ⏳ Try again later!")
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Error fetching GIF from thecatapi: {e}")
+        await update.message.reply_text("Hiss! Couldn't connect to the cat GIF source. 😿")
+    except Exception as e:
+        logger.error(f"Unexpected error processing GIF from thecatapi: {e}", exc_info=True)
+        await update.message.reply_text("Mrow! Something weird happened while getting the GIF. 😵‍💫")
 
 async def photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    API_URL = "https://api.thecatapi.com/v1/images/search?limit=1&mime_types=jpg,png"; headers = {}
-    logger.info("Fetching random cat photo...")
+    """Fetches and sends a random cat photo."""
+    API_URL = "https://api.thecatapi.com/v1/images/search?limit=1&mime_types=jpg,png"
+    # headers = {"x-api-key": "YOUR_CAT_API_KEY"}
+    headers = {}
+    logger.info("Fetching random cat photo from thecatapi...")
     try:
-        response = requests.get(API_URL, headers=headers, timeout=10); response.raise_for_status(); data = response.json()
-        if data and isinstance(data, list) and len(data) > 0 and 'url' in data[0]: await update.message.reply_photo(photo=data[0]['url'], caption="Purrfect! A random photo for you! 🐾📷")
-        else: logger.warning("No photo URL found: %s", data); await update.message.reply_text("Meow? Couldn't find a photo now. 😿")
-    except requests.exceptions.Timeout: logger.error("Timeout fetching photo"); await update.message.reply_text("Hiss! Photo source is slow. ⏳")
-    except requests.exceptions.RequestException as e: logger.error(f"Error fetching photo: {e}"); await update.message.reply_text("Hiss! Couldn't connect to photo source. 😿")
-    except Exception as e: logger.error(f"Error processing photo: {e}", exc_info=True); await update.message.reply_text("Mrow! Weird photo data or other error occurred. 😵‍💫")
+        response = requests.get(API_URL, headers=headers, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+        if data and isinstance(data, list) and len(data) > 0 and 'url' in data[0]:
+            await update.message.reply_photo(photo=data[0]['url'], caption="Purrfect! A random photo for you! 🐾📷")
+        else:
+            logger.warning(f"No valid photo data received from thecatapi: {data}")
+            await update.message.reply_text("Meow? Couldn't find a photo right now. 😿")
+    except requests.exceptions.Timeout:
+        logger.error("Timeout fetching photo from thecatapi.")
+        await update.message.reply_text("Hiss! The cat photo source is being slow. ⏳ Try again later!")
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Error fetching photo from thecatapi: {e}")
+        await update.message.reply_text("Hiss! Couldn't connect to the cat photo source. 😿")
+    except Exception as e:
+        logger.error(f"Unexpected error processing photo from thecatapi: {e}", exc_info=True)
+        await update.message.reply_text("Mrow! Something weird happened while getting the photo. 😵‍💫")
 
 # --- Owner Only Functionality ---
 async def status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Displays bot status (Owner Only)."""
     user_id = update.effective_user.id
-    if user_id == OWNER_ID:
-        ping_ms = "N/A"
-        if update.message and update.message.date:
-            try:
-                now_utc = datetime.datetime.now(datetime.timezone.utc)
-                msg_utc = update.message.date.astimezone(datetime.timezone.utc)
-                ping_ms = int((now_utc - msg_utc).total_seconds() * 1000)
-            except Exception as e:
-                logger.error(f"Error calculating ping: {e}")
-                ping_ms = "Error"
-        uptime_delta = datetime.datetime.now() - BOT_START_TIME; readable_uptime = get_readable_time_delta(uptime_delta)
-        status_msg = (f"<b>Purrrr! Bot Status:</b> ✨\n— Uptime: {readable_uptime} 🕰️\n— Ping: {ping_ms} ms 📶\n— Owner ID: <code>{OWNER_ID}</code> 👑\n— Status: Ready & Purring! 🐾")
-        await update.message.reply_html(status_msg)
-    else:
+    if user_id != OWNER_ID:
         logger.warning(f"Unauthorized /status attempt by user {user_id}.")
         owner_mention = f"<code>{OWNER_ID}</code>"
         try:
             owner_chat = await context.bot.get_chat(OWNER_ID)
             owner_mention = owner_chat.mention_html()
-        except Exception:
-            pass
-        refusal_text = random.choice(OWNER_ONLY_REFUSAL).format(OWNER_ID=OWNER_ID, owner_mention=owner_mention)
+        except Exception: pass # Ignore errors fetching owner mention for refusal msg
+        refusal_text = random.choice(OWNER_ONLY_REFUSAL).format(owner_mention=owner_mention)
         await update.message.reply_html(refusal_text)
+        return
+
+    # Calculate Ping
+    ping_ms_str = "N/A"
+    if update.message and update.message.date:
+        try:
+            now_utc = datetime.datetime.now(datetime.timezone.utc)
+            # Ensure message date is timezone-aware (it usually is)
+            msg_utc = update.message.date.astimezone(datetime.timezone.utc)
+            delta_ping = now_utc - msg_utc
+            ping_ms = int(delta_ping.total_seconds() * 1000)
+            # Add a sanity check for ping
+            if 0 <= ping_ms < 60000: # Ping shouldn't be negative or excessively large
+                ping_ms_str = f"{ping_ms} ms"
+            else:
+                 ping_ms_str = f"~{ping_ms} ms (?)" # Indicate potentially unreliable value
+        except Exception as e:
+            logger.error(f"Error calculating ping: {e}")
+            ping_ms_str = "Error"
+
+    # Calculate Uptime
+    uptime_delta = datetime.datetime.now() - BOT_START_TIME
+    readable_uptime = get_readable_time_delta(uptime_delta)
+
+    # Construct Status Message
+    status_msg = (
+        f"<b>Purrrr! Bot Status:</b> ✨\n"
+        f"— Uptime: {readable_uptime} 🕰️\n"
+        f"— Ping: {ping_ms_str} 📶\n"
+        f"— Owner ID: <code>{OWNER_ID}</code> 👑\n"
+        f"— Status: Ready & Purring! 🐾"
+    )
+    await update.message.reply_html(status_msg)
 
 async def say(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Sends a message as the bot to the current or specified chat (Owner Only)."""
     user = update.effective_user
     if user.id != OWNER_ID:
         logger.warning(f"Unauthorized /say attempt by user {user.id}.")
-        owner_mention=f"<code>{OWNER_ID}</code>"
+        owner_mention = f"<code>{OWNER_ID}</code>"
         try:
-            owner_chat=await context.bot.get_chat(OWNER_ID)
-            owner_mention=owner_chat.mention_html()
-        except Exception:
-            pass
-        refusal_text = random.choice(OWNER_ONLY_REFUSAL).format(OWNER_ID=OWNER_ID, owner_mention=owner_mention)
-        await update.message.reply_html(refusal_text); return
+            owner_chat = await context.bot.get_chat(OWNER_ID)
+            owner_mention = owner_chat.mention_html()
+        except Exception: pass
+        refusal_text = random.choice(OWNER_ONLY_REFUSAL).format(owner_mention=owner_mention)
+        await update.message.reply_html(refusal_text)
+        return
 
     args = context.args
-    if not args: await update.message.reply_text("Usage: /say [optional_chat_id] <your message>"); return
+    if not args:
+        await update.message.reply_text("Usage: /say [optional_chat_id] <your message>")
+        return
 
-    target_chat_id = update.effective_chat.id; message_to_say_list = args; is_remote_send = False
+    target_chat_id_str = args[0]
+    message_to_say_list = args
+    target_chat_id = update.effective_chat.id # Default to current chat
+    is_remote_send = False
+
+    # Check if the first argument looks like a chat ID
     try:
-        potential_chat_id = int(args[0])
-        if len(args[0]) > 4 or potential_chat_id < 0:
-            if len(args) > 1: target_chat_id = potential_chat_id; message_to_say_list = args[1:]; is_remote_send = True; logger.info(f"Owner remote send to: {target_chat_id}")
-            else: await update.message.reply_text("Mrow? ID provided but no message!"); return
-    except (ValueError, IndexError): logger.info("No valid target chat ID detected, sending to current chat.")
+        potential_chat_id = int(target_chat_id_str)
+        # Basic sanity check for ID format (very long or positive might be user IDs)
+        # Telegram chat IDs are typically large negative numbers
+        if len(target_chat_id_str) > 5 or potential_chat_id >= -1000: # Adjust threshold if needed
+            # Try to fetch chat info to confirm if it's a valid chat ID
+            # This check might be slow or fail if bot isn't in the chat
+            try:
+                 await context.bot.get_chat(potential_chat_id)
+                 # If get_chat succeeds, assume it's a valid target ID
+                 if len(args) > 1: # Make sure there's a message after the ID
+                     target_chat_id = potential_chat_id
+                     message_to_say_list = args[1:]
+                     is_remote_send = True
+                     logger.info(f"Owner remote send detected. Target: {target_chat_id}")
+                 else:
+                     await update.message.reply_text("Mrow? Target chat ID provided, but no message to send!")
+                     return
+            except TelegramError:
+                # get_chat failed, assume first arg is part of the message
+                 logger.info("First argument doesn't seem like a valid/accessible chat ID, sending to current chat.")
+                 target_chat_id = update.effective_chat.id
+                 message_to_say_list = args # Use all args as message
+                 is_remote_send = False
+            except Exception as e:
+                 logger.error(f"Unexpected error checking potential chat ID {potential_chat_id}: {e}")
+                 # Safer to assume it's part of the message
+                 target_chat_id = update.effective_chat.id
+                 message_to_say_list = args
+                 is_remote_send = False
+
+        else: # Assume it's definitely a message for the current chat
+             logger.info("First argument doesn't look like a chat ID, sending to current chat.")
+             target_chat_id = update.effective_chat.id
+             message_to_say_list = args
+             is_remote_send = False
+
+    except (ValueError, IndexError):
+        # First argument is not an integer, treat it as part of the message
+        logger.info("First argument is not numeric, sending to current chat.")
+        target_chat_id = update.effective_chat.id
+        message_to_say_list = args
+        is_remote_send = False
 
     message_to_say = ' '.join(message_to_say_list)
-    if not message_to_say: await update.message.reply_text("Mrow? Cannot send empty message!"); return
+    if not message_to_say:
+        await update.message.reply_text("Mrow? Cannot send an empty message!")
+        return
 
-    logger.info(f"Owner ({user.id}) using /say. Target: {target_chat_id}. Msg: '{message_to_say[:50]}...'")
+    logger.info(f"Owner ({user.id}) using /say. Target: {target_chat_id}. Is remote: {is_remote_send}. Msg start: '{message_to_say[:50]}...'")
     try:
         await context.bot.send_message(chat_id=target_chat_id, text=message_to_say)
-        if is_remote_send: await update.message.reply_text(f"✅ Sent to <code>{target_chat_id}</code>.", parse_mode=constants.ParseMode.HTML, quote=False)
-    except TelegramError as e: logger.error(f"Failed /say to {target_chat_id}: {e}"); await update.message.reply_text(f"😿 Couldn't send to <code>{target_chat_id}</code>: {e}", parse_mode=constants.ParseMode.HTML)
-    except Exception as e: logger.error(f"Unexpected /say error: {e}", exc_info=True); await update.message.reply_text("Oops! Unexpected /say error.")
+        # Send confirmation only for remote sends
+        if is_remote_send:
+            await update.message.reply_text(f"✅ Message sent to <code>{target_chat_id}</code>.", parse_mode=ParseMode.HTML, quote=False)
+        # Maybe delete the owner's /say command message in the original chat for privacy?
+        # try: await update.message.delete() except: pass
+    except TelegramError as e:
+        logger.error(f"Failed to send message via /say to {target_chat_id}: {e}")
+        await update.message.reply_text(f"😿 Couldn't send message to <code>{target_chat_id}</code>: {e}", parse_mode=ParseMode.HTML)
+    except Exception as e:
+        logger.error(f"Unexpected error during /say execution: {e}", exc_info=True)
+        await update.message.reply_text("Oops! An unexpected error occurred while trying to send the message.")
 
-# Handler for welcoming the owner
+# --- NOWA FUNKCJA /leave ---
+async def leave_chat(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Makes the bot leave the current or a specified chat (Owner Only)."""
+    user = update.effective_user
+    if user.id != OWNER_ID:
+        logger.warning(f"Unauthorized /leave attempt by user {user.id}.")
+        owner_mention = f"<code>{OWNER_ID}</code>"
+        try:
+            owner_chat = await context.bot.get_chat(OWNER_ID)
+            owner_mention = owner_chat.mention_html()
+        except Exception: pass
+        refusal_text = random.choice(OWNER_ONLY_REFUSAL).format(owner_mention=owner_mention)
+        await update.message.reply_html(refusal_text); return
+
+    target_chat_id = None
+    is_remote_leave = False
+
+    # Determine target chat ID
+    if context.args:
+        try:
+            target_chat_id = int(context.args[0])
+            # Group/channel IDs are typically negative and long
+            if target_chat_id >= -100: # Basic check, might need adjustment
+                await update.message.reply_text("Mrow? That looks like a user ID or a small group ID, not a standard group/channel ID. They are usually large negative numbers (e.g., -100...).")
+                return
+            is_remote_leave = True
+            logger.info(f"Owner initiated remote leave for chat ID: {target_chat_id}")
+        except (ValueError, IndexError):
+            await update.message.reply_text("Mrow? Invalid chat ID format. Please provide the numeric ID (usually starts with -100...).")
+            return
+    else:
+        # Leave current chat, unless it's private
+        if update.effective_chat.type == ChatType.PRIVATE:
+            await update.message.reply_text("Meow! I can't leave a private chat with you, silly human.")
+            return
+        target_chat_id = update.effective_chat.id
+        logger.info(f"Owner initiated leave for current chat: {target_chat_id}")
+
+    # Fetch owner mention and chat title *before* leaving
+    owner_mention = f"<code>{OWNER_ID}</code>" # Fallback
+    try:
+        owner_chat_info = await context.bot.get_chat(OWNER_ID)
+        owner_mention = owner_chat_info.mention_html()
+    except Exception as e:
+        logger.warning(f"Could not fetch owner mention for /leave message: {e}")
+
+    chat_title = f"Chat ID {target_chat_id}" # Fallback title
+    safe_chat_title = chat_title # Use this for messages
+    try:
+        target_chat_info = await context.bot.get_chat(target_chat_id)
+        # Use title, fallback to first name (for channels?), fallback to ID
+        chat_title = target_chat_info.title or target_chat_info.first_name or f"Chat ID {target_chat_id}"
+        safe_chat_title = html.escape(chat_title) # Escape for safe inclusion in HTML
+        logger.info(f"Target chat title resolved to: '{chat_title}'")
+    except TelegramError as e:
+        logger.error(f"Could not get chat info for {target_chat_id} before leaving: {e}")
+        await update.message.reply_text(f"⚠️ Couldn't get chat info for <code>{target_chat_id}</code>: {e}. Will attempt to leave anyway.", parse_mode=ParseMode.HTML)
+    except Exception as e:
+         logger.error(f"Unexpected error getting chat info for {target_chat_id}: {e}", exc_info=True)
+         await update.message.reply_text(f"⚠️ Unexpected error getting chat info for <code>{target_chat_id}</code>. Will attempt to leave anyway.", parse_mode=ParseMode.HTML)
+
+
+    # Prepare and Send Farewell Message (to target chat)
+    if not LEAVE_TEXTS:
+        logger.warning("LEAVE_TEXTS list is empty!")
+    else:
+        farewell_message = random.choice(LEAVE_TEXTS).format(
+            owner_mention=owner_mention,
+            chat_title=f"<b>{safe_chat_title}</b>" # Use escaped title
+        )
+        try:
+            # Send message first, then leave
+            await context.bot.send_message(chat_id=target_chat_id, text=farewell_message, parse_mode=ParseMode.HTML)
+            logger.info(f"Sent farewell message to {target_chat_id}")
+        except TelegramError as e:
+            # Log error but still attempt to leave
+            logger.error(f"Failed to send farewell message to {target_chat_id}: {e}. Proceeding with leave.")
+            if is_remote_leave: # Only bother informing owner if it was remote
+                await update.message.reply_text(f"⚠️ Failed to send farewell message to <code>{target_chat_id}</code>: {e}", parse_mode=ParseMode.HTML)
+        except Exception as e:
+             logger.error(f"Unexpected error sending farewell message to {target_chat_id}: {e}", exc_info=True)
+
+
+    # Attempt to Leave Chat
+    try:
+        success = await context.bot.leave_chat(chat_id=target_chat_id)
+        if success:
+            logger.info(f"Successfully left chat {target_chat_id} ('{chat_title}')")
+            # Send confirmation back to owner
+            await update.message.reply_text(f"✅ Successfully left chat: <b>{safe_chat_title}</b> (<code>{target_chat_id}</code>)", parse_mode=ParseMode.HTML)
+        else:
+            # This case might indicate the bot was already not in the chat or permissions issue without raising TelegramError
+            logger.warning(f"Attempted to leave chat {target_chat_id} but leave_chat returned False (maybe not a member or lacking permissions?).")
+            await update.message.reply_text(f"🤔 Attempted to leave <b>{safe_chat_title}</b> (<code>{target_chat_id}</code>), but the operation returned False. Maybe I wasn't there or lack permission?", parse_mode=ParseMode.HTML)
+    except TelegramError as e:
+        # Specific Telegram errors (like Bot kicked)
+        logger.error(f"Failed to leave chat {target_chat_id}: {e}")
+        await update.message.reply_text(f"❌ Failed to leave chat <b>{safe_chat_title}</b> (<code>{target_chat_id}</code>): {e}", parse_mode=ParseMode.HTML)
+    except Exception as e:
+         # Other unexpected errors
+         logger.error(f"Unexpected error during leave process for {target_chat_id}: {e}", exc_info=True)
+         await update.message.reply_text(f"💥 Unexpected error leaving chat <b>{safe_chat_title}</b> (<code>{target_chat_id}</code>). Check logs.", parse_mode=ParseMode.HTML)
+# --- KONIEC FUNKCJI /leave ---
+
+
+# Handler for welcoming the owner when they join a group
 async def welcome_owner(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    if not OWNER_ID or not update.message or not update.message.new_chat_members: return
+    """Sends a welcome message when the owner joins a group."""
+    if not OWNER_ID or not update.message or not update.message.new_chat_members:
+        return # Nothing to do if owner ID not set or no new members
+
     for member in update.message.new_chat_members:
         if member.id == OWNER_ID:
-            logger.info(f"Owner {OWNER_ID} joined chat {update.effective_chat.id}")
+            logger.info(f"Owner {OWNER_ID} joined chat {update.effective_chat.id} ('{update.effective_chat.title}')")
             owner_mention = member.mention_html()
             welcome_text = random.choice(OWNER_WELCOME_TEXTS).format(owner_mention=owner_mention)
             try:
+                # Reply to the "User joined" system message
                 await update.message.reply_html(welcome_text)
+            except TelegramError as e:
+                logger.error(f"Failed to send owner welcome message to {update.effective_chat.id}: {e}")
             except Exception as e:
-                logger.error(f"Failed to send owner welcome: {e}")
-            break
+                 logger.error(f"Unexpected error sending owner welcome to {update.effective_chat.id}: {e}", exc_info=True)
+            break # Stop checking after finding the owner
 
 # --- Main Function ---
 def main() -> None:
     """Configures and runs the Telegram bot."""
+    logger.info("Initializing bot application...")
     application = Application.builder().token(BOT_TOKEN).build()
 
     # --- Handler Registration ---
-    # Optional Debug Handler
-    # from telegram.ext import MessageHandler, filters, ApplicationHandlerStop
-    # application.add_handler(MessageHandler(filters.ALL, debug_receive_handler), group=-2)
-
-    # Commands
+    logger.info("Registering command handlers...")
+    # Basic Commands
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CommandHandler("github", github))
     application.add_handler(CommandHandler("owner", owner_info))
+
+    # Media Commands
     application.add_handler(CommandHandler("gif", gif))
     application.add_handler(CommandHandler("photo", photo))
+
+    # Simple Text Commands
     application.add_handler(CommandHandler("meow", meow))
     application.add_handler(CommandHandler("nap", nap))
     application.add_handler(CommandHandler("play", play))
     application.add_handler(CommandHandler("treat", treat))
     application.add_handler(CommandHandler("zoomies", zoomies))
     application.add_handler(CommandHandler("judge", judge))
+
+    # Action/Simulation Commands
     application.add_handler(CommandHandler("fed", fed))
-    application.add_handler(CommandHandler("pat", pat))
     application.add_handler(CommandHandler("attack", attack))
-    application.add_handler(CommandHandler("status", status))
     application.add_handler(CommandHandler("kill", kill))
     application.add_handler(CommandHandler("punch", punch))
     application.add_handler(CommandHandler("slap", slap))
     application.add_handler(CommandHandler("bite", bite))
     application.add_handler(CommandHandler("hug", hug))
-    application.add_handler(CommandHandler("say", say))
 
-    # Message Handler for owner joining
+    # Owner Only Commands
+    application.add_handler(CommandHandler("status", status))
+    application.add_handler(CommandHandler("say", say))
+    application.add_handler(CommandHandler("leave", leave_chat)) # Nowy handler
+
+    # Message Handler for owner joining (runs on status updates in groups)
+    logger.info("Registering message handlers...")
     application.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS & filters.ChatType.GROUPS, welcome_owner))
 
     # --- Start the Bot ---
-    logger.info(f"Bot starting polling... Owner ID: {OWNER_ID}")
-    try: application.run_polling()
-    except KeyboardInterrupt: logger.info("Bot stopped by user (Ctrl+C).")
-    except Exception as e: logger.critical(f"CRITICAL: Bot crashed: {e}", exc_info=True); print(f"\n--- FATAL ERROR ---\nBot crashed: {e}"); exit(1)
-    finally: logger.info("Bot shutdown process initiated.")
+    logger.info(f"Bot starting polling... Owner ID configured: {OWNER_ID}")
+    print(f"Bot starting polling... Owner ID: {OWNER_ID}") # Also print to console
+    try:
+        # Use allowed_updates to potentially reduce load if needed, but Update.ALL_TYPES is fine for most bots
+        application.run_polling(allowed_updates=Update.ALL_TYPES)
+    except KeyboardInterrupt:
+        logger.info("Bot stopped by user (Ctrl+C).")
+        print("\nBot stopped by user.")
+    except TelegramError as te:
+        # Handle specific Telegram errors during startup/polling if necessary
+        logger.critical(f"CRITICAL: TelegramError encountered during polling: {te}")
+        print(f"\n--- FATAL TELEGRAM ERROR ---\n{te}")
+        exit(1)
+    except Exception as e:
+        # Catch-all for other critical errors during runtime
+        logger.critical(f"CRITICAL: Bot crashed unexpectedly: {e}", exc_info=True)
+        print(f"\n--- FATAL ERROR ---\nBot crashed: {e}")
+        exit(1)
+    finally:
+        logger.info("Bot shutdown process initiated.")
+        print("Bot shutting down...")
+
     logger.info("Bot stopped.")
+    print("Bot stopped.")
 
 # --- Script Execution ---
 if __name__ == "__main__":
-    try: import requests
-    except ImportError: print("\n--- DEPENDENCY ERROR ---\n'requests' library required (pip install requests)"); exit(1)
+    # Simple check for 'requests' library
+    try:
+        import requests
+    except ImportError:
+        print("\n--- DEPENDENCY ERROR ---")
+        print("The 'requests' library is required but not installed.")
+        print("Please install it using: pip install requests")
+        exit(1)
+
     main()
