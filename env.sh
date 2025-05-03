@@ -9,3 +9,6 @@ export TELEGRAM_OWNER_ID="PASTE_HERE"
 # export TENOR_API_KEY="PASTE_HERE"
 
 echo "done"
+
+# Use this command to start bot:
+# cd ~/catbot && . ./env.sh && python catbot.py
