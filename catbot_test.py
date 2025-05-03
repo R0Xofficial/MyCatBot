@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-# --- MyCatbot - Final Version (ALL Syntax Errors REALLY Fixed This Time) ---
+# --- MyCatBot
 
 import logging
 import random
@@ -10,17 +10,18 @@ import datetime
 import requests # Needed for /gif, /photo, and OPTIONAL themed GIFs
 from typing import List, Tuple # For type hinting
 from telegram import Update, constants
-from telegram.constants import ChatType, ChatMemberStatus # Added ChatMemberStatus
-# Import necessary components
+from telegram.constants import ChatType # Needed to check chat type (though simplified now)
+# ADDED MessageHandler and filters for owner welcome
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 # Optional Debug Imports
 # from telegram.ext import ApplicationHandlerStop
-from telegram.error import TelegramError, BadRequest # Import specific errors
+from telegram.error import TelegramError
 
 # --- Logging Configuration ---
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
 )
+# Reduce log noise from underlying libraries
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("telegram.vendor.ptb_urllib3.urllib3").setLevel(logging.WARNING)
 logging.getLogger("httpcore").setLevel(logging.WARNING)
@@ -907,7 +908,7 @@ OWNER_WELCOME_TEXTS = [
     "My sensors detect the arrival of Prime Human {owner_mention}. Systems nominal. Purr engine warming up. 🤖❤️",
     "Welcome, {owner_mention}! I've been waiting (napping) patiently for your return! 😴➡️🤩",
     "Hooray! {owner_mention} is here! Now the fun can *really* begin! 🎉",
-    "The legend returns! Welcome back to the chat, {owner_mention}!  легенда",
+    "The legend returns! Welcome back to the chat, {owner_mention}!",
     "Ah, {owner_mention}! My designated chin scratcher has arrived! Welcome! 🙏",
     "Good day/evening/whatever-time-it-is, {owner_mention}! Delighted to have you here! 👋",
     "The Controller of the Red Dot ({owner_mention}) has entered the arena! Welcome! 🔴",
@@ -955,39 +956,6 @@ OWNER_WELCOME_TEXTS = [
     "Glad you could make it, {owner_mention}! Welcome! 👍",
     "The reason I tolerate technology ({owner_mention}) has logged on! Welcome!",
     "Welcome, {owner_mention}! Let the important discussions (about my needs) commence!",
-]
-
-BOT_ADDED_OWNER_WELCOME_TEXTS = [
-    "Meeeow! Just arrived in '<b>{chat_title}</b>' and guess who I see? My favorite human, {owner_mention}! Ready for service (and maybe treats)! 🫡🐾",
-    "Purrrr! Logging into '<b>{chat_title}</b>'... System check... Owner detected! Happy to see you here, {owner_mention}! Let's make this place pawsome! ❤️",
-    "Hello <b>{chat_title}</b>! Your friendly neighborhood Cat Bot reporting for duty! Oh hey, {owner_mention}! Didn't expect to see you here! ✨ Fancy meeting you!",
-    "Well, well, well... look who's already gracing '<b>{chat_title}</b>' with their presence! It's my esteemed Owner, {owner_mention}! Excellent! Let the fun (and my commands) begin! 🥳",
-    "Initialization complete in '<b>{chat_title}</b>'. Scanning members... Owner ({owner_mention}) located! What a pleasant surprise! Greetings, Boss! 👋",
-    "Just unpacked my virtual bags in '<b>{chat_title}</b>'. So glad my human ({owner_mention}) is here to show me around! 🤗",
-    "Entering '<b>{chat_title}</b>'... Is that... {owner_mention}? It IS! Hooray! Now I know who to bother for attention! 😉 Welcome me!",
-    "Reporting for duty in '<b>{chat_title}</b>', sir/ma'am {owner_mention}! Your loyal Cat Bot has arrived. Awaiting commands (or pets). 🧐",
-    "This place ('<b>{chat_title}</b>') seems interesting... and it has {owner_mention}! Bonus! Hi Owner! 👋 Let's cause some chaos!",
-    "The prophecy foretold this! I have been summoned to '<b>{chat_title}</b>', and my Owner, {owner_mention}, awaits! Destiny fulfilled! 📜✨",
-    "Beep boop! Cat Bot online in '<b>{chat_title}</b>'. Owner {owner_mention} detected. Happiness subroutine activated. Purr sequence initiated. 🤖❤️",
-    "Surprise! Just got added to '<b>{chat_title}</b>'! And double surprise, {owner_mention} is here too! This is going to be great! 🎉",
-    "Greetings, inhabitants of '<b>{chat_title}</b>'! Your new feline overlord has arrived... Oh, hi {owner_mention}! Didn't see you there. Act natural. 👑😅",
-    "Okay, settling into '<b>{chat_title}</b>'... Wait a meowment! Is that my {owner_mention}? Now this group is officially purrfect! 🥰",
-    "Just landed in '<b>{chat_title}</b>'! My mission: Serve the users... especially user {owner_mention}! Priority target acquired! 🎯❤️",
-    "Hello '<b>{chat_title}</b>'! I bring fluff, judgment, and... oh! {owner_mention}! Excellent! My primary human is secured! 👍",
-    "Navigating the digital pathways to '<b>{chat_title}</b>'... Connection established! Owner {owner_mention} present! All systems go! 🚀",
-    "Well, isn't this cozy? Just joined '<b>{chat_title}</b>' and my favorite lap ({owner_mention}) is already here! Perfect! 🛋️",
-    "Activated in '<b>{chat_title}</b>'. Scanning for treats... Found {owner_mention} instead! Close enough! Hi! 👋🎁",
-    "My journey brings me to '<b>{chat_title}</b>', where fate (and an admin) reunites me with {owner_mention}! It was meant to be! ✨",
-    "Greetings '<b>{chat_title}</b>'! I am Cat Bot... *sees owner* ...and I belong to {owner_mention}! Please direct all treat inquiries through them. 😉",
-    "Just spawned in '<b>{chat_title}</b>'. Level 1 Cat Bot. Objective: Find Owner. Objective complete! Hi {owner_mention}! 🎮",
-    "Permission to enter '<b>{chat_title}</b>' granted. Detecting familiar human signature... Welcome acknowledged, {owner_mention}! 👍",
-    "The new bot on the block ('<b>{chat_title}</b>') has arrived! And look, my favorite person {owner_mention} is here to welcome me! How thoughtful! 😊",
-    "Joining '<b>{chat_title}</b>'... Processing member list... Match found: {owner_mention}! Excellent, the treat dispenser is already integrated! 🥳",
-    "Mrow! Just stretched my virtual paws into '<b>{chat_title}</b>'! So happy to see a friendly face, {owner_mention}! 🤗",
-    "Deployed successfully in '<b>{chat_title}</b>'! Locating primary user... Found {owner_mention}! Ready for instructions! 🫡",
-    "What a coincidence! Joining '<b>{chat_title}</b>' and finding {owner_mention} here feels like finding an extra treat in the bowl! 🎉",
-    "Presenting... me! In '<b>{chat_title}</b>'! And look who else is here: {owner_mention}! The party can officially start! 🎈",
-    "My arrival in '<b>{chat_title}</b>' is complete. Detecting optimal human ({owner_mention}). Engaging Greeting Protocol Alpha. Hello! 👋",
 ]
 
 # Refusal texts
@@ -1126,13 +1094,8 @@ async def check_username_protection(target_mention: str, context: ContextTypes.D
     if bot_username and target_mention.lower() == f"@{bot_username.lower()}": is_protected = True
     if not is_protected and OWNER_ID:
         owner_username = None
-        # --- CORRECTED try...except ---
-        try:
-            owner_chat = await context.bot.get_chat(OWNER_ID)
-            owner_username = owner_chat.username
-        except Exception as e:
-            logger.warning(f"Could not fetch owner username: {e}")
-        # --- END CORRECTION ---
+        try: owner_chat = await context.bot.get_chat(OWNER_ID); owner_username = owner_chat.username
+        except Exception as e: logger.warning(f"Could not fetch owner username: {e}")
         if owner_username and target_mention.lower() == f"@{owner_username.lower()}":
             is_protected = True; is_owner_match = True
     return is_protected, is_owner_match
@@ -1141,7 +1104,6 @@ async def get_themed_gif(context: ContextTypes.DEFAULT_TYPE, search_terms: list[
     if not TENOR_API_KEY: return None
     search_term = random.choice(search_terms); logger.info(f"Searching Tenor: '{search_term}'")
     url = "https://tenor.googleapis.com/v2/search"; params = {"q": search_term, "key": TENOR_API_KEY, "client_key": "my_cat_bot_project_py", "limit": 8, "media_filter": "gif", "contentfilter": "medium", "random": "true"}
-    # --- CORRECTED try...except ---
     try:
         response = requests.get(url, params=params, timeout=5); response.raise_for_status(); data = response.json()
         results = data.get("results")
@@ -1150,13 +1112,9 @@ async def get_themed_gif(context: ContextTypes.DEFAULT_TYPE, search_terms: list[
             if gif_url: logger.info(f"Found themed GIF URL: {gif_url}"); return gif_url
             else: logger.warning("Could not extract GIF URL from Tenor item.")
         else: logger.warning(f"No results found on Tenor for '{search_term}'.")
-    except requests.exceptions.Timeout:
-        logger.error("Timeout fetching GIF from Tenor.")
-    except requests.exceptions.RequestException as e:
-        logger.error(f"Error fetching GIF from Tenor: {e}")
-    except Exception as e:
-        logger.error(f"Unexpected error in get_themed_gif: {e}", exc_info=True)
-    # --- END CORRECTION ---
+    except requests.exceptions.Timeout: logger.error("Timeout fetching GIF from Tenor.")
+    except requests.exceptions.RequestException as e: logger.error(f"Error fetching GIF from Tenor: {e}")
+    except Exception as e: logger.error(f"Unexpected error in get_themed_gif: {e}", exc_info=True)
     return None
 
 # --- Command Handlers ---
@@ -1198,16 +1156,14 @@ async def github(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def owner_info(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if OWNER_ID:
         owner_mention = f"<code>{OWNER_ID}</code>"; owner_name = "My Esteemed Human"
-        # --- CORRECTED try...except ---
         try:
             owner_chat = await context.bot.get_chat(OWNER_ID)
             owner_mention = owner_chat.mention_html()
             owner_name = owner_chat.full_name or owner_chat.title or owner_name
         except Exception as e:
             logger.warning(f"Could not fetch owner info: {e}")
-        # --- END CORRECTION ---
         message = (f"My designated human is: 👤 <b>{owner_name}</b> ({owner_mention}) ❤️");
-        await update.message.reply_html(message)
+        await update.message.reply_html(message) # reply_html implies HTML parse mode
     else: await update.message.reply_text("Meow? Can't find owner info!")
 
 # --- Simple Text Command Definitions ---
@@ -1226,7 +1182,7 @@ async def zoomies(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None: a
 async def judge(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None: await send_random_text(update, context, JUDGE_TEXTS, "JUDGE_TEXTS")
 async def fed(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None: await _handle_action_command(update, context, FED_TEXTS, ["cat eating", "cat food", "cat nom"], "fed", False)
 
-# --- Helper for simulation commands (CORRECTED Syntax)---
+# --- Helper for simulation commands ---
 async def _handle_action_command(
     update: Update, context: ContextTypes.DEFAULT_TYPE, action_texts: list[str], gif_search_terms: list[str],
     command_name: str, target_required: bool = True, target_required_msg: str = "This command requires a target.", hug_command: bool = False
@@ -1253,7 +1209,7 @@ async def _handle_action_command(
     message_text = random.choice(action_texts)
     if "{target}" in message_text: message_text = message_text.format(target=target_mention) if target_mention else message_text.replace("{target}", "someone")
 
-    # --- Sending Logic with Corrected Fallback ---
+    # --- Sending Logic with Fallback ---
     try:
         if gif_url:
             await update.message.reply_animation(animation=gif_url, caption=message_text, parse_mode=constants.ParseMode.HTML)
@@ -1261,16 +1217,11 @@ async def _handle_action_command(
             await update.message.reply_html(message_text)
     except Exception as e:
         logger.error(f"Error sending {command_name} reply (animation or initial html): {e}. Attempting fallback to text.")
-        # --- CORRECTED FALLBACK BLOCK ---
         try:
-            # Fallback: try sending just the text using reply_html
             await update.message.reply_html(message_text)
             logger.info(f"Successfully sent fallback text for {command_name}.")
         except Exception as fallback_e:
-            # Log if even the fallback fails
             logger.error(f"Fallback text reply also failed for {command_name}: {fallback_e}")
-        # --- END OF CORRECTION ---
-
 
 # Public Simulation Commands Definitions
 async def attack(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None: await _handle_action_command(update, context, ATTACK_TEXTS, ["cat attack", "cat pounce", "cat fight"], "attack", True, "Who to attack? Reply or use /attack @username.")
@@ -1282,10 +1233,8 @@ async def hug(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None: await
 
 # --- GIF and Photo Commands (Reply) ---
 async def gif(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Fetches and sends a random cat GIF, replying."""
     API_URL = "https://api.thecatapi.com/v1/images/search?mime_types=gif&limit=1"; headers = {}
     logger.info("Fetching random cat GIF...")
-    # --- CORRECTED try...except ---
     try:
         response = requests.get(API_URL, headers=headers, timeout=10); response.raise_for_status(); data = response.json()
         if data and isinstance(data, list) and len(data) > 0 and 'url' in data[0]: await update.message.reply_animation(animation=data[0]['url'], caption="Meow! A random GIF for you! 🐾🖼️")
@@ -1293,13 +1242,10 @@ async def gif(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     except requests.exceptions.Timeout: logger.error("Timeout fetching GIF"); await update.message.reply_text("Hiss! GIF source is slow. ⏳")
     except requests.exceptions.RequestException as e: logger.error(f"Error fetching GIF: {e}"); await update.message.reply_text("Hiss! Couldn't connect to GIF source. 😿")
     except Exception as e: logger.error(f"Error processing GIF: {e}", exc_info=True); await update.message.reply_text("Mrow! Weird GIF data or other error occurred. 😵‍💫")
-    # --- END CORRECTION ---
 
 async def photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Fetches and sends a random cat photo, replying."""
     API_URL = "https://api.thecatapi.com/v1/images/search?limit=1&mime_types=jpg,png"; headers = {}
     logger.info("Fetching random cat photo...")
-    # --- CORRECTED try...except ---
     try:
         response = requests.get(API_URL, headers=headers, timeout=10); response.raise_for_status(); data = response.json()
         if data and isinstance(data, list) and len(data) > 0 and 'url' in data[0]: await update.message.reply_photo(photo=data[0]['url'], caption="Purrfect! A random photo for you! 🐾📷")
@@ -1307,15 +1253,12 @@ async def photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     except requests.exceptions.Timeout: logger.error("Timeout fetching photo"); await update.message.reply_text("Hiss! Photo source is slow. ⏳")
     except requests.exceptions.RequestException as e: logger.error(f"Error fetching photo: {e}"); await update.message.reply_text("Hiss! Couldn't connect to photo source. 😿")
     except Exception as e: logger.error(f"Error processing photo: {e}", exc_info=True); await update.message.reply_text("Mrow! Weird photo data or other error occurred. 😵‍💫")
-    # --- END CORRECTION ---
 
 # --- Owner Only Functionality ---
 async def status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Sends a status message (owner only). Replies always."""
     user_id = update.effective_user.id
     if user_id == OWNER_ID:
         ping_ms = "N/A"
-        # --- CORRECTED try...except ---
         if update.message and update.message.date:
             try:
                 now_utc = datetime.datetime.now(datetime.timezone.utc)
@@ -1324,37 +1267,32 @@ async def status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             except Exception as e:
                 logger.error(f"Error calculating ping: {e}")
                 ping_ms = "Error"
-        # --- END CORRECTION ---
         uptime_delta = datetime.datetime.now() - BOT_START_TIME; readable_uptime = get_readable_time_delta(uptime_delta)
         status_msg = (f"<b>Purrrr! Bot Status:</b> ✨\n— Uptime: {readable_uptime} 🕰️\n— Ping: {ping_ms} ms 📶\n— Owner ID: <code>{OWNER_ID}</code> 👑\n— Status: Ready & Purring! 🐾")
         await update.message.reply_html(status_msg)
     else:
         logger.warning(f"Unauthorized /status attempt by user {user_id}.")
         owner_mention = f"<code>{OWNER_ID}</code>"
-        # --- CORRECTED try...except ---
         try:
             owner_chat = await context.bot.get_chat(OWNER_ID)
             owner_mention = owner_chat.mention_html()
-        except Exception: # Catch broad exception if get_chat fails
-            pass # Ignore error, use ID as fallback
-        # --- END CORRECTION ---
+        except Exception:
+            pass
         refusal_text = random.choice(OWNER_ONLY_REFUSAL).format(OWNER_ID=OWNER_ID, owner_mention=owner_mention)
         await update.message.reply_html(refusal_text)
 
 async def say(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Sends a message as the bot (owner only). Can target specific chat ID."""
     user = update.effective_user
     if user.id != OWNER_ID:
         logger.warning(f"Unauthorized /say attempt by user {user.id}.")
         owner_mention=f"<code>{OWNER_ID}</code>"
-        # --- CORRECTED try...except ---
         try:
             owner_chat=await context.bot.get_chat(OWNER_ID)
             owner_mention=owner_chat.mention_html()
         except Exception:
-            pass # Ignore error fetching owner info for refusal
-        # --- END CORRECTION ---
-        refusal_text = random.choice(OWNER_ONLY_REFUSAL).format(OWNER_ID=OWNER_ID, owner_mention=owner_mention); await update.message.reply_html(refusal_text); return
+            pass
+        refusal_text = random.choice(OWNER_ONLY_REFUSAL).format(OWNER_ID=OWNER_ID, owner_mention=owner_mention)
+        await update.message.reply_html(refusal_text); return
 
     args = context.args
     if not args: await update.message.reply_text("Usage: /say [optional_chat_id] <your message>"); return
@@ -1362,7 +1300,7 @@ async def say(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     target_chat_id = update.effective_chat.id; message_to_say_list = args; is_remote_send = False
     try:
         potential_chat_id = int(args[0])
-        if len(args[0]) > 4 or potential_chat_id < 0: # Basic check for potential ID format
+        if len(args[0]) > 4 or potential_chat_id < 0:
             if len(args) > 1: target_chat_id = potential_chat_id; message_to_say_list = args[1:]; is_remote_send = True; logger.info(f"Owner remote send to: {target_chat_id}")
             else: await update.message.reply_text("Mrow? ID provided but no message!"); return
     except (ValueError, IndexError): logger.info("No valid target chat ID detected, sending to current chat.")
@@ -1371,80 +1309,25 @@ async def say(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not message_to_say: await update.message.reply_text("Mrow? Cannot send empty message!"); return
 
     logger.info(f"Owner ({user.id}) using /say. Target: {target_chat_id}. Msg: '{message_to_say[:50]}...'")
-    # --- CORRECTED try...except ---
     try:
         await context.bot.send_message(chat_id=target_chat_id, text=message_to_say)
         if is_remote_send: await update.message.reply_text(f"✅ Sent to <code>{target_chat_id}</code>.", parse_mode=constants.ParseMode.HTML, quote=False)
-    except TelegramError as e:
-        logger.error(f"Failed /say to {target_chat_id}: {e}")
-        await update.message.reply_text(f"😿 Couldn't send to <code>{target_chat_id}</code>: {e}", parse_mode=constants.ParseMode.HTML)
-    except Exception as e:
-        logger.error(f"Unexpected /say error: {e}", exc_info=True)
-        await update.message.reply_text("Oops! Unexpected /say error.")
-    # --- END CORRECTION ---
+    except TelegramError as e: logger.error(f"Failed /say to {target_chat_id}: {e}"); await update.message.reply_text(f"😿 Couldn't send to <code>{target_chat_id}</code>: {e}", parse_mode=constants.ParseMode.HTML)
+    except Exception as e: logger.error(f"Unexpected /say error: {e}", exc_info=True); await update.message.reply_text("Oops! Unexpected /say error.")
 
-# Handler for welcoming the owner when THEY join
+# Handler for welcoming the owner
 async def welcome_owner(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Welcomes the owner when they join a group."""
     if not OWNER_ID or not update.message or not update.message.new_chat_members: return
     for member in update.message.new_chat_members:
         if member.id == OWNER_ID:
             logger.info(f"Owner {OWNER_ID} joined chat {update.effective_chat.id}")
             owner_mention = member.mention_html()
             welcome_text = random.choice(OWNER_WELCOME_TEXTS).format(owner_mention=owner_mention)
-            # --- CORRECTED try...except ---
             try:
-                await update.message.reply_html(welcome_text) # Reply to join message
+                await update.message.reply_html(welcome_text)
             except Exception as e:
-                logger.error(f"Failed to send owner welcome message: {e}")
-            # --- END CORRECTION ---
+                logger.error(f"Failed to send owner welcome: {e}")
             break
-
-# Handler for welcoming owner when BOT joins
-async def greet_owner_on_bot_add(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Greets the owner if they are already in the group when the bot is added."""
-    if not OWNER_ID or not update.message or not update.message.new_chat_members: return
-    if update.effective_chat.type not in [ChatType.GROUP, ChatType.SUPERGROUP]: return
-
-    # Sprawdź, czy bot został dodany
-    bot_id = context.bot.id
-    bot_was_added = any(member.id == bot_id for member in update.message.new_chat_members)
-
-    if bot_was_added:
-        chat = update.effective_chat; chat_id = chat.id
-        logger.info(f"Bot was added to chat {chat_id} ('{chat.title}')")
-
-        # Spróbuj sprawdzić status właściciela
-        try:
-            logger.info(f"Checking status for OWNER_ID {OWNER_ID} in chat {chat_id}...")
-            owner_member = await context.bot.get_chat_member(chat_id, OWNER_ID)
-            # --- DODANO LOGOWANIE STATUSU ---
-            logger.info(f"Owner status check result: Status='{owner_member.status}', User='{owner_member.user.id}'")
-            # --- KONIEC LOGOWANIA ---
-
-            if owner_member.status in [ChatMemberStatus.MEMBER, ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.OWNER]:
-                logger.info(f"Owner {OWNER_ID} is an active member in chat {chat_id}. Sending welcome.")
-                owner_mention = owner_member.user.mention_html()
-                chat_title = chat.title if chat.title else "this group"
-                welcome_text = random.choice(BOT_ADDED_OWNER_WELCOME_TEXTS).format(owner_mention=owner_mention, chat_title=chat_title)
-                # --- Dodano try...except wokół wysyłania ---
-                try:
-                    await context.bot.send_message(chat_id=chat_id, text=welcome_text, parse_mode=constants.ParseMode.HTML)
-                except Exception as send_e:
-                    logger.error(f"Failed to send bot-add welcome message to {chat_id}: {send_e}")
-                # --- Koniec try...except ---
-            else:
-                 logger.info(f"Owner {OWNER_ID} not active member in chat {chat_id} (Status: {owner_member.status}). No welcome sent.")
-
-        except BadRequest as e:
-            if "user not found" in str(e).lower():
-                logger.info(f"Owner {OWNER_ID} not found in chat {chat_id} when bot was added.")
-            else:
-                 logger.error(f"BadRequest checking owner status in {chat_id}: {e}")
-        except TelegramError as e:
-            logger.error(f"TelegramError checking owner status in {chat_id}: {e}")
-        except Exception as e:
-            logger.error(f"Unexpected error checking owner status in {chat_id}: {e}", exc_info=True)
 
 # --- Main Function ---
 def main() -> None:
@@ -1479,9 +1362,8 @@ def main() -> None:
     application.add_handler(CommandHandler("hug", hug))
     application.add_handler(CommandHandler("say", say))
 
-    # Message Handler for member joining
+    # Message Handler for owner joining
     application.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS & filters.ChatType.GROUPS, welcome_owner))
-    application.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS & filters.ChatType.GROUPS, greet_owner_on_bot_add))
 
     # --- Start the Bot ---
     logger.info(f"Bot starting polling... Owner ID: {OWNER_ID}")
