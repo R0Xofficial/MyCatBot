@@ -62,9 +62,9 @@ If you want run test do this command
 
 /hug [reply/@user] - Offer a comforting hug!🤗
 
-(Note: Owner cannot be targeted by attack/kill/punch/slap/bite/hug)
+## (Note: Owner cannot be targeted by attack/kill/punch/slap/bite/hug)
 
-Owner Only Commands (Hidden):
+# Owner Only Commands (Hidden):
 
   /status - Show bot status.
   
