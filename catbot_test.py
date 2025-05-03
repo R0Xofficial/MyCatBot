@@ -1270,7 +1270,7 @@ Owner Only Commands (Hidden):
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None: user = update.effective_user; await update.message.reply_html(f"Meow {user.mention_html()}! I'm the Meow Bot. 🐾\nUse /help to see available commands!")
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None: await update.message.reply_html(HELP_TEXT, disable_web_page_preview=True)
-async def github(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None: github_link = "https://github.com/R0Xofficial/MyCatbot"; await update.message.reply_text(f"Meeeow! I'm open source! 💻 Find my code:\n{github_link}", disable_web_page_preview=True)
+async def github(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None: github_link = "https://github.com/R0Xofficial/MyCatbot"; await update.message.reply_text(f"Meeeow! I'm open source! 💻 Here my code: {github_link}", disable_web_page_preview=True)
 async def owner_info(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if OWNER_ID: owner_mention = f"<code>{OWNER_ID}</code>"; owner_name = "My Esteemed Human"; try: owner_chat = await context.bot.get_chat(OWNER_ID); owner_mention = owner_chat.mention_html(); owner_name = owner_chat.full_name or owner_chat.title or owner_name; except Exception as e: logger.warning(f"Could not fetch owner info: {e}"); message = (f"My designated human is: 👤 <b>{owner_name}</b> ({owner_mention}) ❤️"); await update.message.reply_html(message)
     else: await update.message.reply_text("Meow? Can't find owner info!")
