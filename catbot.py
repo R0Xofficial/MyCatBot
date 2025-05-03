@@ -1141,7 +1141,6 @@ Meeeow! 🐾 Here are the commands you can use:
 /bite [reply/@user] - Take a playful bite! 😬
 /hug [reply/@user] - Offer a comforting hug! 🤗
 
-<i>(* Themed GIFs require a TENOR_API_KEY to be configured by the bot owner)</i>
 <i>(Note: Owner cannot be targeted by attack/kill/punch/slap/bite/hug)</i>
 Owner Only Commands (Hidden):
   /status - Show bot status.
