@@ -1,3 +1,4 @@
+
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
@@ -1504,8 +1505,8 @@ async def status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await update.message.reply_html(refusal_text)
 
 async def say(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Sends a message as the bot to the current or specified chat (Owner Only)."""
     user = update.effective_user
+
     if user.id != OWNER_ID:
         logger.warning(f"Unauthorized /say attempt by user {user.id}.")
         owner_mention = f"<code>{OWNER_ID}</code>"
@@ -1524,21 +1525,15 @@ async def say(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     target_chat_id_str = args[0]
     message_to_say_list = args
-    target_chat_id = update.effective_chat.id # Default to current chat
+    target_chat_id = update.effective_chat.id
     is_remote_send = False
 
-    # Check if the first argument looks like a chat ID
     try:
         potential_chat_id = int(target_chat_id_str)
-        # Basic sanity check for ID format (very long or positive might be user IDs)
-        # Telegram chat IDs are typically large negative numbers
-        if len(target_chat_id_str) > 5 or potential_chat_id >= -1000: # Adjust threshold if needed
-            # Try to fetch chat info to confirm if it's a valid chat ID
-            # This check might be slow or fail if bot isn't in the chat
+        if len(target_chat_id_str) > 5 or potential_chat_id >= -1000:
             try:
                  await context.bot.get_chat(potential_chat_id)
-                 # If get_chat succeeds, assume it's a valid target ID
-                 if len(args) > 1: # Make sure there's a message after the ID
+                 if len(args) > 1:
                      target_chat_id = potential_chat_id
                      message_to_say_list = args[1:]
                      is_remote_send = True
@@ -1547,26 +1542,21 @@ async def say(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                      await update.message.reply_text("Mrow? Target chat ID provided, but no message to send!")
                      return
             except TelegramError:
-                # get_chat failed, assume first arg is part of the message
-                 logger.info("First argument doesn't seem like a valid/accessible chat ID, sending to current chat.")
-                 target_chat_id = update.effective_chat.id
-                 message_to_say_list = args # Use all args as message
-                 is_remote_send = False
-            except Exception as e:
-                 logger.error(f"Unexpected error checking potential chat ID {potential_chat_id}: {e}")
-                 # Safer to assume it's part of the message
+                 logger.info("First argument looks like ID but get_chat failed, sending to current chat.")
                  target_chat_id = update.effective_chat.id
                  message_to_say_list = args
                  is_remote_send = False
-
-        else: # Assume it's definitely a message for the current chat
+            except Exception as e:
+                 logger.error(f"Unexpected error checking potential chat ID {potential_chat_id}: {e}")
+                 target_chat_id = update.effective_chat.id
+                 message_to_say_list = args
+                 is_remote_send = False
+        else:
              logger.info("First argument doesn't look like a chat ID, sending to current chat.")
              target_chat_id = update.effective_chat.id
              message_to_say_list = args
              is_remote_send = False
-
     except (ValueError, IndexError):
-        # First argument is not an integer, treat it as part of the message
         logger.info("First argument is not numeric, sending to current chat.")
         target_chat_id = update.effective_chat.id
         message_to_say_list = args
@@ -1577,20 +1567,30 @@ async def say(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await update.message.reply_text("Mrow? Cannot send an empty message!")
         return
 
-    logger.info(f"Owner ({user.id}) using /say. Target: {target_chat_id}. Is remote: {is_remote_send}. Msg start: '{message_to_say[:50]}...'")
+    chat_title = f"Chat ID {target_chat_id}"
+    safe_chat_title = chat_title
+    try:
+        target_chat_info = await context.bot.get_chat(target_chat_id)
+        chat_title = target_chat_info.title or target_chat_info.first_name or f"Chat ID {target_chat_id}"
+        safe_chat_title = html.escape(chat_title)
+        logger.info(f"Target chat title for /say resolved to: '{chat_title}'")
+    except TelegramError as e:
+        logger.warning(f"Could not get chat info for {target_chat_id} for /say confirmation: {e}")
+    except Exception as e:
+         logger.error(f"Unexpected error getting chat info for {target_chat_id} in /say: {e}", exc_info=True)
+
+    logger.info(f"Owner ({user.id}) using /say. Target: {target_chat_id} ('{chat_title}'). Is remote: {is_remote_send}. Msg start: '{message_to_say[:50]}...'")
+
     try:
         await context.bot.send_message(chat_id=target_chat_id, text=message_to_say)
-        # Send confirmation only for remote sends
         if is_remote_send:
-            await update.message.reply_text(f"✅ Message sent to <code>{target_chat_id}</code>.", parse_mode=ParseMode.HTML, quote=False)
-        # Maybe delete the owner's /say command message in the original chat for privacy?
-        # try: await update.message.delete() except: pass
+            await update.message.reply_text(f"✅ Message sent to <b>{safe_chat_title}</b> (<code>{target_chat_id}</code>).", parse_mode=ParseMode.HTML, quote=False)
     except TelegramError as e:
-        logger.error(f"Failed to send message via /say to {target_chat_id}: {e}")
-        await update.message.reply_text(f"😿 Couldn't send message to <code>{target_chat_id}</code>: {e}", parse_mode=ParseMode.HTML)
+        logger.error(f"Failed to send message via /say to {target_chat_id} ('{chat_title}'): {e}")
+        await update.message.reply_text(f"😿 Couldn't send message to <b>{safe_chat_title}</b> (<code>{target_chat_id}</code>): {e}", parse_mode=ParseMode.HTML)
     except Exception as e:
         logger.error(f"Unexpected error during /say execution: {e}", exc_info=True)
-        await update.message.reply_text("Oops! An unexpected error occurred while trying to send the message.")
+        await update.message.reply_text(f"💥 Oops! An unexpected error occurred while trying to send the message to <b>{safe_chat_title}</b> (<code>{target_chat_id}</code>). Check logs.", parse_mode=ParseMode.HTML)
 
 async def leave_chat(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Makes the bot leave the current or a specified chat (Owner Only)."""
