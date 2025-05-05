@@ -12,7 +12,7 @@ import html # Needed for escaping chat titles in /leave
 from typing import List, Tuple # For type hinting
 from telegram import Update, constants
 # Import ChatType and ParseMode explicitly
-from telegram.constants import ChatType, ParseMode
+from telegram.constants import ChatType, ParseMode, ChatMemberStatus
 # Import necessary extensions
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 # Import error type
