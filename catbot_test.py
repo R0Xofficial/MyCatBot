@@ -1218,21 +1218,6 @@ Owner Only Commands (Hidden):
   /leave [optional_chat_id] - Make the bot leave a chat.
 """
 
-import json # Potrzebny do ładnego formatowania
-
-async def log_all_updates(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Logs the entire update object received from Telegram."""
-    try:
-        update_data = update.to_dict()
-        pretty_update_data = json.dumps(update_data, indent=2, ensure_ascii=False)
-        log_message = f">>> RECEIVED UPDATE >>>\n{pretty_update_data}\n<<< END OF UPDATE <<<"
-        print(log_message)
-        logger.info(log_message)
-    except Exception as e:
-        error_message = f">>> ERROR LOGGING UPDATE: {e} <<<"
-        print(error_message)
-        logger.error(error_message, exc_info=True)
-        
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
     await update.message.reply_html(f"Meow {user.mention_html()}! I'm the Meow Bot. 🐾\nUse /help to see available commands!")
@@ -1673,7 +1658,6 @@ def main() -> None:
     application = Application.builder().token(BOT_TOKEN).build()
 
     logger.info("Registering command handlers...")
-    application.add_handler(MessageHandler(filters.ALL, log_all_updates), group=-1)
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CommandHandler("github", github))
