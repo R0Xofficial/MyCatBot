@@ -1,4 +1,4 @@
-![MyCatbot] (https://github.com/R0Xofficial/MyCatbot/banner.png)
+![MyCatbot](https://github.com/R0Xofficial/MyCatbot/banner.png)
 
 # MyCatbot - Your Fun, Furry Assistant
 
