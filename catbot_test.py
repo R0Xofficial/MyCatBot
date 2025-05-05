@@ -1608,57 +1608,41 @@ async def welcome_owner(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
 # Handler for when the bot joins a group
 async def bot_joined_group(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """
-    Logs when the bot is added to a new group and notifies the owner via PM.
-    Tries to include a public link or generate an invite link if admin.
-    """
-    if not update.message or not update.message.new_chat_members: return
-    bot_id = context.bot.id; chat = update.effective_chat
-    for member in update.message.new_chat_members:
-        if member.id == bot_id:
-            chat_id = chat.id; chat_title = chat.title or f"[Chat without title, ID: {chat_id}]"; safe_chat_title = html.escape(chat_title)
-            chat_username = chat.username; link_line = ""; log_message = f"Bot added to Group: '{chat_title}' (ID: {chat_id})"
+    """SUPER PROSTA WERSJA TESTOWA"""
+    chat = update.effective_chat
+    bot_id = context.bot.id
+    new_members_ids = []
+    if update.message and update.message.new_chat_members:
+        new_members_ids = [m.id for m in update.message.new_chat_members]
 
-            if chat_username:
-                log_message += f" @{chat_username}"; link_line = f"\n<b>Link:</b> https://t.me/{chat_username}"; logger.info(log_message + " (Public)")
-            else:
-                log_message += " (Private/No Username)"; logger.info(log_message)
-                try:
-                    bot_member = await context.bot.get_chat_member(chat_id=chat_id, user_id=bot_id)
-                    if bot_member.status == ChatMemberStatus.ADMINISTRATOR and bot_member.can_invite_users:
-                        logger.info(f"Bot is admin with invite rights in {chat_id}. Creating invite link.")
-                        try:
-                            invite_link_object = await context.bot.create_chat_invite_link(chat_id=chat_id)
-                            invite_link = invite_link_object.invite_link
-                            link_line = f"\n<b>Invite Link:</b> {invite_link}"
-                            logger.info(f"Created invite link for {chat_id}.")
-                        except TelegramError as invite_err:
-                            logger.error(f"Failed to create invite link for {chat_id}: {invite_err}")
-                            link_line = f"\n<b>Note:</b> Private, failed invite link ({invite_err})."
-                        except Exception as invite_exc:
-                            logger.error(f"Unexpected error creating invite link for {chat_id}: {invite_exc}", exc_info=True)
-                            link_line = "\n<b>Note:</b> Private, error creating invite link."
-                    else:
-                        status_str = bot_member.status if bot_member else 'unknown'
-                        can_invite_str = getattr(bot_member, 'can_invite_users', 'N/A') if bot_member else 'N/A'
-                        logger.info(f"Bot not admin with invite rights in {chat_id}. Status: {status_str}, Can Invite: {can_invite_str}")
-                except TelegramError as member_err:
-                    logger.error(f"Could not get bot member status in {chat_id}: {member_err}")
-                    link_line = f"\n<b>Note:</b> Private, couldn't check permissions ({member_err})."
-                except Exception as member_exc:
-                    logger.error(f"Unexpected error checking bot status in {chat_id}: {member_exc}", exc_info=True)
-                    link_line = "\n<b>Note:</b> Private, error checking permissions."
+    print(f"!!! HANDLER bot_joined_group WYWOŁANY !!! Chat ID: {chat.id}, New Members: {new_members_ids}")
+    logger.info(f"!!! HANDLER bot_joined_group WYWOŁANY !!! Chat ID: {chat.id}, New Members: {new_members_ids}")
 
-            if OWNER_ID:
-                try:
-                    pm_text = (f"Meow! 🐾 Added to group:\n<b>Name:</b> {safe_chat_title}\n<b>ID:</b> <code>{chat_id}</code>{link_line}")
-                    await context.bot.send_message(chat_id=OWNER_ID, text=pm_text, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
-                    logger.info(f"Sent join notification to owner ({OWNER_ID}) for group {chat_id}.")
-                except Exception as e:
-                    logger.error(f"Failed to send join notification to owner ({OWNER_ID}) for group {chat_id}: {e}")
-            else:
-                logger.warning("OWNER_ID not set, cannot send join notification.")
-            break
+    # Sprawdź, czy bot jest na liście nowych członków
+    bot_is_new_member = any(member_id == bot_id for member_id in new_members_ids)
+
+    print(f"!!! Czy bot ({bot_id}) jest nowym członkiem? {bot_is_new_member} !!!")
+    logger.info(f"!!! Czy bot ({bot_id}) jest nowym członkiem? {bot_is_new_member} !!!")
+
+    if bot_is_new_member and OWNER_ID:
+        print(f"!!! Próba wysłania testowego PM do OWNER_ID: {OWNER_ID} !!!")
+        logger.info(f"!!! Próba wysłania testowego PM do OWNER_ID: {OWNER_ID} !!!")
+        try:
+            await context.bot.send_message(
+                chat_id=OWNER_ID,
+                text=f"SUPER TEST: Bot dodany do czatu {chat.id}"
+            )
+            print(f"!!! SUKCES: Wysyłanie PM do {OWNER_ID} !!!")
+            logger.info(f"!!! SUKCES: Wysyłanie PM do {OWNER_ID} !!!")
+        except Exception as e:
+            print(f"!!! BŁĄD PM: Nie udało się wysłać do {OWNER_ID}: {type(e).__name__} - {e} !!!")
+            logger.error(f"!!! BŁĄD PM: Nie udało się wysłać do {OWNER_ID}: {type(e).__name__} - {e} !!!", exc_info=True)
+    elif bot_is_new_member:
+         print(f"!!! Bot dodany, ale OWNER_ID nie jest ustawione! Brak PM. !!!")
+         logger.warning(f"!!! Bot dodany, ale OWNER_ID nie jest ustawione! Brak PM. !!!")
+
+    print(f"!!! Zakończono handler bot_joined_group dla czatu {chat.id} !!!")
+    logger.info(f"!!! Zakończono handler bot_joined_group dla czatu {chat.id} !!!")
 
 # --- Main Function ---
 def main() -> None:
