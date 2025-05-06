@@ -1563,7 +1563,7 @@ async def leave_chat(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
             if "forbidden: bot is not a member" in str(e).lower():
                 logger.warning(f"Bot is not a member of {target_chat_id}. Cannot send farewell or leave.")
                 if is_remote_leave:
-                     await update.message.reply_text(f"⚠️ Failed to send farewell to <code>{target_chat_id}</code>: {e}.", parse_mode=ParseMode.HTML)
+                     await update.message.reply_text(f"⚠️ Failed to send farewell to (<code>{target_chat_id}</code>): {e}.", parse_mode=ParseMode.HTML)
                 return
             else:
                  if is_remote_leave:
