@@ -1493,98 +1493,102 @@ async def leave_chat(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
             owner_chat = await context.bot.get_chat(OWNER_ID)
             owner_mention = owner_chat.mention_html()
         except Exception: pass
-        refusal_text = random.choice(OWNER_ONLY_REFUSAL).format(owner_mention=owner_mention)
-        await update.message.reply_html(refusal_text); return
+        if OWNER_ONLY_REFUSAL:
+             refusal_text = random.choice(OWNER_ONLY_REFUSAL).format(owner_mention=owner_mention)
+             await update.message.reply_html(refusal_text)
+        else:
+             await update.message.reply_text("Access denied.")
+        return
 
     target_chat_id = None
     is_remote_leave = False
 
-    # Determine target chat ID
     if context.args:
         try:
             target_chat_id = int(context.args[0])
-            # Group/channel IDs are typically negative and long
-            if target_chat_id >= -100: # Basic check, might need adjustment
-                await update.message.reply_text("Mrow? That looks like a user ID or a small group ID, not a standard group/channel ID. They are usually large negative numbers (e.g., -100...).")
+            if target_chat_id >= -100:
+                await update.message.reply_text("Mrow? Invalid Group/Channel ID format.")
                 return
             is_remote_leave = True
             logger.info(f"Owner initiated remote leave for chat ID: {target_chat_id}")
         except (ValueError, IndexError):
-            await update.message.reply_text("Mrow? Invalid chat ID format. Please provide the numeric ID (usually starts with -100...).")
+            await update.message.reply_text("Mrow? Invalid chat ID format.")
             return
     else:
-        # Leave current chat, unless it's private
         if update.effective_chat.type == ChatType.PRIVATE:
-            await update.message.reply_text("Meow! I can't leave a private chat with you, silly human.")
+            await update.message.reply_text("Meow! I can't leave a private chat.")
             return
         target_chat_id = update.effective_chat.id
         logger.info(f"Owner initiated leave for current chat: {target_chat_id}")
 
-    # Fetch owner mention and chat title *before* leaving
-    owner_mention = f"<code>{OWNER_ID}</code>" # Fallback
+    owner_mention = f"<code>{OWNER_ID}</code>"
     try:
         owner_chat_info = await context.bot.get_chat(OWNER_ID)
         owner_mention = owner_chat_info.mention_html()
     except Exception as e:
         logger.warning(f"Could not fetch owner mention for /leave message: {e}")
 
-    chat_title = f"Chat ID {target_chat_id}" # Fallback title
-    safe_chat_title = chat_title # Use this for messages
+    chat_title = f"Chat ID {target_chat_id}"
+    safe_chat_title = chat_title
+    can_proceed_to_leave = True
+
     try:
         target_chat_info = await context.bot.get_chat(target_chat_id)
-        # Use title, fallback to first name (for channels?), fallback to ID
         chat_title = target_chat_info.title or target_chat_info.first_name or f"Chat ID {target_chat_id}"
-        safe_chat_title = html.escape(chat_title) # Escape for safe inclusion in HTML
+        safe_chat_title = html.escape(chat_title)
         logger.info(f"Target chat title resolved to: '{chat_title}'")
     except TelegramError as e:
-        logger.error(f"Could not get chat info for {target_chat_id} before leaving: {e}")
-        await update.message.reply_text(f"⚠️ Couldn't get chat info for <code>{target_chat_id}</code>: {e}. Will attempt to leave anyway.", parse_mode=ParseMode.HTML)
+        logger.error(f"Could not get chat info for {target_chat_id}: {e}")
+        if "bot is not a member" in str(e).lower() or "chat not found" in str(e).lower():
+             await update.message.reply_text(f"❌ Cannot interact with chat <b>{safe_chat_title}</b> (<code>{target_chat_id}</code>): {e}", parse_mode=ParseMode.HTML)
+             return
+        else:
+             await update.message.reply_text(f"⚠️ Couldn't get chat info for <code>{target_chat_id}</code>: {e}. Will attempt to leave anyway.", parse_mode=ParseMode.HTML)
     except Exception as e:
          logger.error(f"Unexpected error getting chat info for {target_chat_id}: {e}", exc_info=True)
          await update.message.reply_text(f"⚠️ Unexpected error getting chat info for <code>{target_chat_id}</code>. Will attempt to leave anyway.", parse_mode=ParseMode.HTML)
 
 
-    # Prepare and Send Farewell Message (to target chat)
-    if not LEAVE_TEXTS:
-        logger.warning("LEAVE_TEXTS list is empty!")
-    else:
+    # Prepare and Send Farewell Message
+    if can_proceed_to_leave and LEAVE_TEXTS:
         farewell_message = random.choice(LEAVE_TEXTS).format(
             owner_mention=owner_mention,
-            chat_title=f"<b>{safe_chat_title}</b>" # Use escaped title
+            chat_title=f"<b>{safe_chat_title}</b>"
         )
         try:
-            # Send message first, then leave
             await context.bot.send_message(chat_id=target_chat_id, text=farewell_message, parse_mode=ParseMode.HTML)
             logger.info(f"Sent farewell message to {target_chat_id}")
         except TelegramError as e:
-            # Log error but still attempt to leave
-            logger.error(f"Failed to send farewell message to {target_chat_id}: {e}. Proceeding with leave.")
-            if is_remote_leave: # Only bother informing owner if it was remote
-                await update.message.reply_text(f"⚠️ Failed to send farewell message to <code>{target_chat_id}</code>: {e}", parse_mode=ParseMode.HTML)
+            logger.error(f"Failed to send farewell message to {target_chat_id}: {e}.")
+            if "forbidden: bot is not a member" in str(e).lower():
+                logger.warning(f"Bot is not a member of {target_chat_id}. Cannot send farewell or leave.")
+                if is_remote_leave:
+                     await update.message.reply_text(f"⚠️ Failed to send farewell to <code>{target_chat_id}</code>: {e}. Bot is not a member.", parse_mode=ParseMode.HTML)
+                return
+            else:
+                 if is_remote_leave:
+                     await update.message.reply_text(f"⚠️ Failed to send farewell to <code>{target_chat_id}</code>: {e}. Still attempting to leave.", parse_mode=ParseMode.HTML)
         except Exception as e:
              logger.error(f"Unexpected error sending farewell message to {target_chat_id}: {e}", exc_info=True)
 
+    elif not LEAVE_TEXTS:
+        logger.warning("LEAVE_TEXTS list is empty!")
 
     # Attempt to Leave Chat
     try:
         success = await context.bot.leave_chat(chat_id=target_chat_id)
         if success:
             logger.info(f"Successfully left chat {target_chat_id} ('{chat_title}')")
-            # Send confirmation back to owner
             await update.message.reply_text(f"✅ Successfully left chat: <b>{safe_chat_title}</b> (<code>{target_chat_id}</code>)", parse_mode=ParseMode.HTML)
         else:
-            # This case might indicate the bot was already not in the chat or permissions issue without raising TelegramError
-            logger.warning(f"Attempted to leave chat {target_chat_id} but leave_chat returned False (maybe not a member or lacking permissions?).")
-            await update.message.reply_text(f"🤔 Attempted to leave <b>{safe_chat_title}</b> (<code>{target_chat_id}</code>), but the operation returned False. Maybe I wasn't there or lack permission?", parse_mode=ParseMode.HTML)
+            logger.warning(f"leave_chat returned False for {target_chat_id}.")
+            await update.message.reply_text(f"🤔 Attempted leave for <b>{safe_chat_title}</b> (<code>{target_chat_id}</code>), returned False. Maybe I wasn't there or lack permission?", parse_mode=ParseMode.HTML)
     except TelegramError as e:
-        # Specific Telegram errors (like Bot kicked)
         logger.error(f"Failed to leave chat {target_chat_id}: {e}")
         await update.message.reply_text(f"❌ Failed to leave chat <b>{safe_chat_title}</b> (<code>{target_chat_id}</code>): {e}", parse_mode=ParseMode.HTML)
     except Exception as e:
-         # Other unexpected errors
          logger.error(f"Unexpected error during leave process for {target_chat_id}: {e}", exc_info=True)
          await update.message.reply_text(f"💥 Unexpected error leaving chat <b>{safe_chat_title}</b> (<code>{target_chat_id}</code>). Check logs.", parse_mode=ParseMode.HTML)
-
 
 # Handler for welcoming the owner when they join a group and send log to pm
 async def handle_new_group_members(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
