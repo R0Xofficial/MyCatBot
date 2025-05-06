@@ -1382,7 +1382,7 @@ async def status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 logger.error(f"Error calculating ping: {e}")
                 ping_ms = "Error"
         uptime_delta = datetime.datetime.now() - BOT_START_TIME; readable_uptime = get_readable_time_delta(uptime_delta)
-        status_msg = (f"<b>Purrrr! Bot Status:</b> ✨\n— Uptime: {readable_uptime} 🕰️\n— Ping: {ping_ms} ms 📶\n— Owner ID: <code>{OWNER_ID}</code> 👑\n— Status: Ready & Purring! 🐾")
+        status_msg = (f"<b>Purrrr! Bot Status:</b> ✨\n<b>— Uptime:</b> {readable_uptime} 🕰️\n<b>— Ping:</b> {ping_ms} ms 📶\n<b>— Owner ID:</b> <code>{OWNER_ID}</code> 👑\n<b>— Status:</b> Ready & Purring! 🐾")
         await update.message.reply_html(status_msg)
     else:
         logger.warning(f"Unauthorized /status attempt by user {user_id}.")
@@ -1596,7 +1596,6 @@ async def handle_new_group_members(update: Update, context: ContextTypes.DEFAULT
     bot_id = context.bot.id
 
     for member in update.message.new_chat_members:
-        # 1. Czy to WŁAŚCICIEL dołączył?
         if OWNER_ID and member.id == OWNER_ID:
             logger.info(f"Owner {OWNER_ID} joined chat {chat.id} ('{chat.title}')")
             owner_mention = member.mention_html()
