@@ -1240,7 +1240,6 @@ async def owner_info(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     else: await update.message.reply_text("Meow? Owner info not configured! 😿")
 
 # --- Simple Text Command Definitions ---
-# POPRAWIONA FUNKCJA send_random_text
 async def send_random_text(update: Update, context: ContextTypes.DEFAULT_TYPE, text_list: list[str], list_name: str) -> None:
     if not text_list: logger.warning(f"Empty list: '{list_name}'"); await update.message.reply_text("Mrow? Internal error: Text list empty. 😿"); return
     chosen_text = random.choice(text_list)
@@ -1270,7 +1269,6 @@ async def zoomies(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None: a
 async def judge(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None: await send_random_text(update, context, JUDGE_TEXTS, "JUDGE_TEXTS")
 
 # --- Helper for Simulation Commands ---
-# POPRAWIONA FUNKCJA _handle_action_command
 async def _handle_action_command(update: Update, context: ContextTypes.DEFAULT_TYPE, action_texts: list[str], gif_search_terms: list[str], command_name: str, target_required: bool = True, target_required_msg: str = "This command requires a target.", hug_command: bool = False):
     if not action_texts: logger.warning(f"List '{command_name.upper()}_TEXTS' empty!"); await update.message.reply_text(f"Mrow? No texts for /{command_name}. 😿"); return
     target_mention = None; is_protected = False; is_owner = False
@@ -1288,7 +1286,6 @@ async def _handle_action_command(update: Update, context: ContextTypes.DEFAULT_T
     message_text = random.choice(action_texts)
     if "{target}" in message_text: effective_target = target_mention if target_required else update.effective_user.mention_html(); message_text = message_text.format(target=effective_target) if effective_target else message_text.replace("{target}", "someone")
 
-    # Poprawiona logika wysyłania i fallbacku
     try:
         if gif_url: await update.message.reply_animation(animation=gif_url, caption=message_text, parse_mode=ParseMode.HTML)
         else: await update.message.reply_html(message_text)
@@ -1307,7 +1304,7 @@ async def _handle_action_command(update: Update, context: ContextTypes.DEFAULT_T
              try: await update.message.reply_text(message_text); logger.info(f"Sent fallback plain text for {command_name} after unexpected error.")
              except Exception as e_plain_fallback: logger.error(f"Fallback plain text also failed for {command_name} after unexpected error: {e_plain_fallback}")
 
-# Simulation Command Definitions
+# Command Definitions
 async def fed(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None: await _handle_action_command(update, context, FED_TEXTS, ["cat eating", "cat food", "cat nom"], "fed", False)
 async def attack(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None: await _handle_action_command(update, context, ATTACK_TEXTS, ["cat attack", "cat pounce", "cat fight"], "attack", True, "Who to attack? Reply or use /attack @username.")
 async def kill(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None: await _handle_action_command(update, context, KILL_TEXTS, ["cat angry", "cat evil", "cat hiss"], "kill", True, "Who to 'kill'? Reply or use /kill @username.")
@@ -1320,8 +1317,6 @@ async def hug(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None: await
 async def gif(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Fetches and sends a random cat GIF."""
     API_URL = "https://api.thecatapi.com/v1/images/search?mime_types=gif&limit=1"
-    # Add headers if you have an API key for thecatapi
-    # headers = {"x-api-key": "YOUR_CAT_API_KEY"}
     headers = {}
     logger.info("Fetching random cat GIF from thecatapi...")
     try:
@@ -1346,7 +1341,6 @@ async def gif(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Fetches and sends a random cat photo."""
     API_URL = "https://api.thecatapi.com/v1/images/search?limit=1&mime_types=jpg,png"
-    # headers = {"x-api-key": "YOUR_CAT_API_KEY"}
     headers = {}
     logger.info("Fetching random cat photo from thecatapi...")
     try:
