@@ -1594,7 +1594,6 @@ async def handle_new_group_members(update: Update, context: ContextTypes.DEFAULT
     bot_id = context.bot.id
 
     for member in update.message.new_chat_members:
-        # 1. Czy to WŁAŚCICIEL dołączył?
         if OWNER_ID and member.id == OWNER_ID:
             logger.info(f"Owner {OWNER_ID} joined chat {chat.id} ('{chat.title}')")
             owner_mention = member.mention_html()
