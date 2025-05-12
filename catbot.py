@@ -1212,7 +1212,7 @@ Meeeow! 🐾 Here are the commands you can use:
 /hug [reply/@user] - Offer a comforting hug! 🤗
 
 <i>(Note: Owner cannot be targeted by attack/kill/punch/slap/bite)</i>
-Owner Only Commands (Hidden):
+Owner Only Commands:
   /status - Show bot status.
   /say [optional_chat_id] [your text] - Send message as bot.
   /leave [optional_chat_id] - Make the bot leave a chat.
