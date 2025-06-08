@@ -1370,7 +1370,7 @@ def format_user_info(user: User, chat_member_status_str: str | None = None, is_o
 
     if blacklist_reason_str is not None:
         info_lines.append(f"  <b>• Blacklisted:</b> <code>Yes</code>")
-        info_lines.append(f"     <b>Reason:</b> {html.escape(blacklist_reason_str)}")
+        info_lines.append(f"<b>Reason:</b> {html.escape(blacklist_reason_str)}")
     else:
         info_lines.append(f"  <b>• Blacklisted:</b> <code>No</code>")
     return "\n".join(info_lines)
