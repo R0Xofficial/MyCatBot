@@ -1279,15 +1279,15 @@ def format_user_info(user: User, chat_member_status_str: str | None = None, is_o
 
     if chat_member_status_str:
         display_status = ""
-        if chat_member_status_str == ChatMemberStatus.CREATOR:
+        if chat_member_status_str == ChatMemberStatus.Creator:
             display_status = "Creator ✨"
-        elif chat_member_status_str == ChatMemberStatus.ADMINISTRATOR:
+        elif chat_member_status_str == ChatMemberStatus.Administrator:
             display_status = "Administrator 🛡️"
-        elif chat_member_status_str == ChatMemberStatus.MEMBER:
+        elif chat_member_status_str == ChatMemberStatus.Member:
             display_status = "Member 👤"
-        elif chat_member_status_str == ChatMemberStatus.LEFT:
+        elif chat_member_status_str == ChatMemberStatus.Left:
             display_status = "Not in chat 🚶"
-        elif chat_member_status_str == ChatMemberStatus.KICKED:
+        elif chat_member_status_str == ChatMemberStatus.Kicked:
             display_status = "Banned 🚫"
         elif chat_member_status_str == "not_a_member":
             display_status = "Not in chat 🤷"
