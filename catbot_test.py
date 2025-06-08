@@ -1327,34 +1327,38 @@ async def user_info(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     elif context.args:
         target_id_str = context.args[0]
-	try:
-	    if target_id_str.startswith("@"):
-		        fresh_chat_info_for_id = await context.bot.get_chat(target_id_str)
-	    else:
-		user_id_int = int(target_id_str)
-		fresh_chat_info_for_id = await context.bot.get_chat(user_id_int)
-            if fresh_chat_info_for_id.type == ChatType.PRIVATE:
-                initial_target_user = User(
-                    id=fresh_chat_info_for_id.id,
-                    first_name=fresh_chat_info_for_id.first_name or "",
-                    is_bot=getattr(fresh_chat_info_for_id, 'is_bot', False),
-                    username=fresh_chat_info_for_id.username,
-                    last_name=fresh_chat_info_for_id.last_name
-                )
-                logger.info(f"/info identified by ID: {initial_target_user.id}, initial is_bot: {initial_target_user.is_bot}")
+        logger.info(f"/info target is argument: {target_id_str}")
+        try:
+            chat_id_to_fetch: int | str
+            if target_id_str.startswith("@"):
+                chat_id_to_fetch = target_id_str
             else:
-                 await update.message.reply_text(f"Mrow? ID '{user_id_int}' doesn't appear to be a user (it's a {fresh_chat_info_for_id.type}).")
-                 return
+                chat_id_to_fetch = int(target_id_str) # Może rzucić ValueError
+
+            fresh_chat_info_for_arg = await context.bot.get_chat(chat_id_to_fetch)
+            
+            if fresh_chat_info_for_arg.type == ChatType.PRIVATE:
+                initial_target_user = User(
+                    id=fresh_chat_info_for_arg.id,
+                    first_name=fresh_chat_info_for_arg.first_name or "",
+                    is_bot=getattr(fresh_chat_info_for_arg, 'is_bot', False),
+                    username=fresh_chat_info_for_arg.username,
+                    last_name=fresh_chat_info_for_arg.last_name
+                )
+                logger.info(f"/info identified by argument: {initial_target_user.id}, initial is_bot: {initial_target_user.is_bot}")
+            else:
+                await update.message.reply_text(f"Mrow? '{html.escape(target_id_str)}' doesn't appear to be a user (it's a {fresh_chat_info_for_arg.type}).")
+                return
         except ValueError:
-            await update.message.reply_text(f"Mrow? Invalid user ID format: '{html.escape(target_id_str)}'. Please provide a numeric ID.")
+            await update.message.reply_text(f"Mrow? Invalid user ID/username format: '{html.escape(target_id_str)}'. Please provide a numeric ID or @username.")
             return
         except TelegramError as e:
-            logger.error(f"Error fetching user/chat info for ID '{target_id_str}': {e}")
-            await update.message.reply_text(f"😿 Couldn't find or access user info for ID '{html.escape(target_id_str)}': {e}")
+            logger.error(f"Error fetching user/chat info for argument '{target_id_str}': {e}")
+            await update.message.reply_text(f"😿 Couldn't find or access user info for '{html.escape(target_id_str)}': {e}")
             return
         except Exception as e:
-            logger.error(f"Unexpected error processing ID '{target_id_str}' for /info: {e}", exc_info=True)
-            await update.message.reply_text(f"💥 An unexpected error occurred processing ID '{html.escape(target_id_str)}'.")
+            logger.error(f"Unexpected error processing argument '{target_id_str}' for /info: {e}", exc_info=True)
+            await update.message.reply_text(f"💥 An unexpected error occurred processing '{html.escape(target_id_str)}'.")
             return
     else:
         initial_target_user = update.effective_user
@@ -1375,11 +1379,12 @@ async def user_info(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                     member_status_in_current_chat = "not_a_member"
             except Exception as e:
                 logger.error(f"Unexpected error getting chat member status: {e}", exc_info=True)
+        
         try:
             fresh_chat_info = await context.bot.get_chat(chat_id=initial_target_user.id)
             
             is_bot_flag = getattr(fresh_chat_info, 'is_bot', None)
-            if is_bot_flag is None and initial_target_user:
+            if is_bot_flag is None and initial_target_user: # Użyj flagi z initial_target_user jeśli fresh_chat_info jej nie ma
                 is_bot_flag = initial_target_user.is_bot
 
             target_user_to_display = User(
@@ -1387,7 +1392,7 @@ async def user_info(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 first_name=fresh_chat_info.first_name or "",
                 last_name=fresh_chat_info.last_name,
                 username=fresh_chat_info.username,
-                is_bot=is_bot_flag if is_bot_flag is not None else False, # Fallback na False jeśli nadal None
+                is_bot=is_bot_flag if is_bot_flag is not None else False,
                 language_code=getattr(initial_target_user, 'language_code', getattr(fresh_chat_info, 'language_code', None))
             )
             logger.info(f"Refreshed user data for {target_user_to_display.id} from API. First Name: '{target_user_to_display.first_name}', Is Bot: {target_user_to_display.is_bot}")
@@ -1416,7 +1421,7 @@ async def user_info(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     else:
         logger.warning("/info command reached end without an initial_target_user.")
         await update.message.reply_text("Mrow? Couldn't determine who to get info for.")
-        
+    
 # --- Simple Text Command Definitions ---
 async def send_random_text(update: Update, context: ContextTypes.DEFAULT_TYPE, text_list: list[str], list_name: str) -> None:
     if not text_list: logger.warning(f"Empty list: '{list_name}'"); await update.message.reply_text("Mrow? Internal error: Text list empty. 😿"); return
