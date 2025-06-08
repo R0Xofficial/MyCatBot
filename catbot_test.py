@@ -1337,8 +1337,8 @@ Owner Only Commands
   /status - Show bot status.
   /say [optional_chat_id] [your text] - Send message as bot.
   /leave [optional_chat_id] - Make the bot leave a chat.
-  /blacklist <ID/reply> [reason] - Add user to blacklist.
-  /unblacklist <ID/reply> - Remove user from blacklist.
+  /blacklist [ID/reply] [reason] - Add user to blacklist.
+  /unblacklist [ID/reply] - Remove user from blacklist.
 """
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
