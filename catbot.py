@@ -1360,7 +1360,7 @@ def format_user_info(user: User, chat_member_status_str: str | None = None, is_o
     permalink_url = f"tg://user?id={user_id}"
     permalink_text_display = "Link" 
     permalink_html = f"<a href=\"{permalink_url}\">{permalink_text_display}</a>"
-    info_lines = [f"👤 <b>User Information:</b>"]
+    info_lines = [f"👤 <b>User Information:</b>\n"]
     info_lines.extend([f"<b>• ID:</b> <code>{user_id}</code>", f"<b>• First Name:</b> {first_name}"])
     if user.last_name: info_lines.append(f"<b>• Last Name:</b> {last_name}")
     info_lines.extend([f"<b>• Username:</b> {username_display}", f"<b>• Permalink:</b> {permalink_html}", f"<b>• Is Bot:</b> <code>{is_bot_str}</code>", f"<b>• Language Code:</b> <code>{language_code}</code>"])
