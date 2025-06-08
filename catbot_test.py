@@ -1475,11 +1475,22 @@ async def user_info(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def send_random_text(update: Update, context: ContextTypes.DEFAULT_TYPE, text_list: list[str], list_name: str) -> None:
     if not text_list: logger.warning(f"Empty list: '{list_name}'"); await update.message.reply_text("Mrow? Internal error: Text list empty. 😿"); return
     chosen_text = random.choice(text_list)
-    try: await update.message.reply_html(chosen_text)
-    except TelegramError as e_html: logger.error(f"TelegramError sending HTML for {list_name}: {e_html}. Trying plain."); try: await update.message.reply_text(chosen_text); logger.info(f"Sent plain fallback for {list_name}.")
-    except Exception as e_plain: logger.error(f"Fallback plain failed for {list_name}: {e_plain}")
-    except Exception as e_other: logger.error(f"Unexpected error sending HTML for {list_name}: {e_other}", exc_info=True); try: await update.message.reply_text(chosen_text); logger.info(f"Sent plain fallback for {list_name} after error.")
-    except Exception as e_plain_fallback: logger.error(f"Fallback plain also failed for {list_name} after error: {e_plain_fallback}")
+    try:
+        await update.message.reply_html(chosen_text)
+    except TelegramError as e_html:
+        logger.error(f"TelegramError sending HTML reply for {list_name}: {e_html}. Trying plain text.")
+        try:
+            await update.message.reply_text(chosen_text)
+            logger.info(f"Sent plain text fallback for {list_name}.")
+        except Exception as e_plain:
+            logger.error(f"Fallback plain text reply also failed for {list_name}: {e_plain}")
+    except Exception as e_other:
+        logger.error(f"Unexpected error sending HTML reply for {list_name}: {e_other}", exc_info=True)
+        try:
+            await update.message.reply_text(chosen_text) # Fallback na zwykły tekst
+            logger.info(f"Sent plain text fallback for {list_name} after unexpected error.")
+        except Exception as e_plain_fallback:
+            logger.error(f"Fallback plain text reply also failed for {list_name} after unexpected error: {e_plain_fallback}")
 
 async def meow(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None: await send_random_text(update, context, MEOW_TEXTS, "MEOW_TEXTS")
 async def nap(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None: await send_random_text(update, context, NAP_TEXTS, "NAP_TEXTS")
