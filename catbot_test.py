@@ -1271,17 +1271,10 @@ def format_user_info(user: User, chat_member_status_str: str | None = None, is_o
     is_bot_str = "Yes" if user.is_bot else "No"
     language_code = user.language_code or "N/A"
 
-    permalink_url = ""
-    permalink_text = ""
-    if user.username:
-        permalink_text = f"@{html.escape(user.username)}"
-        permalink_url = f"https://t.me/{html.escape(user.username)}"
-    else:
-        permalink_text = html.escape(user.full_name or user.first_name or f"User {user_id}")
-        permalink_url = f"tg://user?id={user_id}"
+    permalink_url = f"tg://user?id={user_id}"
+    permalink_text_display = "Link" 
+    permalink_html = f"<a href=\"{permalink_url}\">{permalink_text_display}</a>"
     
-    permalink_html = f"<a href=\"{permalink_url}\">{permalink_text}</a>"
-
     info_lines = [
         f"👤 <b>User Information:</b>",
     ]
