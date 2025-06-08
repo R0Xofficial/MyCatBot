@@ -1265,16 +1265,16 @@ def format_user_info(user: User, chat_member_status_str: str | None = None, is_o
         info_lines.append(f"\n<b>{random.choice(OWNER_INFO_EXTRA_LINES)}</b>\n")
     
     info_lines.extend([
-        f"   <b>• ID:</b> <code>{user_id}</code>",
-        f"   <b>• First Name:</b> {first_name}",
+        f"   <b>ID:</b> <code>{user_id}</code>",
+        f"   <b>First Name:</b> {first_name}",
     ])
     if user.last_name:
         info_lines.append(f"   <b>Last Name:</b> {last_name}")
     info_lines.extend([
-        f"   <b>• Username:</b> {username}",
-        f"   <b>• Mention:</b> {mention_html}",
-        f"   <b>• Is Bot:</b> {is_bot_str}",
-        f"   <b>• Language Code:</b> {language_code}"
+        f"   <b>Username:</b> {username}",
+        f"   <b>Mention:</b> {mention_html}",
+        f"   <b>Is Bot:</b> {is_bot_str}",
+        f"   <b>Language Code:</b> {language_code}"
     ])
 
     if chat_member_status_str:
@@ -1294,7 +1294,7 @@ def format_user_info(user: User, chat_member_status_str: str | None = None, is_o
         else:
             display_status = chat_member_status_str.replace('_', ' ').capitalize()
         
-        info_lines.append(f"   <b>• Status:</b> {html.escape(display_status)}")
+        info_lines.append(f"   <b>Status:</b> {html.escape(display_status)}")
 
     return "\n".join(info_lines)
 
