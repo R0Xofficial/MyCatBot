@@ -1841,7 +1841,6 @@ async def handle_new_group_members(update: Update, context: ContextTypes.DEFAULT
     bot_id = context.bot.id
 
     for member in update.message.new_chat_members:
-        # 1. Czy to WŁAŚCICIEL dołączył?
         if OWNER_ID and member.id == OWNER_ID:
             logger.info(f"Owner {OWNER_ID} joined chat {chat.id} ('{chat.title}')")
             owner_mention = member.mention_html()
@@ -1889,7 +1888,7 @@ async def handle_new_group_members(update: Update, context: ContextTypes.DEFAULT
             if OWNER_ID:
                 logger.info(f"!!! Attempting PM to OWNER_ID: {OWNER_ID} !!!")
                 try:
-                    pm_text = (f"Meow! 🐾 Added to group:\n<b>Name:</b> {safe_chat_title}\n<b>ID:</b> <code>{chat_id}</code>{link_line}")
+                    pm_text = (f" #ADDEDTOGROUP\ngGroup Name:\n<b>Name:</b> {safe_chat_title}\n<b>ID:</b> <code>{chat_id}</code>{link_line}")
                     await context.bot.send_message(chat_id=OWNER_ID, text=pm_text, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
                     logger.info(f"Sent join notification to owner ({OWNER_ID}) for group {chat_id}.")
                 except Exception as e:
