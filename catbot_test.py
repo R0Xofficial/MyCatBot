@@ -1261,6 +1261,9 @@ def format_user_info(user: User, chat_member_status: str | None = None, is_owner
     info_lines = [
         f"👤 <b>User Information:</b>",
     ]
+
+    if is_owner and OWNER_INFO_EXTRA_LINES:
+        info_lines.append(f"  <b>✨ {random.choice(OWNER_INFO_EXTRA_LINES)} ✨</b>")
     
         info_lines.extend([
         f"  <b>ID:</b> <code>{user_id}</code>",
@@ -1278,9 +1281,6 @@ def format_user_info(user: User, chat_member_status: str | None = None, is_owner
     if chat_member_status:
         formatted_status = chat_member_status.replace('_', ' ').capitalize()
         info_lines.append(f"  <b>Status in this chat:</b> {html.escape(formatted_status)}")
-
-    if is_owner and OWNER_INFO_EXTRA_LINES:
-        info_lines.append(f"  <b>{random.choice(OWNER_INFO_EXTRA_LINES)}</b>")
 
     return "\n".join(info_lines)
 
