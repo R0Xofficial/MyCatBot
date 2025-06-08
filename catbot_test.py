@@ -1504,25 +1504,36 @@ async def _handle_action_command(update: Update, context: ContextTypes.DEFAULT_T
     if not action_texts: logger.warning(f"List '{command_name.upper()}_TEXTS' empty!"); await update.message.reply_text(f"Mrow? No texts for /{command_name}. 😿"); return
     target_mention = None; is_protected = False; is_owner = False
     if target_required:
-        if update.message.reply_to_message: target_user = update.message.reply_to_message.from_user; is_protected = await check_target_protection(target_user.id, context); is_owner = (target_user.id == OWNER_ID)
-        if is_protected: refusal_list = (CANT_TARGET_OWNER_HUG_TEXTS if is_owner else CANT_TARGET_SELF_HUG_TEXTS) if hug_command else (CANT_TARGET_OWNER_TEXTS if is_owner else CANT_TARGET_SELF_TEXTS); await update.message.reply_html(random.choice(refusal_list)); return
-        target_mention = target_user.mention_html()
-        elif context.args and context.args[0].startswith('@'): target_mention_str = context.args[0].strip(); is_protected, is_owner = await check_username_protection(target_mention_str, context)
-        if is_protected: refusal_list = (CANT_TARGET_OWNER_HUG_TEXTS if is_owner else CANT_TARGET_SELF_HUG_TEXTS) if hug_command else (CANT_TARGET_OWNER_TEXTS if is_owner else CANT_TARGET_SELF_TEXTS); await update.message.reply_html(random.choice(refusal_list)); return
-        target_mention = target_mention_str
+        if update.message.reply_to_message:
+            target_user = update.message.reply_to_message.from_user; is_protected = await check_target_protection(target_user.id, context); is_owner = (target_user.id == OWNER_ID)
+            if is_protected: refusal_list = (CANT_TARGET_OWNER_HUG_TEXTS if is_owner else CANT_TARGET_SELF_HUG_TEXTS) if hug_command else (CANT_TARGET_OWNER_TEXTS if is_owner else CANT_TARGET_SELF_TEXTS); await update.message.reply_html(random.choice(refusal_list)); return
+            target_mention = target_user.mention_html()
+        elif context.args and context.args[0].startswith('@'):
+            target_mention_str = context.args[0].strip(); is_protected, is_owner = await check_username_protection(target_mention_str, context)
+            if is_protected: refusal_list = (CANT_TARGET_OWNER_HUG_TEXTS if is_owner else CANT_TARGET_SELF_HUG_TEXTS) if hug_command else (CANT_TARGET_OWNER_TEXTS if is_owner else CANT_TARGET_SELF_TEXTS); await update.message.reply_html(random.choice(refusal_list)); return
+            target_mention = target_mention_str
         else: await update.message.reply_text(target_required_msg); return
     gif_url = await get_themed_gif(context, gif_search_terms)
     message_text = random.choice(action_texts)
     if "{target}" in message_text: effective_target = target_mention if target_required else update.effective_user.mention_html(); message_text = message_text.format(target=effective_target) if effective_target else message_text.replace("{target}", "someone")
+
     try:
         if gif_url: await update.message.reply_animation(animation=gif_url, caption=message_text, parse_mode=ParseMode.HTML)
         else: await update.message.reply_html(message_text)
-    except TelegramError as e_primary: logger.error(f"TelegramError sending {command_name}: {e_primary}. Fallback."); try: await update.message.reply_html(message_text); logger.info(f"Sent fallback HTML for {command_name}.")
-    except Exception as e_html_fallback: logger.error(f"Fallback HTML failed for {command_name}: {e_html_fallback}. Trying plain."); try: await update.message.reply_text(message_text); logger.info(f"Sent fallback plain for {command_name}.")
-    except Exception as e_plain_fallback: logger.error(f"Fallback plain also failed for {command_name}: {e_plain_fallback}")
-    except Exception as e_other: logger.error(f"Unexpected error sending {command_name}: {e_other}", exc_info=True); try: await update.message.reply_html(message_text); logger.info(f"Sent fallback HTML for {command_name} after error.")
-    except Exception as e_html_fallback: logger.error(f"Fallback HTML failed for {command_name} after error: {e_html_fallback}. Trying plain."); try: await update.message.reply_text(message_text); logger.info(f"Sent fallback plain for {command_name} after error.")
-    except Exception as e_plain_fallback: logger.error(f"Fallback plain also failed for {command_name} after error: {e_plain_fallback}")
+    except TelegramError as e_primary:
+        logger.error(f"TelegramError sending {command_name} (animation/HTML): {e_primary}. Trying HTML fallback.")
+        try: await update.message.reply_html(message_text); logger.info(f"Sent fallback HTML for {command_name}.")
+        except Exception as e_html_fallback:
+            logger.error(f"Fallback HTML failed for {command_name}: {e_html_fallback}. Trying plain text.")
+            try: await update.message.reply_text(message_text); logger.info(f"Sent fallback plain text for {command_name}.")
+            except Exception as e_plain_fallback: logger.error(f"Fallback plain text also failed for {command_name}: {e_plain_fallback}")
+    except Exception as e_other:
+        logger.error(f"Unexpected error sending {command_name} (animation/HTML): {e_other}", exc_info=True)
+        try: await update.message.reply_html(message_text); logger.info(f"Sent fallback HTML for {command_name} after unexpected error.")
+        except Exception as e_html_fallback:
+             logger.error(f"Fallback HTML failed for {command_name} after unexpected error: {e_html_fallback}. Trying plain text.")
+             try: await update.message.reply_text(message_text); logger.info(f"Sent fallback plain text for {command_name} after unexpected error.")
+             except Exception as e_plain_fallback: logger.error(f"Fallback plain text also failed for {command_name} after unexpected error: {e_plain_fallback}")
 
 # Simulation Command Definitions
 async def fed(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None: await _handle_action_command(update, context, FED_TEXTS, ["cat eating", "cat food", "cat nom"], "fed", False)
