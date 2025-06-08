@@ -1341,7 +1341,7 @@ async def owner_info(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     else: await update.message.reply_text("Meow? Owner info not configured! 😿")
 
 # --- User Info Command ---
-def format_user_info(user: User, chat_member_status_str: str | None = None, is_owner: bool = False, is_blacklisted_flag: bool = False) -> str:
+def format_user_info(user: User, chat_member_status_str: str | None = None, is_owner: bool = False, blacklist_reason_str: str | None = None) -> str:
     user_id = user.id
     first_name = html.escape(user.first_name or "N/A")
     last_name = html.escape(user.last_name or "")
@@ -1367,7 +1367,15 @@ def format_user_info(user: User, chat_member_status_str: str | None = None, is_o
         else: display_status = f"<code>{html.escape(chat_member_status_str.replace('_', ' ').capitalize())}</code>"
         info_lines.append(f"  <b>• Status:</b> {display_status}\n")
         if is_owner: info_lines.append(f"  <b>• Bot Owner:</b> <code>Yes</code>")
-    info_lines.append(f"  <b>• Blacklisted:</b> {'<code>Yes</code>' if is_blacklisted_flag else '<code>No</code>'}")
+
+    if blacklist_reason_str is not None:
+        info_lines.append(f"  <b>• Blacklisted:</b> <code>Yes</code>")
+        info_lines.append(f"    <b>Reason:</b> {html.escape(blacklist_reason_str)}")
+        if OWNER_ID:
+            owner_mention_html = f"<code>{OWNER_ID}</code>" 
+            info_lines.append(f"    <i>(To appeal, contact my Owner: {owner_mention_html})</i>")
+    else:
+        info_lines.append(f"  <b>• Blacklisted:</b> <code>No</code>")
     return "\n".join(info_lines)
 
 async def user_info(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -1379,6 +1387,7 @@ async def user_info(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if update.message.reply_to_message:
         initial_target_user = update.message.reply_to_message.from_user
         logger.info(f"/info target is replied user: {initial_target_user.id}, is_bot: {initial_target_user.is_bot}")
+
     elif context.args:
         target_id_str = context.args[0]
         logger.info(f"/info target is argument: {target_id_str}")
@@ -1428,7 +1437,7 @@ async def user_info(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if initial_target_user:
         is_target_owner = (OWNER_ID is not None and initial_target_user.id == OWNER_ID)
         member_status_in_current_chat: str | None = None
-        user_is_blacklisted = is_user_blacklisted(initial_target_user.id)
+        blacklist_reason_from_db = get_blacklist_reason(initial_target_user.id)
 
         if current_chat_id != initial_target_user.id and update.effective_chat.type in [ChatType.GROUP, ChatType.SUPERGROUP]:
             try:
@@ -1474,7 +1483,7 @@ async def user_info(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 logger.error(f"Failed to get any displayable user data after unexpected error for ID: {initial_target_user.id if initial_target_user else 'Unknown'}")
 
         if target_user_to_display:
-            info_message = format_user_info(target_user_to_display, member_status_in_current_chat, is_target_owner, user_is_blacklisted)
+            info_message = format_user_info(target_user_to_display, member_status_in_current_chat, is_target_owner, blacklist_reason_from_db)
             await update.message.reply_html(info_message)
         else:
             user_id_for_error = initial_target_user.id if initial_target_user else 'Unknown'
