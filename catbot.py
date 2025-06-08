@@ -7,22 +7,19 @@ import logging
 import random
 import os
 import datetime
-import requests # Needed for /gif, /photo, and OPTIONAL themed GIFs
-import html # Needed for escaping chat titles
-from typing import List, Tuple # For type hinting
+import requests
+import html
+import sqlite3
+from typing import List, Tuple
 from telegram import Update, User, constants
-# Import ChatType, ParseMode, ChatMemberStatus explicitly
 from telegram.constants import ChatType, ParseMode, ChatMemberStatus
-# Import necessary extensions
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
-# Import error type
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, ApplicationHandlerStop # Dodano ApplicationHandlerStop
 from telegram.error import TelegramError
 
 # --- Logging Configuration ---
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
 )
-# Reduce log noise from underlying libraries
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("telegram.vendor.ptb_urllib3.urllib3").setLevel(logging.WARNING)
 logging.getLogger("httpcore").setLevel(logging.WARNING)
@@ -32,36 +29,131 @@ logger = logging.getLogger(__name__)
 OWNER_ID = None
 BOT_START_TIME = datetime.datetime.now()
 TENOR_API_KEY = None
+DB_NAME = "catbot_data.db"
 
 # --- Load configuration from environment variables ---
 try:
     owner_id_str = os.getenv("TELEGRAM_OWNER_ID")
-    if owner_id_str:
-        OWNER_ID = int(owner_id_str)
-        logger.info(f"Owner ID loaded: {OWNER_ID}")
-    else:
-        raise ValueError("TELEGRAM_OWNER_ID environment variable not set or empty")
-except (ValueError, TypeError) as e:
-    logger.critical(f"CRITICAL: Invalid or missing TELEGRAM_OWNER_ID: {e}")
-    print(f"\n--- FATAL ERROR --- \nInvalid or missing TELEGRAM_OWNER_ID environment variable.")
-    exit(1)
-except Exception as e:
-    logger.critical(f"CRITICAL: Unexpected error loading OWNER_ID: {e}")
-    print(f"\n--- FATAL ERROR --- \nUnexpected error loading OWNER_ID: {e}")
-    exit(1)
+    if owner_id_str: OWNER_ID = int(owner_id_str); logger.info(f"Owner ID loaded: {OWNER_ID}")
+    else: raise ValueError("TELEGRAM_OWNER_ID environment variable not set or empty")
+except (ValueError, TypeError) as e: logger.critical(f"CRITICAL: Invalid or missing TELEGRAM_OWNER_ID: {e}"); print(f"\n--- FATAL ERROR --- \nInvalid or missing TELEGRAM_OWNER_ID."); exit(1)
+except Exception as e: logger.critical(f"CRITICAL: Unexpected error loading OWNER_ID: {e}"); print(f"\n--- FATAL ERROR --- \nUnexpected error loading OWNER_ID: {e}"); exit(1)
 
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-if not BOT_TOKEN:
-    logger.critical("CRITICAL: TELEGRAM_BOT_TOKEN environment variable not set!")
-    print("\n--- FATAL ERROR --- \nEnvironment variable TELEGRAM_BOT_TOKEN is not set.")
-    exit(1)
+if not BOT_TOKEN: logger.critical("CRITICAL: TELEGRAM_BOT_TOKEN not set!"); print("\n--- FATAL ERROR --- \nTELEGRAM_BOT_TOKEN is not set."); exit(1)
 
 TENOR_API_KEY = os.getenv("TENOR_API_KEY")
-if not TENOR_API_KEY:
-    logger.warning("WARNING: TENOR_API_KEY not set. Themed GIFs for action commands will be disabled.")
-else:
-    logger.info("Tenor API Key loaded. Themed GIFs enabled.")
+if not TENOR_API_KEY: logger.warning("WARNING: TENOR_API_KEY not set. Themed GIFs disabled.")
+else: logger.info("Tenor API Key loaded. Themed GIFs enabled.")
 
+# --- Database Initialization ---
+def init_db():
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_NAME)
+        cursor = conn.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                user_id INTEGER PRIMARY KEY, username TEXT, first_name TEXT, last_name TEXT,
+                language_code TEXT, is_bot INTEGER, last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_username ON users (username)")
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS blacklist (
+                user_id INTEGER PRIMARY KEY, reason TEXT,
+                banned_by_id INTEGER, timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        conn.commit()
+        logger.info(f"Database '{DB_NAME}' initialized successfully (tables users, blacklist ensured).")
+    except sqlite3.Error as e: logger.error(f"SQLite error during DB initialization: {e}", exc_info=True)
+    finally:
+        if conn: conn.close()
+
+# --- Blacklist Helper Functions ---
+def add_to_blacklist(user_id: int, banned_by_id: int, reason: str | None = "No reason provided.") -> bool:
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_NAME)
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT OR IGNORE INTO blacklist (user_id, reason, banned_by_id) VALUES (?, ?, ?)",
+            (user_id, reason, banned_by_id)
+        )
+        conn.commit()
+        return cursor.rowcount > 0
+    except sqlite3.Error as e:
+        logger.error(f"SQLite error adding user {user_id} to blacklist: {e}", exc_info=True)
+        return False
+    finally:
+        if conn:
+            conn.close()
+
+def remove_from_blacklist(user_id: int) -> bool:
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_NAME)
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM blacklist WHERE user_id = ?", (user_id,))
+        conn.commit()
+        return cursor.rowcount > 0
+    except sqlite3.Error as e:
+        logger.error(f"SQLite error removing user {user_id} from blacklist: {e}", exc_info=True)
+        return False
+    finally:
+        if conn:
+            conn.close()
+
+def is_user_blacklisted(user_id: int) -> bool:
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_NAME)
+        cursor = conn.cursor()
+        cursor.execute("SELECT 1 FROM blacklist WHERE user_id = ?", (user_id,))
+        return cursor.fetchone() is not None
+    except sqlite3.Error as e:
+        logger.error(f"SQLite error checking blacklist for user {user_id}: {e}", exc_info=True)
+        return False
+    finally:
+        if conn:
+            conn.close()
+
+# --- Blacklist Check Handler ---
+async def check_blacklist_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """
+    Checks if the user is blacklisted. If so, sends a message and stops further processing.
+    Owner always bypasses. This handler should have a high priority (low group number).
+    """
+    if not update.message or not update.effective_user:
+        return
+
+    user = update.effective_user
+
+    if user.id == OWNER_ID:
+        return
+
+    if is_user_blacklisted(user.id):
+        user_mention_log = f"@{user.username}" if user.username else str(user.id)
+        logger.info(f"User {user.id} ({user_mention_log}) is blacklisted. Blocking their interaction.")
+        
+        owner_mention_html = f"<code>{OWNER_ID}</code>"
+        try:
+            owner_chat = await context.bot.get_chat(OWNER_ID)
+            owner_mention_html = owner_chat.mention_html()
+        except Exception as e:
+            logger.warning(f"Could not fetch owner's mention for blacklist response: {e}")
+
+        response_text = "Mrow! Your access has been restricted."
+        if BLACKLISTED_USER_RESPONSE_TEXTS:
+            response_text = random.choice(BLACKLISTED_USER_RESPONSE_TEXTS).format(owner_mention=owner_mention_html)
+        
+        try:
+            await update.message.reply_html(response_text)
+        except Exception as e:
+            logger.error(f"Failed to send blacklist notification to user {user.id}: {e}")
+
+        raise ApplicationHandlerStop
 
 # --- CAT TEXTS SECTION ---
 # /meow texts - General cat noises and behaviors
@@ -1130,38 +1222,20 @@ OWNER_ONLY_REFUSAL = [ # Needed for /status and /say
     "This command requires Owner-level magic. Ask {owner_mention}.",
     "Nope. That's an {owner_mention}-only button.",
 ]
-OWNER_INFO_EXTRA_LINES = [
-    "🐾 This is my hooman. They serve me snacks and praise. I allow it.",
-    "😼 My official can opener and litter box technician.",
-    "🐱 Bringer of tuna, scratcher of ears, warmer of laps.",
-    "🛋️ My designated nap cushion. Do not sit there.",
-    "🐟 Authorized distributor of treats. Proceed with purring.",
-    "🧹 The one who scoops the sacred sand. Truly devoted.",
-    "🧶 My toy thrower and accidental laser pointer wielder.",
-    "👑 Serves royalty (me) with dignity and daily kibble.",
-    "📦 Brings boxes for me to ignore and then sit in.",
-    "💤 Understands that 18 naps a day is *normal*.",
-    "🥣 Refills my bowl without question. Trained to obey.",
-    "🐾 Pawsitively my favorite servant. They know the rules.",
-    "📱 Drops everything when I meow near the phone. Good.",
-    "🐾 Lets me walk across the keyboard like a proper cat god.",
-    "😹 Meows back at me. Communication level: Excellent hooman.",
-    "🎣 Waves string like it's their full-time job. Respect.",
-    "🐈‍⬛ Signed the sacred treaty of belly rubs (at own risk).",
-    "🪶 Keeps the bird videos coming. I’m entertained.",
-    "😴 Doesn’t mind that I wake them at 3AM. Loyal.",
-    "🚪 Opens doors I just meowed at. Then I walk away. Perfect."
+
+BLACKLISTED_USER_RESPONSE_TEXTS = [
+    "Meeeow... 😿 It seems you are on my naughty list. Please contact my Owner ({owner_mention}) if you believe this is a mistake.",
+    "Hiss!  доступа нет! You've been blacklisted. For appeals, contact my human: {owner_mention}.",
+    "Purrrr... Unfortunately, your access to my purrfect services has been restricted. My Owner, {owner_mention}, might be able to help.",
+    "Access Denied: Feline Unit 734 has placed you on a temporary (or permanent) timeout. Contact Supervisor: {owner_mention}.",
+    "My apologies, but I cannot process your request at this time. You appear to be on the blacklist. My Owner: {owner_mention}.",
 ]
 # --- END OF TEXT SECTION ---
 
 # --- Utility Functions ---
 def get_readable_time_delta(delta: datetime.timedelta) -> str:
-    total_seconds = int(delta.total_seconds())
-    if total_seconds < 0: return "0s"
-    days, rem = divmod(total_seconds, 86400)
-    hours, rem = divmod(rem, 3600)
-    minutes, seconds = divmod(rem, 60)
-    parts = []
+    total_seconds = int(delta.total_seconds()); days, rem = divmod(total_seconds, 86400); hours, rem = divmod(rem, 3600); minutes, seconds = divmod(rem, 60)
+    parts = [];
     if days > 0: parts.append(f"{days}d")
     if hours > 0: parts.append(f"{hours}h")
     if minutes > 0: parts.append(f"{minutes}m")
@@ -1234,10 +1308,12 @@ Meeeow! 🐾 Here are the commands you can use:
 /bite [reply/@user] - Take a playful bite! 😬
 /hug [reply/@user] - Offer a comforting hug! 🤗
 
-Owner Only Commands:
+Owner Only Commands
   /status - Show bot status.
   /say [optional_chat_id] [your text] - Send message as bot.
   /leave [optional_chat_id] - Make the bot leave a chat.
+  /blacklist [ID/reply] [reason] - Add user to blacklist.
+  /unblacklist [ID/reply] - Remove user from blacklist.
 """
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -1248,7 +1324,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     await update.message.reply_html(HELP_TEXT, disable_web_page_preview=True)
 
 async def github(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    github_link = "https://github.com/R0Xofficial/MyCatbot" # Sprawdź poprawność linku
+    github_link = "https://github.com/R0Xofficial/MyCatbot"
     await update.message.reply_text(f"Meeeow! I'm open source! 💻 Here is my code: {github_link}", disable_web_page_preview=True)
 
 async def owner_info(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -1262,61 +1338,34 @@ async def owner_info(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     else: await update.message.reply_text("Meow? Owner info not configured! 😿")
 
 # --- User Info Command ---
-def format_user_info(user: User, chat_member_status_str: str | None = None, is_owner: bool = False) -> str:
+def format_user_info(user: User, chat_member_status_str: str | None = None, is_owner: bool = False, is_blacklisted_flag: bool = False) -> str:
     user_id = user.id
     first_name = html.escape(user.first_name or "N/A")
     last_name = html.escape(user.last_name or "")
     username_display = f"@{html.escape(user.username)}" if user.username else "N/A"
     is_bot_str = "Yes" if user.is_bot else "No"
     language_code = user.language_code or "N/A"
-
     permalink_url = f"tg://user?id={user_id}"
     permalink_text_display = "Link" 
     permalink_html = f"<a href=\"{permalink_url}\">{permalink_text_display}</a>"
-    
-    info_lines = [
-        f"👤 <b>User Information:</b>",
-    ]
-
-    if is_owner and OWNER_INFO_EXTRA_LINES:
-        info_lines.append(f"\n<b>{random.choice(OWNER_INFO_EXTRA_LINES)}</b>\n")
-    
-    info_lines.extend([
-        f"  <b>• ID:</b> <code>{user_id}</code>",
-        f"  <b>• First Name:</b> {first_name}",
-    ])
-    if user.last_name:
-        info_lines.append(f"  <b>• Last Name:</b> {last_name}")
-    info_lines.extend([
-        f"  <b>• Username:</b> {username_display}",
-        f"  <b>• Permalink:</b> {permalink_html}",
-        f"  <b>• Is Bot:</b> <code>{is_bot_str}</code>",
-        f"  <b>• Language Code:</b> <code>{language_code}</code>"
-    ])
-
+    info_lines = [f"👤 <b>User Information:</b>"]
+    info_lines.extend([f"  <b>• ID:</b> <code>{user_id}</code>", f"  <b>• First Name:</b> {first_name}"])
+    if user.last_name: info_lines.append(f"  <b>• Last Name:</b> {last_name}")
+    info_lines.extend([f"  <b>• Username:</b> {username_display}", f"  <b>• Permalink:</b> {permalink_html}", f"  <b>• Is Bot:</b> <code{is_bot_str}</code>", f"  <b>• Language Code:</b> <code>{language_code}</code>"])
     if chat_member_status_str:
         display_status = ""
-        if chat_member_status_str == "creator":
-            display_status = "<code>Owner</code>"
-        elif chat_member_status_str == "administrator":
-            display_status = "<code>Admin</code>"
-        elif chat_member_status_str == "member":
-            display_status = "<code>Member</code>"
-        elif chat_member_status_str == "left":
-            display_status = "<code>Not in chat</code>"
-        elif chat_member_status_str == "kicked":
-            display_status = "<code>Banned</code>"
-        elif chat_member_status_str == "restricted":
-            display_status = "<code>Restricted</code>"
-        elif chat_member_status_str == "not_a_member":
-            display_status = "<code>Not in chat</code>"
-        else:
-            display_status = f"<code>{html.escape(chat_member_status_str.replace('_', ' ').capitalize())}</code>"
-        
-        info_lines.append(f"  <b>• Status:</b> {display_status}")
-
+        if chat_member_status_str == "creator": display_status = "<code>Owner</code>"
+        elif chat_member_status_str == "administrator": display_status = "<code>Admin</code>"
+        elif chat_member_status_str == "member": display_status = "<code>Member</code>"
+        elif chat_member_status_str == "left": display_status = "<code>Not in chat</code>"
+        elif chat_member_status_str == "kicked": display_status = "<code>Banned</code>"
+        elif chat_member_status_str == "restricted": display_status = "<code>Muted</code>"
+        elif chat_member_status_str == "not_a_member": display_status = "<code>Not in chat</code>"
+        else: display_status = f"<code>{html.escape(chat_member_status_str.replace('_', ' ').capitalize())}</code>"
+        info_lines.append(f"  <b>• Status:</b> {display_status}\n")
+        if is_owner: info_lines.append(f"  <b>• Bot Owner:</b> <code>Yes</code>")
+    info_lines.append(f"  <b>• Blacklisted:</b> {'<code>Yes</code>' if is_blacklisted_flag else '<code>No</code>'}")
     return "\n".join(info_lines)
-
 
 async def user_info(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     target_user_to_display: User | None = None
@@ -1327,7 +1376,6 @@ async def user_info(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if update.message.reply_to_message:
         initial_target_user = update.message.reply_to_message.from_user
         logger.info(f"/info target is replied user: {initial_target_user.id}, is_bot: {initial_target_user.is_bot}")
-
     elif context.args:
         target_id_str = context.args[0]
         logger.info(f"/info target is argument: {target_id_str}")
@@ -1377,6 +1425,7 @@ async def user_info(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if initial_target_user:
         is_target_owner = (OWNER_ID is not None and initial_target_user.id == OWNER_ID)
         member_status_in_current_chat: str | None = None
+        user_is_blacklisted = is_user_blacklisted(initial_target_user.id)
 
         if current_chat_id != initial_target_user.id and update.effective_chat.type in [ChatType.GROUP, ChatType.SUPERGROUP]:
             try:
@@ -1388,7 +1437,7 @@ async def user_info(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 if "user not found" in str(e).lower():
                     member_status_in_current_chat = "not_a_member"
             except Exception as e:
-                logger.error(f"Unexpected error getting chat member status: {e}", exc_info=True)
+                logger.error(f"Unexpected error getting chat member status for {initial_target_user.id}: {e}", exc_info=True)
         
         try:
             fresh_chat_info = await context.bot.get_chat(chat_id=initial_target_user.id)
@@ -1422,7 +1471,7 @@ async def user_info(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 logger.error(f"Failed to get any displayable user data after unexpected error for ID: {initial_target_user.id if initial_target_user else 'Unknown'}")
 
         if target_user_to_display:
-            info_message = format_user_info(target_user_to_display, member_status_in_current_chat, is_target_owner)
+            info_message = format_user_info(target_user_to_display, member_status_in_current_chat, is_target_owner, user_is_blacklisted)
             await update.message.reply_html(info_message)
         else:
             user_id_for_error = initial_target_user.id if initial_target_user else 'Unknown'
@@ -1431,7 +1480,7 @@ async def user_info(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     else:
         logger.warning("/info command reached end without an initial_target_user.")
         await update.message.reply_text("Mrow? Couldn't determine who to get info for.")
-    
+        
 # --- Simple Text Command Definitions ---
 async def send_random_text(update: Update, context: ContextTypes.DEFAULT_TYPE, text_list: list[str], list_name: str) -> None:
     if not text_list: logger.warning(f"Empty list: '{list_name}'"); await update.message.reply_text("Mrow? Internal error: Text list empty. 😿"); return
@@ -1452,7 +1501,6 @@ async def send_random_text(update: Update, context: ContextTypes.DEFAULT_TYPE, t
             logger.info(f"Sent plain text fallback for {list_name} after unexpected error.")
         except Exception as e_plain_fallback:
             logger.error(f"Fallback plain text reply also failed for {list_name} after unexpected error: {e_plain_fallback}")
-
 
 async def meow(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None: await send_random_text(update, context, MEOW_TEXTS, "MEOW_TEXTS")
 async def nap(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None: await send_random_text(update, context, NAP_TEXTS, "NAP_TEXTS")
@@ -1846,11 +1894,155 @@ async def handle_new_group_members(update: Update, context: ContextTypes.DEFAULT
             else:
                 logger.warning("OWNER_ID not set, cannot send join notification.")
 
+# --- Blacklist Commands ---
+async def blacklist_user_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    user = update.effective_user
+    if user.id != OWNER_ID:
+        if OWNER_ONLY_REFUSAL:
+            owner_mention = f"<code>{OWNER_ID}</code>"
+            try:
+                owner_chat = await context.bot.get_chat(OWNER_ID)
+                owner_mention = owner_chat.mention_html()
+            except Exception: pass
+            refusal_text = random.choice(OWNER_ONLY_REFUSAL).format(owner_mention=owner_mention)
+            await update.message.reply_html(refusal_text)
+        else:
+            await update.message.reply_text("Meeeow! Only my Owner can use this command!")
+        return
+
+    target_user_obj: User | None = None
+    reason = "No reason provided."
+
+    if update.message.reply_to_message:
+        target_user_obj = update.message.reply_to_message.from_user
+        if context.args:
+            reason = " ".join(context.args)
+    elif context.args:
+        target_id_str = context.args[0]
+        try:
+            target_id = int(target_id_str)
+            try:
+                chat_info = await context.bot.get_chat(target_id)
+                if chat_info.type == ChatType.PRIVATE:
+                     target_user_obj = User(
+                         id=chat_info.id,
+                         first_name=chat_info.first_name or f"User {target_id}", # Lepszy fallback
+                         is_bot=getattr(chat_info, 'is_bot', False),
+                         username=chat_info.username,
+                         last_name=chat_info.last_name
+                     )
+                else:
+                     await update.message.reply_text(f"Mrow? ID {target_id} does not seem to be a user (type: {chat_info.type}).")
+                     return
+            except TelegramError as e:
+                logger.warning(f"Couldn't fully verify user ID {target_id} for blacklist: {e}. Blacklisting ID directly.")
+                target_user_obj = User(id=target_id, first_name=f"User {target_id}", is_bot=False)
+
+            if len(context.args) > 1:
+                reason = " ".join(context.args[1:])
+        except ValueError:
+            await update.message.reply_text("Mrow? Invalid user ID format. Use /blacklist <user_id> [reason] or reply to a user's message.")
+            return
+    else:
+        await update.message.reply_text("Mrow? Please specify a user ID (or reply to a message) to blacklist.")
+        return
+
+    if not target_user_obj:
+        await update.message.reply_text("Mrow? Could not identify the user to blacklist.")
+        return
+
+    if target_user_obj.id == OWNER_ID:
+        await update.message.reply_text("Meow! I can't blacklist my Owner! That's just silly. 😹")
+        return
+    if target_user_obj.id == context.bot.id:
+        await update.message.reply_text("Purr... I can't blacklist myself! That would be a cat-astrophe! 🙀")
+        return
+
+    if is_user_blacklisted(target_user_obj.id):
+        user_display = target_user_obj.mention_html() if target_user_obj.username else html.escape(target_user_obj.first_name or str(target_user_obj.id))
+        await update.message.reply_html(f"User {user_display} (<code>{target_user_obj.id}</code>) is already on the blacklist.")
+        return
+
+    if add_to_blacklist(target_user_obj.id, user.id, reason):
+        logger.info(f"Owner {user.id} blacklisted user {target_user_obj.id} (@{target_user_obj.username}). Reason: {reason}")
+        user_display = target_user_obj.mention_html() if target_user_obj.username else html.escape(target_user_obj.first_name or str(target_user_obj.id))
+        await update.message.reply_html(
+            f"✅ User {user_display} (<code>{target_user_obj.id}</code>) has been added to the blacklist.\n"
+            f"Reason: {html.escape(reason)}"
+        )
+    else:
+        await update.message.reply_text("Mrow? Failed to add user to the blacklist. Check logs.")
+
+async def unblacklist_user_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    user = update.effective_user
+    if user.id != OWNER_ID:
+        if OWNER_ONLY_REFUSAL:
+            owner_mention = f"<code>{OWNER_ID}</code>"
+            try:
+                owner_chat = await context.bot.get_chat(OWNER_ID)
+                owner_mention = owner_chat.mention_html()
+            except Exception: pass
+            refusal_text = random.choice(OWNER_ONLY_REFUSAL).format(owner_mention=owner_mention)
+            await update.message.reply_html(refusal_text)
+        else:
+            await update.message.reply_text("Meeeow! Only my Owner can use this command!")
+        return
+
+    target_user_obj: User | None = None
+
+    if update.message.reply_to_message:
+        target_user_obj = update.message.reply_to_message.from_user
+    elif context.args:
+        target_id_str = context.args[0]
+        try:
+            target_id = int(target_id_str)
+            try:
+                chat_info = await context.bot.get_chat(target_id)
+                if chat_info.type == ChatType.PRIVATE:
+                    target_user_obj = User(
+                        id=chat_info.id,
+                        first_name=chat_info.first_name or f"User {target_id}",
+                        is_bot=getattr(chat_info, 'is_bot', False),
+                        username=chat_info.username,
+                        last_name=chat_info.last_name
+                    )
+                else:
+                    await update.message.reply_text(f"Mrow? ID {target_id} does not seem to be a user (type: {chat_info.type}).")
+                    return
+            except TelegramError as e:
+                logger.warning(f"Couldn't fully verify user ID {target_id} for unblacklist: {e}. Unblacklisting ID directly if present.")
+                target_user_obj = User(id=target_id, first_name=f"User {target_id}", is_bot=False)
+        except ValueError:
+            await update.message.reply_text("Mrow? Invalid user ID format. Use /unblacklist <user_id> or reply to a user.")
+            return
+    else:
+        await update.message.reply_text("Mrow? Please specify a user ID (or reply to a message) to unblacklist.")
+        return
+
+    if not target_user_obj:
+        await update.message.reply_text("Mrow? Could not identify the user to unblacklist.")
+        return
+
+    if not is_user_blacklisted(target_user_obj.id):
+        user_display = target_user_obj.mention_html() if target_user_obj.username else html.escape(target_user_obj.first_name or str(target_user_obj.id))
+        await update.message.reply_html(f"User {user_display} (<code>{target_user_obj.id}</code>) is not on the blacklist.")
+        return
+
+    if remove_from_blacklist(target_user_obj.id):
+        logger.info(f"Owner {user.id} unblacklisted user {target_user_obj.id} (@{target_user_obj.username}).")
+        user_display = target_user_obj.mention_html() if target_user_obj.username else html.escape(target_user_obj.first_name or str(target_user_obj.id))
+        await update.message.reply_html(f"✅ User {user_display} (<code>{target_user_obj.id}</code>) has been removed from the blacklist.")
+    else:
+        await update.message.reply_text("Mrow? Failed to remove user from the blacklist. Check logs.")
+        
 # --- Main Function ---
 def main() -> None:
+    init_db()
     logger.info("Initializing bot application...")
-    logger.info("Registering command handlers...")
     application = Application.builder().token(BOT_TOKEN).build()
+
+    logger.info("Registering blacklist check handler...")
+    application.add_handler(MessageHandler(filters.COMMAND, check_blacklist_handler), group=-1)
 
     logger.info("Registering command handlers...")
     application.add_handler(CommandHandler("start", start))
@@ -1876,8 +2068,10 @@ def main() -> None:
     application.add_handler(CommandHandler("status", status))
     application.add_handler(CommandHandler("say", say))
     application.add_handler(CommandHandler("leave", leave_chat))
+    application.add_handler(CommandHandler("blacklist", blacklist_user_command))
+    application.add_handler(CommandHandler("unblacklist", unblacklist_user_command))
 
-    logger.info("Registering message handlers...")
+    logger.info("Registering message handlers for group joins...")
     application.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS & filters.ChatType.GROUPS, handle_new_group_members))
 
     logger.info(f"Bot starting polling... Owner ID configured: {OWNER_ID}")
