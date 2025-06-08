@@ -1285,7 +1285,6 @@ def format_user_info(user: User, chat_member_status: str | None = None, is_owner
     return "\n".join(info_lines)
 
 async def user_info(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Displays information about a user (via reply or ID)."""
     target_user_to_display: User | None = None
     initial_target_user: User | None = None
     target_id_str: str | None = None
@@ -1293,18 +1292,24 @@ async def user_info(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     if update.message.reply_to_message:
         initial_target_user = update.message.reply_to_message.from_user
-        logger.info(f"/info target is replied user: {initial_target_user.id}")
-
+        logger.info(f"/info target is replied user: {initial_target_user.id}, is_bot: {initial_target_user.is_bot}")
     elif context.args:
         target_id_str = context.args[0]
         logger.info(f"/info target is ID argument: {target_id_str}")
         try:
             user_id_int = int(target_id_str)
-            chat_info = await context.bot.get_chat(chat_id=user_id_int) # Najpierw pobierz Chat object
-            if chat_info.type == ChatType.PRIVATE :
-                 initial_target_user = User(id=chat_info.id, first_name="", is_bot=False) # Placeholder z ID
+            fresh_chat_info_for_id = await context.bot.get_chat(chat_id=user_id_int)
+            if fresh_chat_info_for_id.type == ChatType.PRIVATE:
+                initial_target_user = User(
+                    id=fresh_chat_info_for_id.id,
+                    first_name=fresh_chat_info_for_id.first_name or "",
+                    is_bot=getattr(fresh_chat_info_for_id, 'is_bot', False),
+                    username=fresh_chat_info_for_id.username,
+                    last_name=fresh_chat_info_for_id.last_name
+                )
+                logger.info(f"/info identified by ID: {initial_target_user.id}, initial is_bot: {initial_target_user.is_bot}")
             else:
-                 await update.message.reply_text(f"Mrow? ID '{user_id_int}' doesn't appear to be a user (it's a {chat_info.type}).")
+                 await update.message.reply_text(f"Mrow? ID '{user_id_int}' doesn't appear to be a user (it's a {fresh_chat_info_for_id.type}).")
                  return
         except ValueError:
             await update.message.reply_text(f"Mrow? Invalid user ID format: '{html.escape(target_id_str)}'. Please provide a numeric ID.")
@@ -1319,7 +1324,7 @@ async def user_info(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             return
     else:
         initial_target_user = update.effective_user
-        logger.info(f"/info target is command sender: {initial_target_user.id}")
+        logger.info(f"/info target is command sender: {initial_target_user.id}, is_bot: {initial_target_user.is_bot}")
 
     if initial_target_user:
         is_target_owner = (OWNER_ID is not None and initial_target_user.id == OWNER_ID)
@@ -1338,25 +1343,32 @@ async def user_info(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 logger.error(f"Unexpected error getting chat member status: {e}", exc_info=True)
         try:
             fresh_chat_info = await context.bot.get_chat(chat_id=initial_target_user.id)
+            
+            is_bot_flag = getattr(fresh_chat_info, 'is_bot', None)
+            if is_bot_flag is None and initial_target_user:
+                is_bot_flag = initial_target_user.is_bot
+            elif is_bot_flag is None:
+                is_bot_flag = False
+
             target_user_to_display = User(
                 id=fresh_chat_info.id,
                 first_name=fresh_chat_info.first_name or "",
                 last_name=fresh_chat_info.last_name,
                 username=fresh_chat_info.username,
-                is_bot=getattr(fresh_chat_info, 'is_bot', False),
-                language_code=getattr(fresh_chat_info, 'language_code', None)
+                is_bot=is_bot_flag,
+                language_code=getattr(initial_target_user, 'language_code', None) or getattr(fresh_chat_info, 'language_code', None)
             )
-            logger.info(f"Refreshed user data for {target_user_to_display.id} from API. First Name: '{target_user_to_display.first_name}'")
+            logger.info(f"Refreshed user data for {target_user_to_display.id} from API. First Name: '{target_user_to_display.first_name}', Is Bot: {target_user_to_display.is_bot}")
         except TelegramError as e:
             logger.warning(f"Could not refresh user data for {initial_target_user.id} from API: {e}. Using initial data if available.")
-            if initial_target_user and initial_target_user.first_name: # Sprawdź czy initial_target_user miał jakieś dane
+            if initial_target_user and (initial_target_user.first_name or initial_target_user.username):
                 target_user_to_display = initial_target_user
             else:
                 target_user_to_display = None
                 logger.error(f"Failed to get any displayable user data for ID: {initial_target_user.id if initial_target_user else 'Unknown'}")
         except Exception as e:
             logger.error(f"Unexpected error refreshing user data for {initial_target_user.id}: {e}", exc_info=True)
-            if initial_target_user and initial_target_user.first_name:
+            if initial_target_user and (initial_target_user.first_name or initial_target_user.username):
                 target_user_to_display = initial_target_user
             else:
                 target_user_to_display = None
