@@ -1189,6 +1189,7 @@ async def get_themed_gif(context: ContextTypes.DEFAULT_TYPE, search_terms: list[
 
 # --- Command Handlers ---
 HELP_TEXT = """
+[I'm now in testing version, errors may occur]
 Meeeow! 🐾 Here are the commands you can use:
 
 /start - Shows the welcome message. ✨
