@@ -9,7 +9,7 @@ import os
 import datetime
 import requests
 import html
-import sqlite3 # Dodano dla blacklisty
+import sqlite3
 from typing import List, Tuple
 from telegram import Update, User, constants
 from telegram.constants import ChatType, ParseMode, ChatMemberStatus
@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 OWNER_ID = None
 BOT_START_TIME = datetime.datetime.now()
 TENOR_API_KEY = None
-DB_NAME = "catbot_data.db" # Nazwa pliku bazy danych
+DB_NAME = "catbot_data.db"
 
 # --- Load configuration from environment variables ---
 try:
@@ -52,7 +52,6 @@ def init_db():
     try:
         conn = sqlite3.connect(DB_NAME)
         cursor = conn.cursor()
-        # Tabela użytkowników (jeśli chcesz ją rozbudować)
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS users (
                 user_id INTEGER PRIMARY KEY, username TEXT, first_name TEXT, last_name TEXT,
@@ -60,7 +59,6 @@ def init_db():
             )
         """)
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_username ON users (username)")
-        # Tabela blacklisty
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS blacklist (
                 user_id INTEGER PRIMARY KEY, reason TEXT,
@@ -1354,7 +1352,7 @@ def format_user_info(user: User, chat_member_status_str: str | None = None, is_o
     info_lines = [f"👤 <b>User Information:</b>"]
     info_lines.extend([f"  <b>• ID:</b> <code>{user_id}</code>", f"  <b>• First Name:</b> {first_name}"])
     if user.last_name: info_lines.append(f"  <b>• Last Name:</b> {last_name}")
-    info_lines.extend([f"  <b>• Username:</b> {username_display}", f"  <b>• Permalink:</b> {permalink_html}", f"  <b>• Is Bot:</b> {is_bot_str}", f"  <b>• Language Code:</b> {language_code}"])
+    info_lines.extend([f"  <b>• Username:</b> {username_display}", f"  <b>• Permalink:</b> {permalink_html}", f"  <b>• Is Bot:</b> <code{is_bot_str}</code>", f"  <b>• Language Code:</b> <code>{language_code}</code>"])
     if chat_member_status_str:
         display_status = ""
         if chat_member_status_str == "creator": display_status = "<code>Owner</code>"
@@ -1365,9 +1363,9 @@ def format_user_info(user: User, chat_member_status_str: str | None = None, is_o
         elif chat_member_status_str == "restricted": display_status = "<code>Muted</code>"
         elif chat_member_status_str == "not_a_member": display_status = "<code>Not in chat</code>"
         else: display_status = f"<code>{html.escape(chat_member_status_str.replace('_', ' ').capitalize())}</code>"
-        info_lines.append(f"  <b>• Status:</b> {display_status}")
-    info_lines.append(f"\n  <b>• Blacklisted:</b> {'<code>Yes</code>' if is_blacklisted_flag else '<code>No</code>'}")
-    if is_owner: info_lines.append(f"  <b>• Bot Owner:</b> <code>Yes</code>")
+        info_lines.append(f"  <b>• Status:</b> {display_status}\n")
+        if is_owner: info_lines.append(f"  <b>• Bot Owner:</b> <code>Yes</code>")
+    info_lines.append(f"  <b>• Blacklisted:</b> {'<code>Yes</code>' if is_blacklisted_flag else '<code>No</code>'}")
     return "\n".join(info_lines)
 
 async def user_info(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
