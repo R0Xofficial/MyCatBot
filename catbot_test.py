@@ -1248,8 +1248,7 @@ async def owner_info(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     else: await update.message.reply_text("Meow? Owner info not configured! 😿")
 
 # --- User Info Command ---
-def format_user_info(user: User, chat_member_status: str | None = None, is_owner: bool = False) -> str:
-    """Formats user information into a readable string."""
+def format_user_info(user: User, chat_member_status_str: str | None = None, is_owner: bool = False) -> str:
     user_id = user.id
     first_name = html.escape(user.first_name or "N/A")
     last_name = html.escape(user.last_name or "")
@@ -1266,21 +1265,36 @@ def format_user_info(user: User, chat_member_status: str | None = None, is_owner
         info_lines.append(f"\n<b>{random.choice(OWNER_INFO_EXTRA_LINES)}</b>\n")
     
     info_lines.extend([
-        f"  <b>ID:</b> <code>{user_id}</code>",
-        f"  <b>First Name:</b> {first_name}",
+        f"   <b>• ID:</b> <code>{user_id}</code>",
+        f"   <b>• First Name:</b> {first_name}",
     ])
     if user.last_name:
-        info_lines.append(f"  <b>Last Name:</b> {last_name}")
+        info_lines.append(f"   <b>Last Name:</b> {last_name}")
     info_lines.extend([
-        f"  <b>Username:</b> {username}",
-        f"  <b>Mention:</b> {mention_html}",
-        f"  <b>Is Bot:</b> {is_bot_str}",
-        f"  <b>Language Code:</b> {language_code}"
+        f"   <b>• Username:</b> {username}",
+        f"   <b>• Mention:</b> {mention_html}",
+        f"   <b>• Is Bot:</b> {is_bot_str}",
+        f"   <b>• Language Code:</b> {language_code}"
     ])
 
-    if chat_member_status:
-        formatted_status = chat_member_status.replace('_', ' ').capitalize()
-        info_lines.append(f"  <b>Status in this chat:</b> {html.escape(formatted_status)}")
+    if chat_member_status_str:
+        display_status = ""
+        if chat_member_status_str == ChatMemberStatus.CREATOR:
+            display_status = "Creator ✨"
+        elif chat_member_status_str == ChatMemberStatus.ADMINISTRATOR:
+            display_status = "Administrator 🛡️"
+        elif chat_member_status_str == ChatMemberStatus.MEMBER:
+            display_status = "Member 👤"
+        elif chat_member_status_str == ChatMemberStatus.LEFT:
+            display_status = "Not in chat 🚶"
+        elif chat_member_status_str == ChatMemberStatus.KICKED:
+            display_status = "Banned 🚫"
+        elif chat_member_status_str == "not_a_member":
+            display_status = "Not in chat 🤷"
+        else:
+            display_status = chat_member_status_str.replace('_', ' ').capitalize()
+        
+        info_lines.append(f"   <b>• Status:</b> {html.escape(display_status)}")
 
     return "\n".join(info_lines)
 
