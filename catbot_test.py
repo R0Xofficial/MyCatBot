@@ -1131,11 +1131,26 @@ OWNER_ONLY_REFUSAL = [ # Needed for /status and /say
     "Nope. That's an {owner_mention}-only button.",
 ]
 OWNER_INFO_EXTRA_LINES = [
-    "👑 This is my esteemed Owner! All hail the Bringer of Treats!",
-    "🧐 You're looking at the Supreme Human who manages my circuits. Bow down!",
-    "❤️ That's my Boss! They have ultimate control over me (and the laser pointer).",
-    "🤖 My primary operator! All systems are go when they are around.",
-    "🐾 My designated human servant! Please be nice to them."
+    "🐾 This is my hooman. They serve me snacks and praise. I allow it.",
+    "😼 My official can opener and litter box technician.",
+    "🐱 Bringer of tuna, scratcher of ears, warmer of laps.",
+    "🛋️ My designated nap cushion. Do not sit there.",
+    "🐟 Authorized distributor of treats. Proceed with purring.",
+    "🧹 The one who scoops the sacred sand. Truly devoted.",
+    "🧶 My toy thrower and accidental laser pointer wielder.",
+    "👑 Serves royalty (me) with dignity and daily kibble.",
+    "📦 Brings boxes for me to ignore and then sit in.",
+    "💤 Understands that 18 naps a day is *normal*.",
+    "🥣 Refills my bowl without question. Trained to obey.",
+    "🐾 Pawsitively my favorite servant. They know the rules.",
+    "📱 Drops everything when I meow near the phone. Good.",
+    "🐾 Lets me walk across the keyboard like a proper cat god.",
+    "😹 Meows back at me. Communication level: Excellent hooman.",
+    "🎣 Waves string like it's their full-time job. Respect.",
+    "🐈‍⬛ Signed the sacred treaty of belly rubs (at own risk).",
+    "🪶 Keeps the bird videos coming. I’m entertained.",
+    "😴 Doesn’t mind that I wake them at 3AM. Loyal.",
+    "🚪 Opens doors I just meowed at. Then I walk away. Perfect."
 ]
 # --- END OF TEXT SECTION ---
 
@@ -1312,10 +1327,12 @@ async def user_info(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     elif context.args:
         target_id_str = context.args[0]
-        logger.info(f"/info target is ID argument: {target_id_str}")
-        try:
-            user_id_int = int(target_id_str)
-            fresh_chat_info_for_id = await context.bot.get_chat(chat_id=user_id_int)
+		try:
+		    if target_id_str.startswith("@"):
+		        fresh_chat_info_for_id = await context.bot.get_chat(target_id_str)
+		    else:
+		        user_id_int = int(target_id_str)
+		        fresh_chat_info_for_id = await context.bot.get_chat(user_id_int)
             if fresh_chat_info_for_id.type == ChatType.PRIVATE:
                 initial_target_user = User(
                     id=fresh_chat_info_for_id.id,
