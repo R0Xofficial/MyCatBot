@@ -1298,9 +1298,9 @@ def format_user_info(user: User, chat_member_status_str: str | None = None, is_o
     if chat_member_status_str:
         display_status = ""
         if chat_member_status_str == "creator":
-            display_status = "<code>Creator</code>"
+            display_status = "<code>Owner</code>"
         elif chat_member_status_str == "administrator":
-            display_status = "<code>Administrator</code>"
+            display_status = "<code>Admin</code>"
         elif chat_member_status_str == "member":
             display_status = "<code>Member</code>"
         elif chat_member_status_str == "left":
