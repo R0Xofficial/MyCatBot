@@ -121,6 +121,42 @@ def is_user_blacklisted(user_id: int) -> bool:
         if conn:
             conn.close()
 
+# --- Blacklist Check Handler ---
+async def check_blacklist_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """
+    Checks if the user is blacklisted. If so, sends a message and stops further processing.
+    Owner always bypasses. This handler should have a high priority (low group number).
+    """
+    if not update.message or not update.effective_user:
+        return
+
+    user = update.effective_user
+
+    if user.id == OWNER_ID:
+        return
+
+    if is_user_blacklisted(user.id):
+        user_mention_log = f"@{user.username}" if user.username else str(user.id)
+        logger.info(f"User {user.id} ({user_mention_log}) is blacklisted. Blocking their interaction.")
+        
+        owner_mention_html = f"<code>{OWNER_ID}</code>"
+        try:
+            owner_chat = await context.bot.get_chat(OWNER_ID)
+            owner_mention_html = owner_chat.mention_html()
+        except Exception as e:
+            logger.warning(f"Could not fetch owner's mention for blacklist response: {e}")
+
+        response_text = "Mrow! Your access has been restricted."
+        if BLACKLISTED_USER_RESPONSE_TEXTS:
+            response_text = random.choice(BLACKLISTED_USER_RESPONSE_TEXTS).format(owner_mention=owner_mention_html)
+        
+        try:
+            await update.message.reply_html(response_text)
+        except Exception as e:
+            logger.error(f"Failed to send blacklist notification to user {user.id}: {e}")
+
+        raise ApplicationHandlerStop
+
 # --- CAT TEXTS SECTION ---
 # /meow texts - General cat noises and behaviors
 MEOW_TEXTS = [
