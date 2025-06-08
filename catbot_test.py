@@ -1380,8 +1380,7 @@ def format_user_info(user: User, chat_member_status_str: str | None = None, is_o
     info_lines.extend([f"  <b>• Username:</b> {username_display}", f"  <b>• Permalink:</b> {permalink_html}", f"  <b>• Is Bot:</b> {is_bot_str}", f"  <b>• Language Code:</b> {language_code}"])
     if chat_member_status_str:
         display_status = ""
-        if is_owner: display_status = "<code>Owner 👑</code>"
-        elif chat_member_status_str == "creator": display_status = "<code>Owner</code>"
+        if chat_member_status_str == "creator": display_status = "<code>Owner</code>"
         elif chat_member_status_str == "administrator": display_status = "<code>Admin</code>"
         elif chat_member_status_str == "member": display_status = "<code>Member</code>"
         elif chat_member_status_str == "left": display_status = "<code>Not in chat</code>"
