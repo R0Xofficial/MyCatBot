@@ -1976,7 +1976,7 @@ async def blacklist_user_command(update: Update, context: ContextTypes.DEFAULT_T
                     f"<b>User:</b> {user_display} (<code>{target_user_obj.id}</code>)\n"
                     f"<b>Username:</b> @{html.escape(target_user_obj.username) if target_user_obj.username else 'N/A'}\n"
                     f"<b>Reason:</b> {html.escape(reason)}\n"
-                    f"<b>Date:</b> {current_time}"
+                    f"<b>Date:</b> <code>{current_time}</code>"
                 )
                 await context.bot.send_message(chat_id=OWNER_ID, text=pm_message, parse_mode=ParseMode.HTML)
                 logger.info(f"Sent blacklist notification to Owner PM for user {target_user_obj.id}")
@@ -2047,7 +2047,7 @@ async def unblacklist_user_command(update: Update, context: ContextTypes.DEFAULT
                     f"<b>#UNBLACKLISTED</b>\n\n"
                     f"<b>User:</b> {user_display} (<code>{target_user_obj.id}</code>)\n"
                     f"<b>Username:</b> @{html.escape(target_user_obj.username) if target_user_obj.username else 'N/A'}\n"
-                    f"<b>Date:</b> {current_time}"
+                    f"<b>Date:</b> <code>{current_time}</code>"
                 )
                 await context.bot.send_message(chat_id=OWNER_ID, text=pm_message, parse_mode=ParseMode.HTML)
                 logger.info(f"Sent unblacklist notification to Owner PM for user {target_user_obj.id}")
