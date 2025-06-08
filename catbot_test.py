@@ -1267,10 +1267,20 @@ def format_user_info(user: User, chat_member_status_str: str | None = None, is_o
     user_id = user.id
     first_name = html.escape(user.first_name or "N/A")
     last_name = html.escape(user.last_name or "")
-    username = f"@{html.escape(user.username)}" if user.username else "N/A"
-    mention_html = user.mention_html()
+    username_display = f"@{html.escape(user.username)}" if user.username else "N/A"
     is_bot_str = "Yes" if user.is_bot else "No"
     language_code = user.language_code or "N/A"
+
+    permalink_url = ""
+    permalink_text = ""
+    if user.username:
+        permalink_text = f"@{html.escape(user.username)}"
+        permalink_url = f"https://t.me/{html.escape(user.username)}"
+    else:
+        permalink_text = html.escape(user.full_name or user.first_name or f"User {user_id}")
+        permalink_url = f"tg://user?id={user_id}"
+    
+    permalink_html = f"<a href=\"{permalink_url}\">{permalink_text}</a>"
 
     info_lines = [
         f"👤 <b>User Information:</b>",
@@ -1286,8 +1296,8 @@ def format_user_info(user: User, chat_member_status_str: str | None = None, is_o
     if user.last_name:
         info_lines.append(f"  <b>• Last Name:</b> {last_name}")
     info_lines.extend([
-        f"  <b>• Username:</b> {username}",
-        f"  <b>• Mention:</b> {mention_html}",
+        f"  <b>• Username:</b> {username_display}",
+        f"  <b>• Permalink:</b> {permalink_html}",
         f"  <b>• Is Bot:</b> <code>{is_bot_str}</code>",
         f"  <b>• Language Code:</b> <code>{language_code}</code>"
     ])
@@ -1295,25 +1305,26 @@ def format_user_info(user: User, chat_member_status_str: str | None = None, is_o
     if chat_member_status_str:
         display_status = ""
         if chat_member_status_str == "creator":
-            display_status = "Owner"
+            display_status = "<code>Creator</code>"
         elif chat_member_status_str == "administrator":
-            display_status = "Admin"
+            display_status = "<code>Administrator</code>"
         elif chat_member_status_str == "member":
-            display_status = "Member"
+            display_status = "<code>Member</code>"
         elif chat_member_status_str == "left":
-            display_status = "Not in chat"
+            display_status = "<code>Not in chat</code>"
         elif chat_member_status_str == "kicked":
-            display_status = "Banned"
+            display_status = "<code>Banned</code>"
         elif chat_member_status_str == "restricted":
-            display_status = "Muted"
+            display_status = "<code>Restricted</code>"
         elif chat_member_status_str == "not_a_member":
-            display_status = "Not in chat"
+            display_status = "<code>Not in chat</code>"
         else:
-            display_status = chat_member_status_str.replace('_', ' ').capitalize()
+            display_status = f"<code>{html.escape(chat_member_status_str.replace('_', ' ').capitalize())}</code>"
         
-        info_lines.append(f"  <b>• Status:</b> {html.escape(display_status)}")
+        info_lines.append(f"  <b>• Status:</b> {display_status}")
 
     return "\n".join(info_lines)
+
 
 async def user_info(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     target_user_to_display: User | None = None
@@ -1333,9 +1344,9 @@ async def user_info(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             if target_id_str.startswith("@"):
                 chat_id_to_fetch = target_id_str
             else:
-                chat_id_to_fetch = int(target_id_str) # Może rzucić ValueError
+                chat_id_to_fetch = int(target_id_str)
 
-            fresh_chat_info_for_arg = await context.bot.get_chat(chat_id_to_fetch)
+            fresh_chat_info_for_arg = await context.bot.get_chat(chat_id=chat_id_to_fetch)
             
             if fresh_chat_info_for_arg.type == ChatType.PRIVATE:
                 initial_target_user = User(
@@ -1350,11 +1361,18 @@ async def user_info(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 await update.message.reply_text(f"Mrow? '{html.escape(target_id_str)}' doesn't appear to be a user (it's a {fresh_chat_info_for_arg.type}).")
                 return
         except ValueError:
-            await update.message.reply_text(f"Mrow? Invalid user ID/username format: '{html.escape(target_id_str)}'. Please provide a numeric ID or @username.")
+            await update.message.reply_text(f"Mrow? Invalid format: '{html.escape(target_id_str)}'. Please provide a numeric ID or an @username.")
             return
         except TelegramError as e:
             logger.error(f"Error fetching user/chat info for argument '{target_id_str}': {e}")
-            await update.message.reply_text(f"😿 Couldn't find or access user info for '{html.escape(target_id_str)}': {e}")
+            if "chat not found" in str(e).lower():
+                 await update.message.reply_text(
+                    f"😿 Couldn't find user '{html.escape(target_id_str)}'.\n"
+                    f"If using @username, make sure it's correct and the user has interacted with me or is in a mutual group. "
+                    f"Alternatively, reply to their message or use their numeric ID."
+                )
+            else:
+                await update.message.reply_text(f"😿 Couldn't find or access user info for '{html.escape(target_id_str)}': {e}")
             return
         except Exception as e:
             logger.error(f"Unexpected error processing argument '{target_id_str}' for /info: {e}", exc_info=True)
@@ -1384,7 +1402,7 @@ async def user_info(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             fresh_chat_info = await context.bot.get_chat(chat_id=initial_target_user.id)
             
             is_bot_flag = getattr(fresh_chat_info, 'is_bot', None)
-            if is_bot_flag is None and initial_target_user: # Użyj flagi z initial_target_user jeśli fresh_chat_info jej nie ma
+            if is_bot_flag is None and initial_target_user:
                 is_bot_flag = initial_target_user.is_bot
 
             target_user_to_display = User(
