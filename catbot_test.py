@@ -1265,36 +1265,38 @@ def format_user_info(user: User, chat_member_status_str: str | None = None, is_o
         info_lines.append(f"\n<b>{random.choice(OWNER_INFO_EXTRA_LINES)}</b>\n")
     
     info_lines.extend([
-        f"   <b>ID:</b> <code>{user_id}</code>",
-        f"   <b>First Name:</b> {first_name}",
+        f"  <b>• ID:</b> <code>{user_id}</code>",
+        f"  <b>• First Name:</b> {first_name}",
     ])
     if user.last_name:
-        info_lines.append(f"   <b>Last Name:</b> {last_name}")
+        info_lines.append(f"  <b>• Last Name:</b> {last_name}")
     info_lines.extend([
-        f"   <b>Username:</b> {username}",
-        f"   <b>Mention:</b> {mention_html}",
-        f"   <b>Is Bot:</b> {is_bot_str}",
-        f"   <b>Language Code:</b> {language_code}"
+        f"  <b>• Username:</b> {username}",
+        f"  <b>• Mention:</b> {mention_html}",
+        f"  <b>• Is Bot:</b> {is_bot_str}",
+        f"  <b>• Language Code:</b> {language_code}"
     ])
 
     if chat_member_status_str:
         display_status = ""
-        if chat_member_status_str == ChatMemberStatus.Creator:
+        if chat_member_status_str == "creator":
             display_status = "Creator ✨"
-        elif chat_member_status_str == ChatMemberStatus.Administrator:
+        elif chat_member_status_str == "administrator":
             display_status = "Administrator 🛡️"
-        elif chat_member_status_str == ChatMemberStatus.Member:
+        elif chat_member_status_str == "member":
             display_status = "Member 👤"
-        elif chat_member_status_str == ChatMemberStatus.Left:
+        elif chat_member_status_str == "left":
             display_status = "Not in chat 🚶"
-        elif chat_member_status_str == ChatMemberStatus.Kicked:
+        elif chat_member_status_str == "kicked":
             display_status = "Banned 🚫"
+        elif chat_member_status_str == "restricted":
+            display_status = "Restricted ⚠️"
         elif chat_member_status_str == "not_a_member":
             display_status = "Not in chat 🤷"
         else:
             display_status = chat_member_status_str.replace('_', ' ').capitalize()
         
-        info_lines.append(f"   <b>Status:</b> {html.escape(display_status)}")
+        info_lines.append(f"  <b>• Status:</b> {html.escape(display_status)}")
 
     return "\n".join(info_lines)
 
@@ -1307,6 +1309,7 @@ async def user_info(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if update.message.reply_to_message:
         initial_target_user = update.message.reply_to_message.from_user
         logger.info(f"/info target is replied user: {initial_target_user.id}, is_bot: {initial_target_user.is_bot}")
+
     elif context.args:
         target_id_str = context.args[0]
         logger.info(f"/info target is ID argument: {target_id_str}")
@@ -1361,16 +1364,14 @@ async def user_info(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             is_bot_flag = getattr(fresh_chat_info, 'is_bot', None)
             if is_bot_flag is None and initial_target_user:
                 is_bot_flag = initial_target_user.is_bot
-            elif is_bot_flag is None:
-                is_bot_flag = False
 
             target_user_to_display = User(
                 id=fresh_chat_info.id,
                 first_name=fresh_chat_info.first_name or "",
                 last_name=fresh_chat_info.last_name,
                 username=fresh_chat_info.username,
-                is_bot=is_bot_flag,
-                language_code=getattr(initial_target_user, 'language_code', None) or getattr(fresh_chat_info, 'language_code', None)
+                is_bot=is_bot_flag if is_bot_flag is not None else False, # Fallback na False jeśli nadal None
+                language_code=getattr(initial_target_user, 'language_code', getattr(fresh_chat_info, 'language_code', None))
             )
             logger.info(f"Refreshed user data for {target_user_to_display.id} from API. First Name: '{target_user_to_display.first_name}', Is Bot: {target_user_to_display.is_bot}")
         except TelegramError as e:
