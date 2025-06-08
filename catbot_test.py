@@ -1227,10 +1227,19 @@ OWNER_ONLY_REFUSAL = [ # Needed for /status and /say
 
 BLACKLISTED_USER_RESPONSE_TEXTS = [
     "Meeeow... 😿 It seems you are on my naughty list. Please contact my Owner ({owner_mention}) if you believe this is a mistake.",
-    "Hiss!  доступа нет! You've been blacklisted. For appeals, contact my human: {owner_mention}.",
     "Purrrr... Unfortunately, your access to my purrfect services has been restricted. My Owner, {owner_mention}, might be able to help.",
     "Access Denied: Feline Unit 734 has placed you on a temporary (or permanent) timeout. Contact Supervisor: {owner_mention}.",
     "My apologies, but I cannot process your request at this time. You appear to be on the blacklist. My Owner: {owner_mention}.",
+    "😾 No purring allowed for you. My tail twitched in disapproval. Ask {owner_mention} for forgiveness.",
+    "🐾 Your scent is... not approved. Paw off until {owner_mention} says otherwise.",
+    "📛 Scratched from my friends list. Only my Owner {owner_mention} can undo the clawmark.",
+    "🚫 You stepped on my tail metaphorically. Access revoked. Meow at {owner_mention} to appeal.",
+    "🐱‍👤 You're in the shadow realm of cat judgment. Only {owner_mention} holds the key to redemption.",
+    "😿 You've been put in the 'no petting' zone. Only {owner_mention} can let you back into the sunbeam.",
+    "🍗 You tried to touch the sacred treats. Big no-no. Contact {owner_mention} if you seek mercy.",
+    "🛑 You’ve triggered the Hiss Protocol. My claws are retracted... for now. Talk to {owner_mention}.",
+    "👃 My whiskers detect... untrustworthy vibes. Blacklisted! {owner_mention} might forgive you.",
+    "🧶 Access to yarn mode denied. Maybe {owner_mention} will grant you another chance to play."
 ]
 # --- END OF TEXT SECTION ---
 
