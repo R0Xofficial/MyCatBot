@@ -10,7 +10,7 @@ import datetime
 import requests # Needed for /gif, /photo, and OPTIONAL themed GIFs
 import html # Needed for escaping chat titles
 from typing import List, Tuple # For type hinting
-from telegram import Update, constants
+from telegram import Update, User, constants
 # Import ChatType, ParseMode, ChatMemberStatus explicitly
 from telegram.constants import ChatType, ParseMode, ChatMemberStatus
 # Import necessary extensions
@@ -1195,6 +1195,7 @@ Meeeow! 🐾 Here are the commands you can use:
 /help - Shows this help message. ❓
 /github - Get the link to my source code! 💻
 /owner - Info about my designated human! ❤️
+/info [reply/@user/ID] - Get info about a user. 👤
 /gif - Get a random cat GIF! 🖼️
 /photo - Get a random cat photo! 📷
 /meow - Get a random cat sound or phrase. 🔊
@@ -1211,8 +1212,7 @@ Meeeow! 🐾 Here are the commands you can use:
 /bite [reply/@user] - Take a playful bite! 😬
 /hug [reply/@user] - Offer a comforting hug! 🤗
 
-<i>(Note: Owner cannot be targeted by attack/kill/punch/slap/bite)</i>
-Owner Only Commands (Hidden):
+Owner Only Commands:
   /status - Show bot status.
   /say [optional_chat_id] [your text] - Send message as bot.
   /leave [optional_chat_id] - Make the bot leave a chat.
@@ -1239,8 +1239,95 @@ async def owner_info(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
         await update.message.reply_html(message)
     else: await update.message.reply_text("Meow? Owner info not configured! 😿")
 
+# --- User Info Command ---
+def format_user_info(user: User) -> str:
+    """Formats user information into a readable string."""
+    user_id = user.id
+    first_name = html.escape(user.first_name or "N/A")
+    last_name = html.escape(user.last_name or "")
+    username = f"@{html.escape(user.username)}" if user.username else "N/A"
+    mention_html = user.mention_html()
+    is_bot = "Yes" if user.is_bot else "No"
+    language_code = user.language_code or "N/A"
+
+    info_lines = [
+        f"👤 <b>User Information:</b>",
+        f"  ├─ ID: <code>{user_id}</code>",
+        f"  ├─ First Name: {first_name}",
+    ]
+    if user.last_name:
+        info_lines.append(f"  ├─ Last Name: {last_name}")
+    info_lines.extend([
+        f"  ├─ Username: {username}",
+        f"  ├─ Mention: {mention_html}",
+        f"  ├─ Is Bot: {is_bot}",
+        f"  └─ Language Code: {language_code}"
+    ])
+    return "\n".join(info_lines)
+
+
+async def user_info(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Displays information about a user."""
+    target_user: User | None = None
+    target_id_str: str | None = None
+
+    if update.message.reply_to_message:
+        target_user = update.message.reply_to_message.from_user
+        logger.info(f"/info target is replied user: {target_user.id}")
+    elif context.args:
+        target_id_str = context.args[0]
+        logger.info(f"/info target is argument: {target_id_str}")
+        try:
+            if target_id_str.startswith('@'):
+                chat_info = await context.bot.get_chat(chat_id=target_id_str)
+                if chat_info.type == ChatType.PRIVATE :
+                     target_user = User(
+                         id=chat_info.id,
+                         first_name=chat_info.first_name or "",
+                         is_bot=getattr(chat_info, 'is_bot', False),
+                         username=chat_info.username,
+                         last_name=chat_info.last_name
+                     )
+                else:
+                     await update.message.reply_text(f"Mrow? '{target_id_str}' doesn't look like a user.")
+                     return
+            else:
+                user_id_int = int(target_id_str)
+                chat_info = await context.bot.get_chat(chat_id=user_id_int)
+                if chat_info.type == ChatType.PRIVATE :
+                     target_user = User(
+                         id=chat_info.id,
+                         first_name=chat_info.first_name or "",
+                         is_bot=getattr(chat_info, 'is_bot', False),
+                         username=chat_info.username,
+                         last_name=chat_info.last_name
+                     )
+                else:
+                     await update.message.reply_text(f"Mrow? ID '{user_id_int}' doesn't belong to a user.")
+                     return
+        except ValueError:
+            await update.message.reply_text(f"Mrow? Invalid user ID format: '{target_id_str}'. Please provide a numeric ID or @username.")
+            return
+        except TelegramError as e:
+            logger.error(f"Error fetching user/chat info for '{target_id_str}': {e}")
+            await update.message.reply_text(f"😿 Couldn't find or access user info for '{html.escape(target_id_str)}': {e}")
+            return
+        except Exception as e:
+            logger.error(f"Unexpected error processing target '{target_id_str}' for /info: {e}", exc_info=True)
+            await update.message.reply_text(f"💥 An unexpected error occurred processing '{html.escape(target_id_str)}'.")
+            return
+    else:
+        target_user = update.effective_user
+        logger.info(f"/info target is command sender: {target_user.id}")
+
+    if target_user:
+        info_message = format_user_info(target_user)
+        await update.message.reply_html(info_message)
+    else:
+        logger.warning("/info command reached end without a target_user.")
+        await update.message.reply_text("Mrow? Couldn't determine who to get info for.")
+
 # --- Simple Text Command Definitions ---
-# POPRAWIONA FUNKCJA send_random_text
 async def send_random_text(update: Update, context: ContextTypes.DEFAULT_TYPE, text_list: list[str], list_name: str) -> None:
     if not text_list: logger.warning(f"Empty list: '{list_name}'"); await update.message.reply_text("Mrow? Internal error: Text list empty. 😿"); return
     chosen_text = random.choice(text_list)
@@ -1270,7 +1357,6 @@ async def zoomies(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None: a
 async def judge(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None: await send_random_text(update, context, JUDGE_TEXTS, "JUDGE_TEXTS")
 
 # --- Helper for Simulation Commands ---
-# POPRAWIONA FUNKCJA _handle_action_command
 async def _handle_action_command(update: Update, context: ContextTypes.DEFAULT_TYPE, action_texts: list[str], gif_search_terms: list[str], command_name: str, target_required: bool = True, target_required_msg: str = "This command requires a target.", hug_command: bool = False):
     if not action_texts: logger.warning(f"List '{command_name.upper()}_TEXTS' empty!"); await update.message.reply_text(f"Mrow? No texts for /{command_name}. 😿"); return
     target_mention = None; is_protected = False; is_owner = False
@@ -1288,7 +1374,6 @@ async def _handle_action_command(update: Update, context: ContextTypes.DEFAULT_T
     message_text = random.choice(action_texts)
     if "{target}" in message_text: effective_target = target_mention if target_required else update.effective_user.mention_html(); message_text = message_text.format(target=effective_target) if effective_target else message_text.replace("{target}", "someone")
 
-    # Poprawiona logika wysyłania i fallbacku
     try:
         if gif_url: await update.message.reply_animation(animation=gif_url, caption=message_text, parse_mode=ParseMode.HTML)
         else: await update.message.reply_html(message_text)
@@ -1659,6 +1744,7 @@ async def handle_new_group_members(update: Update, context: ContextTypes.DEFAULT
 # --- Main Function ---
 def main() -> None:
     logger.info("Initializing bot application...")
+    logger.info("Registering command handlers...")
     application = Application.builder().token(BOT_TOKEN).build()
 
     logger.info("Registering command handlers...")
@@ -1666,6 +1752,7 @@ def main() -> None:
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CommandHandler("github", github))
     application.add_handler(CommandHandler("owner", owner_info))
+    application.add_handler(CommandHandler("info", user_info))
     application.add_handler(CommandHandler("gif", gif))
     application.add_handler(CommandHandler("photo", photo))
     application.add_handler(CommandHandler("meow", meow))
