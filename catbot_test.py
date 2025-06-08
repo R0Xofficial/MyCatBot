@@ -1899,7 +1899,25 @@ async def handle_new_group_members(update: Update, context: ContextTypes.DEFAULT
 
 # --- Blacklist Commands ---
 async def blacklist_user_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
- = update.message.reply_to_message.from_user
+    user = update.effective_user
+    if user.id != OWNER_ID:
+        if OWNER_ONLY_REFUSAL:
+            owner_mention = f"<code>{OWNER_ID}</code>"
+            try:
+                owner_chat = await context.bot.get_chat(OWNER_ID)
+                owner_mention = owner_chat.mention_html()
+            except Exception: pass
+            refusal_text = random.choice(OWNER_ONLY_REFUSAL).format(owner_mention=owner_mention)
+            await update.message.reply_html(refusal_text)
+        else:
+            await update.message.reply_text("Meeeow! Only my Owner can use this command!")
+        return
+
+    target_user_obj: User | None = None
+    reason = "No reason provided."
+
+    if update.message.reply_to_message:
+        target_user_obj = update.message.reply_to_message.from_user
         if context.args:
             reason = " ".join(context.args)
     elif context.args:
@@ -1966,7 +1984,7 @@ async def blacklist_user_command(update: Update, context: ContextTypes.DEFAULT_T
                 logger.error(f"Failed to send blacklist PM notification to Owner: {e}", exc_info=True)
     else:
         await update.message.reply_text("Mrow? Failed to add user to the blacklist. Check logs.")
-        
+
 async def unblacklist_user_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
     if user.id != OWNER_ID:
