@@ -76,30 +76,50 @@ def init_db():
 # --- Blacklist Helper Functions ---
 def add_to_blacklist(user_id: int, banned_by_id: int, reason: str | None = "No reason provided.") -> bool:
     conn = None
-    try: conn = sqlite3.connect(DB_NAME); cursor = conn.cursor()
-    cursor.execute("INSERT OR IGNORE INTO blacklist (user_id, reason, banned_by_id) VALUES (?, ?, ?)", (user_id, reason, banned_by_id)); conn.commit()
-    return cursor.rowcount > 0
-    except sqlite3.Error as e: logger.error(f"SQLite error adding {user_id} to blacklist: {e}", exc_info=True); return False
+    try:
+        conn = sqlite3.connect(DB_NAME)
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT OR IGNORE INTO blacklist (user_id, reason, banned_by_id) VALUES (?, ?, ?)",
+            (user_id, reason, banned_by_id)
+        )
+        conn.commit()
+        return cursor.rowcount > 0
+    except sqlite3.Error as e:
+        logger.error(f"SQLite error adding user {user_id} to blacklist: {e}", exc_info=True)
+        return False
     finally:
-        if conn: conn.close()
+        if conn:
+            conn.close()
 
 def remove_from_blacklist(user_id: int) -> bool:
     conn = None
-    try: conn = sqlite3.connect(DB_NAME); cursor = conn.cursor()
-    cursor.execute("DELETE FROM blacklist WHERE user_id = ?", (user_id,)); conn.commit()
-    return cursor.rowcount > 0
-    except sqlite3.Error as e: logger.error(f"SQLite error removing {user_id} from blacklist: {e}", exc_info=True); return False
+    try:
+        conn = sqlite3.connect(DB_NAME)
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM blacklist WHERE user_id = ?", (user_id,))
+        conn.commit()
+        return cursor.rowcount > 0
+    except sqlite3.Error as e:
+        logger.error(f"SQLite error removing user {user_id} from blacklist: {e}", exc_info=True)
+        return False
     finally:
-        if conn: conn.close()
+        if conn:
+            conn.close()
 
 def is_user_blacklisted(user_id: int) -> bool:
     conn = None
-    try: conn = sqlite3.connect(DB_NAME); cursor = conn.cursor()
-    cursor.execute("SELECT 1 FROM blacklist WHERE user_id = ?", (user_id,))
-    return cursor.fetchone() is not None
-    except sqlite3.Error as e: logger.error(f"SQLite error checking blacklist for {user_id}: {e}", exc_info=True); return False
+    try:
+        conn = sqlite3.connect(DB_NAME)
+        cursor = conn.cursor()
+        cursor.execute("SELECT 1 FROM blacklist WHERE user_id = ?", (user_id,))
+        return cursor.fetchone() is not None
+    except sqlite3.Error as e:
+        logger.error(f"SQLite error checking blacklist for user {user_id}: {e}", exc_info=True)
+        return False
     finally:
-        if conn: conn.close()
+        if conn:
+            conn.close()
 
 # --- CAT TEXTS SECTION ---
 # /meow texts - General cat noises and behaviors
