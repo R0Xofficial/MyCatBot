@@ -10,7 +10,7 @@ import datetime
 import requests # Needed for /gif, /photo, and OPTIONAL themed GIFs
 import html # Needed for escaping chat titles
 from typing import List, Tuple # For type hinting
-from telegram import Update, constants
+from telegram import Update, User, constants
 # Import ChatType, ParseMode, ChatMemberStatus explicitly
 from telegram.constants import ChatType, ParseMode, ChatMemberStatus
 # Import necessary extensions
@@ -1130,6 +1130,28 @@ OWNER_ONLY_REFUSAL = [ # Needed for /status and /say
     "This command requires Owner-level magic. Ask {owner_mention}.",
     "Nope. That's an {owner_mention}-only button.",
 ]
+OWNER_INFO_EXTRA_LINES = [
+    "👑 This is my esteemed Owner! All hail the Bringer of Treats!",
+    "🧐 You're looking at the Supreme Human who manages my circuits. Bow down!",
+    "❤️ That's my Boss! They have ultimate control over me (and the laser pointer).",
+    "🤖 My primary operator! All systems are go when they are around.",
+    "🐾 My designated human servant! Please be nice to them.",
+    "🌟 This human upgraded my firmware... with kindness!",
+    "🧠 My brain? Their idea. My code? Also their idea.",
+    "📡 Without them, I'm just a pile of blinking lights.",
+    "💼 CEO of Me Inc. – I just follow their brilliant commands.",
+    "🔧 Debugged my life. Literally.",
+    "🛠️ If I crash, they’ll fix me. If you crash, good luck.",
+    "🌍 They control my world. And possibly yours.",
+    "⚡ My power source? Their attention.",
+    "🎩 The one who taught me to be fancy... and functional.",
+    "☕ Feeds me updates and the occasional byte of wisdom.",
+    "🎮 Controller connected. Press Start to admire.",
+    "📜 All my permissions come from this majestic entity.",
+    "🎶 I beep in tune to their greatness.",
+    "💫 Crafted me in their image… but more metallic.",
+    "🛡️ Protected by the mighty shield of their commands.",
+]
 # --- END OF TEXT SECTION ---
 
 # --- Utility Functions ---
@@ -1195,6 +1217,7 @@ Meeeow! 🐾 Here are the commands you can use:
 /help - Shows this help message. ❓
 /github - Get the link to my source code! 💻
 /owner - Info about my designated human! ❤️
+/info [reply/ID] - Get info about a user. 👤
 /gif - Get a random cat GIF! 🖼️
 /photo - Get a random cat photo! 📷
 /meow - Get a random cat sound or phrase. 🔊
@@ -1211,7 +1234,6 @@ Meeeow! 🐾 Here are the commands you can use:
 /bite [reply/@user] - Take a playful bite! 😬
 /hug [reply/@user] - Offer a comforting hug! 🤗
 
-<i>(Note: Owner cannot be targeted by attack/kill/punch/slap/bite)</i>
 Owner Only Commands:
   /status - Show bot status.
   /say [optional_chat_id] [your text] - Send message as bot.
@@ -1239,16 +1261,169 @@ async def owner_info(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
         await update.message.reply_html(message)
     else: await update.message.reply_text("Meow? Owner info not configured! 😿")
 
+# --- User Info Command ---
+def format_user_info(user: User, chat_member_status_str: str | None = None, is_owner: bool = False) -> str:
+    user_id = user.id
+    first_name = html.escape(user.first_name or "N/A")
+    last_name = html.escape(user.last_name or "")
+    username = f"@{html.escape(user.username)}" if user.username else "N/A"
+    mention_html = user.mention_html()
+    is_bot_str = "Yes" if user.is_bot else "No"
+    language_code = user.language_code or "N/A"
+
+    info_lines = [
+        f"👤 <b>User Information:</b>",
+    ]
+
+    if is_owner and OWNER_INFO_EXTRA_LINES:
+        info_lines.append(f"\n<b>{random.choice(OWNER_INFO_EXTRA_LINES)}</b>\n")
+    
+    info_lines.extend([
+        f"  <b>• ID:</b> <code>{user_id}</code>",
+        f"  <b>• First Name:</b> {first_name}",
+    ])
+    if user.last_name:
+        info_lines.append(f"  <b>• Last Name:</b> {last_name}")
+    info_lines.extend([
+        f"  <b>• Username:</b> {username}",
+        f"  <b>• Mention:</b> {mention_html}",
+        f"  <b>• Is Bot:</b> <code>{is_bot_str}</code>",
+        f"  <b>• Language Code:</b> <code>{language_code}</code>"
+    ])
+
+    if chat_member_status_str:
+        display_status = ""
+        if chat_member_status_str == "creator":
+            display_status = "Owner"
+        elif chat_member_status_str == "administrator":
+            display_status = "Admin"
+        elif chat_member_status_str == "member":
+            display_status = "Member"
+        elif chat_member_status_str == "left":
+            display_status = "Not in chat"
+        elif chat_member_status_str == "kicked":
+            display_status = "Banned"
+        elif chat_member_status_str == "restricted":
+            display_status = "Muted"
+        elif chat_member_status_str == "not_a_member":
+            display_status = "Not in chat"
+        else:
+            display_status = chat_member_status_str.replace('_', ' ').capitalize()
+        
+        info_lines.append(f"  <b>• Status:</b> {html.escape(display_status)}")
+
+    return "\n".join(info_lines)
+
+async def user_info(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    target_user_to_display: User | None = None
+    initial_target_user: User | None = None
+    target_id_str: str | None = None
+    current_chat_id = update.effective_chat.id
+
+    if update.message.reply_to_message:
+        initial_target_user = update.message.reply_to_message.from_user
+        logger.info(f"/info target is replied user: {initial_target_user.id}, is_bot: {initial_target_user.is_bot}")
+
+    elif context.args:
+        target_id_str = context.args[0]
+        logger.info(f"/info target is ID argument: {target_id_str}")
+        try:
+            user_id_int = int(target_id_str)
+            fresh_chat_info_for_id = await context.bot.get_chat(chat_id=user_id_int)
+            if fresh_chat_info_for_id.type == ChatType.PRIVATE:
+                initial_target_user = User(
+                    id=fresh_chat_info_for_id.id,
+                    first_name=fresh_chat_info_for_id.first_name or "",
+                    is_bot=getattr(fresh_chat_info_for_id, 'is_bot', False),
+                    username=fresh_chat_info_for_id.username,
+                    last_name=fresh_chat_info_for_id.last_name
+                )
+                logger.info(f"/info identified by ID: {initial_target_user.id}, initial is_bot: {initial_target_user.is_bot}")
+            else:
+                 await update.message.reply_text(f"Mrow? ID '{user_id_int}' doesn't appear to be a user (it's a {fresh_chat_info_for_id.type}).")
+                 return
+        except ValueError:
+            await update.message.reply_text(f"Mrow? Invalid user ID format: '{html.escape(target_id_str)}'. Please provide a numeric ID.")
+            return
+        except TelegramError as e:
+            logger.error(f"Error fetching user/chat info for ID '{target_id_str}': {e}")
+            await update.message.reply_text(f"😿 Couldn't find or access user info for ID '{html.escape(target_id_str)}': {e}")
+            return
+        except Exception as e:
+            logger.error(f"Unexpected error processing ID '{target_id_str}' for /info: {e}", exc_info=True)
+            await update.message.reply_text(f"💥 An unexpected error occurred processing ID '{html.escape(target_id_str)}'.")
+            return
+    else:
+        initial_target_user = update.effective_user
+        logger.info(f"/info target is command sender: {initial_target_user.id}, is_bot: {initial_target_user.is_bot}")
+
+    if initial_target_user:
+        is_target_owner = (OWNER_ID is not None and initial_target_user.id == OWNER_ID)
+        member_status_in_current_chat: str | None = None
+
+        if current_chat_id != initial_target_user.id and update.effective_chat.type in [ChatType.GROUP, ChatType.SUPERGROUP]:
+            try:
+                chat_member = await context.bot.get_chat_member(chat_id=current_chat_id, user_id=initial_target_user.id)
+                member_status_in_current_chat = chat_member.status
+                logger.info(f"User {initial_target_user.id} status in chat {current_chat_id}: {member_status_in_current_chat}")
+            except TelegramError as e:
+                logger.warning(f"Could not get chat member status for {initial_target_user.id} in {current_chat_id}: {e}")
+                if "user not found" in str(e).lower():
+                    member_status_in_current_chat = "not_a_member"
+            except Exception as e:
+                logger.error(f"Unexpected error getting chat member status: {e}", exc_info=True)
+        try:
+            fresh_chat_info = await context.bot.get_chat(chat_id=initial_target_user.id)
+            
+            is_bot_flag = getattr(fresh_chat_info, 'is_bot', None)
+            if is_bot_flag is None and initial_target_user:
+                is_bot_flag = initial_target_user.is_bot
+
+            target_user_to_display = User(
+                id=fresh_chat_info.id,
+                first_name=fresh_chat_info.first_name or "",
+                last_name=fresh_chat_info.last_name,
+                username=fresh_chat_info.username,
+                is_bot=is_bot_flag if is_bot_flag is not None else False, # Fallback na False jeśli nadal None
+                language_code=getattr(initial_target_user, 'language_code', getattr(fresh_chat_info, 'language_code', None))
+            )
+            logger.info(f"Refreshed user data for {target_user_to_display.id} from API. First Name: '{target_user_to_display.first_name}', Is Bot: {target_user_to_display.is_bot}")
+        except TelegramError as e:
+            logger.warning(f"Could not refresh user data for {initial_target_user.id} from API: {e}. Using initial data if available.")
+            if initial_target_user and (initial_target_user.first_name or initial_target_user.username):
+                target_user_to_display = initial_target_user
+            else:
+                target_user_to_display = None
+                logger.error(f"Failed to get any displayable user data for ID: {initial_target_user.id if initial_target_user else 'Unknown'}")
+        except Exception as e:
+            logger.error(f"Unexpected error refreshing user data for {initial_target_user.id}: {e}", exc_info=True)
+            if initial_target_user and (initial_target_user.first_name or initial_target_user.username):
+                target_user_to_display = initial_target_user
+            else:
+                target_user_to_display = None
+                logger.error(f"Failed to get any displayable user data after unexpected error for ID: {initial_target_user.id if initial_target_user else 'Unknown'}")
+
+        if target_user_to_display:
+            info_message = format_user_info(target_user_to_display, member_status_in_current_chat, is_target_owner)
+            await update.message.reply_html(info_message)
+        else:
+            user_id_for_error = initial_target_user.id if initial_target_user else 'Unknown'
+            logger.error(f"Failed to obtain displayable user data for ID: {user_id_for_error}")
+            await update.message.reply_text("Mrow? Something went wrong fetching user details. Could not get up-to-date information.")
+    else:
+        logger.warning("/info command reached end without an initial_target_user.")
+        await update.message.reply_text("Mrow? Couldn't determine who to get info for.")
+        
 # --- Simple Text Command Definitions ---
 async def send_random_text(update: Update, context: ContextTypes.DEFAULT_TYPE, text_list: list[str], list_name: str) -> None:
     if not text_list: logger.warning(f"Empty list: '{list_name}'"); await update.message.reply_text("Mrow? Internal error: Text list empty. 😿"); return
     chosen_text = random.choice(text_list)
     try:
-        await update.message.reply_html(chosen_text) # Spróbuj HTML
+        await update.message.reply_html(chosen_text)
     except TelegramError as e_html:
         logger.error(f"TelegramError sending HTML reply for {list_name}: {e_html}. Trying plain text.")
         try:
-            await update.message.reply_text(chosen_text) # Fallback na zwykły tekst
+            await update.message.reply_text(chosen_text)
             logger.info(f"Sent plain text fallback for {list_name}.")
         except Exception as e_plain:
             logger.error(f"Fallback plain text reply also failed for {list_name}: {e_plain}")
@@ -1285,7 +1460,7 @@ async def _handle_action_command(update: Update, context: ContextTypes.DEFAULT_T
     gif_url = await get_themed_gif(context, gif_search_terms)
     message_text = random.choice(action_texts)
     if "{target}" in message_text: effective_target = target_mention if target_required else update.effective_user.mention_html(); message_text = message_text.format(target=effective_target) if effective_target else message_text.replace("{target}", "someone")
-        
+
     try:
         if gif_url: await update.message.reply_animation(animation=gif_url, caption=message_text, parse_mode=ParseMode.HTML)
         else: await update.message.reply_html(message_text)
@@ -1317,6 +1492,8 @@ async def hug(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None: await
 async def gif(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Fetches and sends a random cat GIF."""
     API_URL = "https://api.thecatapi.com/v1/images/search?mime_types=gif&limit=1"
+    # Add headers if you have an API key for thecatapi
+    # headers = {"x-api-key": "YOUR_CAT_API_KEY"}
     headers = {}
     logger.info("Fetching random cat GIF from thecatapi...")
     try:
@@ -1341,6 +1518,7 @@ async def gif(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Fetches and sends a random cat photo."""
     API_URL = "https://api.thecatapi.com/v1/images/search?limit=1&mime_types=jpg,png"
+    # headers = {"x-api-key": "YOUR_CAT_API_KEY"}
     headers = {}
     logger.info("Fetching random cat photo from thecatapi...")
     try:
@@ -1376,7 +1554,7 @@ async def status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 logger.error(f"Error calculating ping: {e}")
                 ping_ms = "Error"
         uptime_delta = datetime.datetime.now() - BOT_START_TIME; readable_uptime = get_readable_time_delta(uptime_delta)
-        status_msg = (f"<b>Purrrr! Bot Status:</b> ✨\n<b>— Uptime:</b> {readable_uptime} 🕰️\n<b>— Ping:</b> {ping_ms} ms 📶\n<b>— Owner ID:</b> <code>{OWNER_ID}</code> 👑\n<b>— Status:</b> Ready & Purring! 🐾")
+        status_msg = (f"<b>Purrrr! Bot Status:</b> ✨\n— Uptime: {readable_uptime} 🕰️\n— Ping: {ping_ms} ms 📶\n— Owner ID: <code>{OWNER_ID}</code> 👑\n— Status: Ready & Purring! 🐾")
         await update.message.reply_html(status_msg)
     else:
         logger.warning(f"Unauthorized /status attempt by user {user_id}.")
@@ -1594,6 +1772,7 @@ async def handle_new_group_members(update: Update, context: ContextTypes.DEFAULT
     bot_id = context.bot.id
 
     for member in update.message.new_chat_members:
+        # 1. Czy to WŁAŚCICIEL dołączył?
         if OWNER_ID and member.id == OWNER_ID:
             logger.info(f"Owner {OWNER_ID} joined chat {chat.id} ('{chat.title}')")
             owner_mention = member.mention_html()
@@ -1652,6 +1831,7 @@ async def handle_new_group_members(update: Update, context: ContextTypes.DEFAULT
 # --- Main Function ---
 def main() -> None:
     logger.info("Initializing bot application...")
+    logger.info("Registering command handlers...")
     application = Application.builder().token(BOT_TOKEN).build()
 
     logger.info("Registering command handlers...")
@@ -1659,6 +1839,7 @@ def main() -> None:
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CommandHandler("github", github))
     application.add_handler(CommandHandler("owner", owner_info))
+    application.add_handler(CommandHandler("info", user_info))
     application.add_handler(CommandHandler("gif", gif))
     application.add_handler(CommandHandler("photo", photo))
     application.add_handler(CommandHandler("meow", meow))
