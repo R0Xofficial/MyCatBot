@@ -1371,9 +1371,6 @@ def format_user_info(user: User, chat_member_status_str: str | None = None, is_o
     if blacklist_reason_str is not None:
         info_lines.append(f"  <b>• Blacklisted:</b> <code>Yes</code>")
         info_lines.append(f"     <b>Reason:</b> {html.escape(blacklist_reason_str)}")
-        if OWNER_ID:
-            owner_mention = owner_chat.mention_html();
-            info_lines.append(f"    <i>(To appeal, contact my Owner: {owner_mention})</i>")
     else:
         info_lines.append(f"  <b>• Blacklisted:</b> <code>No</code>")
     return "\n".join(info_lines)
