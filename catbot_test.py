@@ -1280,19 +1280,19 @@ def format_user_info(user: User, chat_member_status_str: str | None = None, is_o
     if chat_member_status_str:
         display_status = ""
         if chat_member_status_str == "creator":
-            display_status = "Owner"
+            display_status = "<code>Owner</code>"
         elif chat_member_status_str == "administrator":
-            display_status = "Admin"
+            display_status = "<code>Admin</code>"
         elif chat_member_status_str == "member":
-            display_status = "Member"
+            display_status = "<code>Member</code>"
         elif chat_member_status_str == "left":
-            display_status = "Not in chat"
+            display_status = "<code>Not in chat</code>"
         elif chat_member_status_str == "kicked":
-            display_status = "Banned"
+            display_status = "<code>Banned</code>"
         elif chat_member_status_str == "restricted":
-            display_status = "Muted"
+            display_status = "<code>Muted</code>"
         elif chat_member_status_str == "not_a_member":
-            display_status = "Not in chat"
+            display_status = "<code>Not in chat</code>"
         else:
             display_status = f"<code>{html.escape(chat_member_status_str.replace('_', ' ').capitalize())}</code>"
         
