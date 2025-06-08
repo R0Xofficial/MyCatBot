@@ -1446,22 +1446,55 @@ async def hug(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None: await
 
 # --- GIF and Photo Commands ---
 async def gif(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    API_URL = "https://api.thecatapi.com/v1/images/search?mime_types=gif&limit=1"; headers = {}; logger.info("Fetching GIF from thecatapi...")
-    try: response = requests.get(API_URL, headers=headers, timeout=10); response.raise_for_status(); data = response.json()
-    if data and isinstance(data, list) and len(data) > 0 and 'url' in data[0]: await update.message.reply_animation(animation=data[0]['url'], caption="Meow! A random GIF for you! 🐾🖼️")
-    else: logger.warning(f"No valid GIF data from thecatapi: {data}"); await update.message.reply_text("Meow? Couldn't find GIF. 😿")
-    except requests.exceptions.Timeout: logger.error("Timeout fetching GIF."); await update.message.reply_text("Hiss! GIF source slow. ⏳")
-    except requests.exceptions.RequestException as e: logger.error(f"Error fetching GIF: {e}"); await update.message.reply_text("Hiss! Couldn't connect to GIF source. 😿")
-    except Exception as e: logger.error(f"Error processing GIF: {e}", exc_info=True); await update.message.reply_text("Mrow! Weird GIF error. 😵‍💫")
-
+    """Fetches and sends a random cat GIF."""
+    API_URL = "https://api.thecatapi.com/v1/images/search?mime_types=gif&limit=1"
+    # Add headers if you have an API key for thecatapi
+    # headers = {"x-api-key": "YOUR_CAT_API_KEY"}
+    headers = {}
+    logger.info("Fetching random cat GIF from thecatapi...")
+    try:
+        response = requests.get(API_URL, headers=headers, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+        if data and isinstance(data, list) and len(data) > 0 and 'url' in data[0]:
+            await update.message.reply_animation(animation=data[0]['url'], caption="Meow! A random GIF for you! 🐾🖼️")
+        else:
+            logger.warning(f"No valid GIF data received from thecatapi: {data}")
+            await update.message.reply_text("Meow? Couldn't find a GIF right now. 😿")
+    except requests.exceptions.Timeout:
+        logger.error("Timeout fetching GIF from thecatapi.")
+        await update.message.reply_text("Hiss! The cat GIF source is being slow. ⏳ Try again later!")
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Error fetching GIF from thecatapi: {e}")
+        await update.message.reply_text("Hiss! Couldn't connect to the cat GIF source. 😿")
+    except Exception as e:
+        logger.error(f"Unexpected error processing GIF from thecatapi: {e}", exc_info=True)
+        await update.message.reply_text("Mrow! Something weird happened while getting the GIF. 😵‍💫")
+        
 async def photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    API_URL = "https://api.thecatapi.com/v1/images/search?limit=1&mime_types=jpg,png"; headers = {}; logger.info("Fetching photo from thecatapi...")
-    try: response = requests.get(API_URL, headers=headers, timeout=10); response.raise_for_status(); data = response.json()
-    if data and isinstance(data, list) and len(data) > 0 and 'url' in data[0]: await update.message.reply_photo(photo=data[0]['url'], caption="Purrfect! A random photo for you! 🐾📷")
-    else: logger.warning(f"No valid photo data from thecatapi: {data}"); await update.message.reply_text("Meow? Couldn't find photo. 😿")
-    except requests.exceptions.Timeout: logger.error("Timeout fetching photo."); await update.message.reply_text("Hiss! Photo source slow. ⏳")
-    except requests.exceptions.RequestException as e: logger.error(f"Error fetching photo: {e}"); await update.message.reply_text("Hiss! Couldn't connect to photo source. 😿")
-    except Exception as e: logger.error(f"Error processing photo: {e}", exc_info=True); await update.message.reply_text("Mrow! Weird photo error. 😵‍💫")
+    """Fetches and sends a random cat photo."""
+    API_URL = "https://api.thecatapi.com/v1/images/search?limit=1&mime_types=jpg,png"
+    # headers = {"x-api-key": "YOUR_CAT_API_KEY"}
+    headers = {}
+    logger.info("Fetching random cat photo from thecatapi...")
+    try:
+        response = requests.get(API_URL, headers=headers, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+        if data and isinstance(data, list) and len(data) > 0 and 'url' in data[0]:
+            await update.message.reply_photo(photo=data[0]['url'], caption="Purrfect! A random photo for you! 🐾📷")
+        else:
+            logger.warning(f"No valid photo data received from thecatapi: {data}")
+            await update.message.reply_text("Meow? Couldn't find a photo right now. 😿")
+    except requests.exceptions.Timeout:
+        logger.error("Timeout fetching photo from thecatapi.")
+        await update.message.reply_text("Hiss! The cat photo source is being slow. ⏳ Try again later!")
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Error fetching photo from thecatapi: {e}")
+        await update.message.reply_text("Hiss! Couldn't connect to the cat photo source. 😿")
+    except Exception as e:
+        logger.error(f"Unexpected error processing photo from thecatapi: {e}", exc_info=True)
+        await update.message.reply_text("Mrow! Something weird happened while getting the photo. 😵‍💫")
 
 # --- Owner Only Functionality ---
 async def status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
