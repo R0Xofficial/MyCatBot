@@ -2068,7 +2068,7 @@ def main() -> None:
     application = Application.builder().token(BOT_TOKEN).build()
 
     logger.info("Registering blacklist check handler...")
-    application.add_handler(MessageHandler(filters.COMMAND | filters.TEXT & (~filters.UpdateType.EDITED_MESSAGE), check_blacklist_handler), group=-1)
+    application.add_handler(MessageHandler(filters.COMMAND, check_blacklist_handler), group=-1)
 
     logger.info("Registering command handlers...")
     application.add_handler(CommandHandler("start", start))
