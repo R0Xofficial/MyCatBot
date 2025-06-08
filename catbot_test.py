@@ -1263,7 +1263,7 @@ def format_user_info(user: User, chat_member_status: str | None = None, is_owner
     ]
 
     if is_owner and OWNER_INFO_EXTRA_LINES:
-        info_lines.append(f" <b>{random.choice(OWNER_INFO_EXTRA_LINES)}</b>")
+        info_lines.append(f"<b>{random.choice(OWNER_INFO_EXTRA_LINES)}</b>")
     
         info_lines.extend([
         f"  <b>ID:</b> <code>{user_id}</code>",
