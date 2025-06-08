@@ -1224,28 +1224,6 @@ OWNER_ONLY_REFUSAL = [ # Needed for /status and /say
     "This command requires Owner-level magic. Ask {owner_mention}.",
     "Nope. That's an {owner_mention}-only button.",
 ]
-OWNER_INFO_EXTRA_LINES = [
-    "🐾 This is my hooman. They serve me snacks and praise. I allow it.",
-    "😼 My official can opener and litter box technician.",
-    "🐱 Bringer of tuna, scratcher of ears, warmer of laps.",
-    "🛋️ My designated nap cushion. Do not sit there.",
-    "🐟 Authorized distributor of treats. Proceed with purring.",
-    "🧹 The one who scoops the sacred sand. Truly devoted.",
-    "🧶 My toy thrower and accidental laser pointer wielder.",
-    "👑 Serves royalty (me) with dignity and daily kibble.",
-    "📦 Brings boxes for me to ignore and then sit in.",
-    "💤 Understands that 18 naps a day is *normal*.",
-    "🥣 Refills my bowl without question. Trained to obey.",
-    "🐾 Pawsitively my favorite servant. They know the rules.",
-    "📱 Drops everything when I meow near the phone. Good.",
-    "🐾 Lets me walk across the keyboard like a proper cat god.",
-    "😹 Meows back at me. Communication level: Excellent hooman.",
-    "🎣 Waves string like it's their full-time job. Respect.",
-    "🐈‍⬛ Signed the sacred treaty of belly rubs (at own risk).",
-    "🪶 Keeps the bird videos coming. I’m entertained.",
-    "😴 Doesn’t mind that I wake them at 3AM. Loyal.",
-    "🚪 Opens doors I just meowed at. Then I walk away. Perfect."
-]
 
 BLACKLISTED_USER_RESPONSE_TEXTS = [
     "Meeeow... 😿 It seems you are on my naughty list. Please contact my Owner ({owner_mention}) if you believe this is a mistake.",
@@ -1374,10 +1352,9 @@ def format_user_info(user: User, chat_member_status_str: str | None = None, is_o
     permalink_text_display = "Link" 
     permalink_html = f"<a href=\"{permalink_url}\">{permalink_text_display}</a>"
     info_lines = [f"👤 <b>User Information:</b>"]
-    if is_owner and OWNER_INFO_EXTRA_LINES: info_lines.append(f"\n  <b>• Bot owner:</b> <code>Yes</code>\n{random.choice(OWNER_INFO_EXTRA_LINES)}\n")
-    info_lines.extend([f"  <b>• ID:</b> <code>{user_id}</code>", f"  <b>• First Name:</b> {first_name}"])
+    info_lines.extend([f"\n  <b>• ID:</b> <code>{user_id}</code>", f"  <b>• First Name:</b> {first_name}"])
     if user.last_name: info_lines.append(f"  <b>• Last Name:</b> {last_name}")
-    info_lines.extend([f"  <b>• Username:</b> {username_display}", f"  <b>• Permalink:</b> {permalink_html}", f"  <b>• Is Bot:</b> {is_bot_str}", f"  <b>• Language Code:</b> {language_code}"])
+    info_lines.extend([f"\n  <b>• Username:</b> {username_display}", f"  <b>• Permalink:</b> {permalink_html}", f"  <b>• Is Bot:</b> {is_bot_str}", f"  <b>• Language Code:</b> {language_code}"])
     if chat_member_status_str:
         display_status = ""
         if chat_member_status_str == "creator": display_status = "<code>Owner</code>"
@@ -1389,6 +1366,7 @@ def format_user_info(user: User, chat_member_status_str: str | None = None, is_o
         elif chat_member_status_str == "not_a_member": display_status = "<code>Not in chat</code>"
         else: display_status = f"<code>{html.escape(chat_member_status_str.replace('_', ' ').capitalize())}</code>"
         info_lines.append(f"  <b>• Status:</b> {display_status}")
+    if is_owner: info_lines.append(f"\n  <b>• Bot owner:</b> <code>Yes</code>\n")
     info_lines.append(f"  <b>• Blacklisted:</b> {'<code>Yes</code>' if is_blacklisted_flag else '<code>No</code>'}")
     return "\n".join(info_lines)
 
