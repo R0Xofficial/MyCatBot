@@ -1367,7 +1367,7 @@ def format_user_info(user: User, chat_member_status_str: str | None = None, is_o
         else: display_status = f"<code>{html.escape(chat_member_status_str.replace('_', ' ').capitalize())}</code>"
         info_lines.append(f"  <b>• Status:</b> {display_status}")
     info_lines.append(f"\n  <b>• Blacklisted:</b> {'<code>Yes</code>' if is_blacklisted_flag else '<code>No</code>'}")
-    if is_owner: info_lines.append(f"  <b>• Bot owner:</b> <code>Yes</code>")
+    if is_owner: info_lines.append(f"  <b>• Bot Owner:</b> <code>Yes</code>")
     return "\n".join(info_lines)
 
 async def user_info(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
