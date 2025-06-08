@@ -1327,12 +1327,12 @@ async def user_info(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     elif context.args:
         target_id_str = context.args[0]
-		try:
-		    if target_id_str.startswith("@"):
+	try:
+	    if target_id_str.startswith("@"):
 		        fresh_chat_info_for_id = await context.bot.get_chat(target_id_str)
-		    else:
-		        user_id_int = int(target_id_str)
-		        fresh_chat_info_for_id = await context.bot.get_chat(user_id_int)
+	    else:
+		user_id_int = int(target_id_str)
+		fresh_chat_info_for_id = await context.bot.get_chat(user_id_int)
             if fresh_chat_info_for_id.type == ChatType.PRIVATE:
                 initial_target_user = User(
                     id=fresh_chat_info_for_id.id,
