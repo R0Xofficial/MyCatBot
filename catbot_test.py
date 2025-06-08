@@ -1374,7 +1374,7 @@ def format_user_info(user: User, chat_member_status_str: str | None = None, is_o
     permalink_text_display = "Link" 
     permalink_html = f"<a href=\"{permalink_url}\">{permalink_text_display}</a>"
     info_lines = [f"👤 <b>User Information:</b>"]
-    if is_owner and OWNER_INFO_EXTRA_LINES: info_lines.append(f"\n  <b>• Bot owner:</b> <code>Yes</code>\n<b>{random.choice(OWNER_INFO_EXTRA_LINES)}</b>\n")
+    if is_owner and OWNER_INFO_EXTRA_LINES: info_lines.append(f"\n  <b>• Bot owner:</b> <code>Yes</code>\n{random.choice(OWNER_INFO_EXTRA_LINES)}\n")
     info_lines.extend([f"  <b>• ID:</b> <code>{user_id}</code>", f"  <b>• First Name:</b> {first_name}"])
     if user.last_name: info_lines.append(f"  <b>• Last Name:</b> {last_name}")
     info_lines.extend([f"  <b>• Username:</b> {username_display}", f"  <b>• Permalink:</b> {permalink_html}", f"  <b>• Is Bot:</b> {is_bot_str}", f"  <b>• Language Code:</b> {language_code}"])
