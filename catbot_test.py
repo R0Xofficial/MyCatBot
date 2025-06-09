@@ -1756,10 +1756,14 @@ async def chat_info_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             return
     else:
         chat_to_inspect = update.effective_chat
-        target_chat_id = chat_to_inspect.id
-        logger.info(f"/cinfo called for current chat: {target_chat_id}")
+        if chat_to_inspect:
+             target_chat_id = chat_to_inspect.id
+             logger.info(f"/cinfo called for current chat: {target_chat_id}")
+        else:
+             await update.message.reply_text("Mrow? Could not determine current chat.")
+             return
 
-    if not chat_to_inspect:
+    if not chat_to_inspect or target_chat_id is None:
         await update.message.reply_text("Mrow? Couldn't determine the chat to inspect.")
         return
 
@@ -1781,7 +1785,7 @@ async def chat_info_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     elif chat_to_inspect.type != ChatType.CHANNEL:
         try:
             bot_member = await context.bot.get_chat_member(chat_id=target_chat_id, user_id=bot_id)
-            if bot_member.status == ChatMemberStatus.ADMINISTRATOR and bot_member.can_invite_users:
+            if bot_member.status == "administrator" and bot_member.can_invite_users:
                 link_name = f"cinfo_{str(target_chat_id)[-5:]}_{random.randint(100,999)}"
                 invite_link_obj = await context.bot.create_chat_invite_link(chat_id=target_chat_id, name=link_name)
                 chat_link_line = f"<b>• Generated Invite Link:</b> {invite_link_obj.invite_link} (temporary)"
@@ -1817,19 +1821,30 @@ async def chat_info_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         admin_count_val = len(administrators)
         admin_list_str_parts.append(f"  <b>• Total:</b> {admin_count_val}")
 
-        for admin in administrators:
-            admin_user = admin.user
-            admin_name = admin_user.mention_html() if admin_user.username else html.escape(admin_user.full_name or admin_user.first_name or f"ID: {admin_user.id}")
-            detail = f"      • {admin_name}"
-            if admin.status == ChatMemberStatus.creator: detail += " (Creator ✨)"
-            if admin_user.is_bot: detail += " (Bot 🤖)"; admin_bot_count += 1
-            else: admin_human_count +=1
-            admin_details_list.append(detail)
+        for admin_member in administrators:
+            admin_user = admin_member.user
+            admin_name_display = f"Unknown Admin (ID: {admin_user.id if admin_user else 'N/A'})"
+            if admin_user:
+                if admin_user.username: admin_name_display = admin_user.mention_html()
+                elif admin_user.full_name: admin_name_display = html.escape(admin_user.full_name)
+                elif admin_user.first_name: admin_name_display = html.escape(admin_user.first_name)
+                
+                detail_line = f"    • {admin_name_display}"
+                current_admin_status_str = getattr(admin_member, 'status', None)
+                if current_admin_status_str == "creator":
+                    detail_line += " (Creator ✨)"
+                
+                if admin_user.is_bot: detail_line += " (Bot 🤖)"; admin_bot_count += 1
+                else: admin_human_count +=1
+                admin_details_list.append(detail_line)
+            else:
+                admin_details_list.append(f"    • Unknown Admin (data unavailable)")
+                logger.warning(f"Admin data unavailable for one admin in chat {target_chat_id}")
         
         admin_list_str_parts.append(f"  <b>• Humans:</b> {admin_human_count}")
         admin_list_str_parts.append(f"  <b>• Bots:</b> {admin_bot_count}")
         if admin_details_list:
-             admin_list_str_parts.append("    <b>• List (max 10 shown):</b>")
+             admin_list_str_parts.append("  <b>• List (max 10 shown):</b>")
              admin_list_str_parts.extend(admin_details_list[:10])
              if len(admin_details_list) > 10: admin_list_str_parts.append(f"      ...and {len(admin_details_list) - 10} more.")
     except TelegramError as e:
@@ -1843,13 +1858,14 @@ async def chat_info_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
     if isinstance(member_count_val, int) and isinstance(admin_count_val, int) and admin_count_val >=0:
          other_members_count = member_count_val - admin_count_val
-         info_lines.append(f"  <b>• Other Members (approx.):</b> {other_members_count if other_members_count >= 0 else 'N/A'}")
+         info_lines.append(f"<b>• Other Members (approx.):</b> {other_members_count if other_members_count >= 0 else 'N/A'}")
 
     bot_status_lines = ["\n<b>• Bot Status in this Chat:</b>"]
     try:
         bot_member_on_chat = await context.bot.get_chat_member(chat_id=target_chat_id, user_id=bot_id)
-        bot_status_lines.append(f"  <b>• Status:</b> {bot_member_on_chat.status.capitalize()}")
-        if bot_member_on_chat.status == ChatMemberStatus.administrator:
+        bot_current_status_str = bot_member_on_chat.status
+        bot_status_lines.append(f"  <b>• Status:</b> {bot_current_status_str.capitalize()}")
+        if bot_current_status_str == "administrator":
             if bot_member_on_chat.can_restrict_members:
                 bot_status_lines.append("  <b>• Can manage banned users:</b> Yes ✅")
             else:
