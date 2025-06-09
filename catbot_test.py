@@ -1336,7 +1336,7 @@ Meeeow! 🐾 Here are the commands you can use:
 /help - Shows this help message. ❓
 /github - Get the link to my source code! 💻
 /owner - Info about my designated human! ❤️
-/info [reply/ID] - Get info about a user. 👤
+/info [ID/reply/@user] - Get info about a user. 👤
 /gif - Get a random cat GIF! 🖼️
 /photo - Get a random cat photo! 📷
 /meow - Get a random cat sound or phrase. 🔊
@@ -1357,8 +1357,8 @@ Owner Only Commands
   /status - Show bot status.
   /say [optional_chat_id] [your text] - Send message as bot.
   /leave [optional_chat_id] - Make the bot leave a chat.
-  /blacklist [ID/reply] [reason] - Add user to blacklist.
-  /unblacklist [ID/reply] - Remove user from blacklist.
+  /blacklist [ID/reply/@user] [reason] - Add user to blacklist.
+  /unblacklist [ID/reply/@user] - Remove user from blacklist.
 """
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
