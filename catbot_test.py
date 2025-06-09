@@ -137,24 +137,10 @@ async def check_blacklist_handler(update: Update, context: ContextTypes.DEFAULT_
 
     if is_user_blacklisted(user.id):
         user_mention_log = f"@{user.username}" if user.username else str(user.id)
-        logger.info(f"User {user.id} ({user_mention_log}) is blacklisted. Blocking their interaction.")
+        message_text_preview = update.message.text[:50] if update.message.text else "[No text content]"
         
-        owner_mention_html = f"<code>{OWNER_ID}</code>"
-        try:
-            owner_chat = await context.bot.get_chat(OWNER_ID)
-            owner_mention_html = owner_chat.mention_html()
-        except Exception as e:
-            logger.warning(f"Could not fetch owner's mention for blacklist response: {e}")
-
-        response_text = "Mrow! Your access has been restricted."
-        if BLACKLISTED_USER_RESPONSE_TEXTS:
-            response_text = random.choice(BLACKLISTED_USER_RESPONSE_TEXTS).format(owner_mention=owner_mention_html)
+        logger.info(f"User {user.id} ({user_mention_log}) is blacklisted. Silently ignoring and blocking interaction: '{message_text_preview}'")
         
-        try:
-            await update.message.reply_html(response_text)
-        except Exception as e:
-            logger.error(f"Failed to send blacklist notification to user {user.id}: {e}")
-
         raise ApplicationHandlerStop
 
 # --- User logger ---
@@ -1287,23 +1273,6 @@ OWNER_ONLY_REFUSAL = [ # Needed for /status and /say
     "You need the Owner's permission ({owner_mention}) for that.",
     "This command requires Owner-level magic. Ask {owner_mention}.",
     "Nope. That's an {owner_mention}-only button.",
-]
-
-BLACKLISTED_USER_RESPONSE_TEXTS = [
-    "Meeeow... 😿 It seems you are on my naughty list. Please contact my Owner ({owner_mention}) if you believe this is a mistake.",
-    "Purrrr... Unfortunately, your access to my purrfect services has been restricted. My Owner, {owner_mention}, might be able to help.",
-    "Access Denied: Feline Unit 734 has placed you on a temporary (or permanent) timeout. Contact Supervisor: {owner_mention}.",
-    "My apologies, but I cannot process your request at this time. You appear to be on the blacklist. My Owner: {owner_mention}.",
-    "😾 No purring allowed for you. My tail twitched in disapproval. Ask {owner_mention} for forgiveness.",
-    "🐾 Your scent is... not approved. Paw off until {owner_mention} says otherwise.",
-    "📛 Scratched from my friends list. Only my Owner {owner_mention} can undo the clawmark.",
-    "🚫 You stepped on my tail metaphorically. Access revoked. Meow at {owner_mention} to appeal.",
-    "🐱‍👤 You're in the shadow realm of cat judgment. Only {owner_mention} holds the key to redemption.",
-    "😿 You've been put in the 'no petting' zone. Only {owner_mention} can let you back into the sunbeam.",
-    "🍗 You tried to touch the sacred treats. Big no-no. Contact {owner_mention} if you seek mercy.",
-    "🛑 You’ve triggered the Hiss Protocol. My claws are retracted... for now. Talk to {owner_mention}.",
-    "👃 My whiskers detect... untrustworthy vibes. Blacklisted! {owner_mention} might forgive you.",
-    "🧶 Access to yarn mode denied. Maybe {owner_mention} will grant you another chance to play."
 ]
 # --- END OF TEXT SECTION ---
 
