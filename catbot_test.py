@@ -1814,7 +1814,6 @@ async def chat_info_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
     admin_list_str_parts = ["<b>• Administrators:</b>"]
     admin_details_list = []
-    admin_human_count = 0
     try:
         administrators = await context.bot.get_chat_administrators(chat_id=target_chat_id)
         admin_count_val = len(administrators)
@@ -1833,15 +1832,11 @@ async def chat_info_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
                 if current_admin_status_str == "creator":
                     detail_line += " (Creator ✨)"
                 
-                if not admin_user.is_bot:
-                    admin_human_count +=1
-                
                 admin_details_list.append(detail_line)
             else:
                 admin_details_list.append(f"    • Unknown Admin (data unavailable)")
                 logger.warning(f"Admin data unavailable for one admin in chat {target_chat_id}")
         
-        admin_list_str_parts.append(f"  <b>• Human Admins:</b> {admin_human_count}")
         if admin_details_list:
              admin_list_str_parts.append("  <b>• List:</b>")
              admin_list_str_parts.extend(admin_details_list)
