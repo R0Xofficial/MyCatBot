@@ -1922,32 +1922,44 @@ async def blacklist_user_command(update: Update, context: ContextTypes.DEFAULT_T
 
     target_user_obj: User | None = None
     reason = "No reason provided."
+    target_input_str: str | None = None
 
     if update.message.reply_to_message:
         target_user_obj = update.message.reply_to_message.from_user
         if context.args:
             reason = " ".join(context.args)
     elif context.args:
-        target_id_str = context.args[0]
-        try:
-            target_id = int(target_id_str)
-            try:
-                chat_info = await context.bot.get_chat(target_id)
-                if chat_info.type == ChatType.PRIVATE:
-                     target_user_obj = User(id=chat_info.id, first_name=chat_info.first_name or f"User {target_id}", is_bot=getattr(chat_info, 'is_bot', False), username=chat_info.username, last_name=chat_info.last_name)
-                else:
-                     await update.message.reply_text(f"Mrow? ID {target_id} does not seem to be a user (type: {chat_info.type}).")
-                     return
-            except TelegramError as e:
-                logger.warning(f"Couldn't fully verify user ID {target_id} for blacklist: {e}. Blacklisting ID directly.")
-                target_user_obj = User(id=target_id, first_name=f"User {target_id}", is_bot=False)
+        target_input_str = context.args[0]
+        
+        if target_input_str.startswith("@"):
+            username_to_find = target_input_str[1:]
+            target_user_obj = get_user_from_db_by_username(username_to_find)
+            if not target_user_obj:
+                await update.message.reply_text(f"Mrow? User @{html.escape(username_to_find)} not found in my known contacts. Please use their ID or reply to their message.")
+                return
             if len(context.args) > 1:
                 reason = " ".join(context.args[1:])
-        except ValueError:
-            await update.message.reply_text("Mrow? Invalid format. Use /blacklist <user_id> [reason] or reply to a user's message.")
-            return
+        else:
+            try:
+                target_id = int(target_input_str)
+                try:
+                    chat_info = await context.bot.get_chat(target_id)
+                    if chat_info.type == ChatType.PRIVATE:
+                         target_user_obj = User(id=chat_info.id, first_name=chat_info.first_name or f"User {target_id}", is_bot=getattr(chat_info, 'is_bot', False), username=chat_info.username, last_name=chat_info.last_name)
+                    else:
+                         await update.message.reply_text(f"Mrow? ID {target_id} does not seem to be a user (type: {chat_info.type}).")
+                         return
+                except TelegramError as e:
+                    logger.warning(f"Couldn't fully verify user ID {target_id} for blacklist: {e}. Blacklisting ID directly.")
+                    target_user_obj = User(id=target_id, first_name=f"User {target_id}", is_bot=False)
+                
+                if len(context.args) > 1:
+                    reason = " ".join(context.args[1:])
+            except ValueError:
+                await update.message.reply_text("Mrow? Invalid format. Use /blacklist <ID/@username> [reason] or reply.")
+                return
     else:
-        await update.message.reply_text("Mrow? Please specify a user ID (or reply to a message) to blacklist.")
+        await update.message.reply_text("Mrow? Please specify a user ID/@username (or reply to a message) to blacklist.")
         return
 
     if not target_user_obj:
@@ -1969,24 +1981,12 @@ async def blacklist_user_command(update: Update, context: ContextTypes.DEFAULT_T
     if add_to_blacklist(target_user_obj.id, user.id, reason):
         logger.info(f"Owner {user.id} blacklisted user {target_user_obj.id} (@{target_user_obj.username}). Reason: {reason}")
         user_display = target_user_obj.mention_html() if target_user_obj.username else html.escape(target_user_obj.first_name or str(target_user_obj.id))
-        
-        await update.message.reply_html(
-            f"✅ User {user_display} (<code>{target_user_obj.id}</code>) has been added to the blacklist.\n"
-            f"Reason: {html.escape(reason)}"
-        )
-
+        await update.message.reply_html(f"✅ User {user_display} (<code>{target_user_obj.id}</code>) has been added to the blacklist.\nReason: {html.escape(reason)}")
         if OWNER_ID:
             try:
                 current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S UTC")
-                pm_message = (
-                    f"<b>#BLACKLISTED</b>\n\n"
-                    f"<b>User:</b> {user_display} (<code>{target_user_obj.id}</code>)\n"
-                    f"<b>Username:</b> @{html.escape(target_user_obj.username) if target_user_obj.username else 'N/A'}\n"
-                    f"<b>Reason:</b> {html.escape(reason)}\n"
-                    f"<b>Date:</b> <code>{current_time}</code>"
-                )
+                pm_message = (f"<b>#BLACKLISTED</b>\n\n<b>User:</b> {user_display} (<code>{target_user_obj.id}</code>)\n<b>Username:</b> @{html.escape(target_user_obj.username) if target_user_obj.username else 'N/A'}\n<b>Reason:</b> {html.escape(reason)}\n<b>Date:</b> <code>{current_time}</code>")
                 await context.bot.send_message(chat_id=OWNER_ID, text=pm_message, parse_mode=ParseMode.HTML)
-                logger.info(f"Sent blacklist notification to Owner PM for user {target_user_obj.id}")
             except Exception as e:
                 logger.error(f"Failed to send blacklist PM notification to Owner: {e}", exc_info=True)
     else:
@@ -2008,28 +2008,36 @@ async def unblacklist_user_command(update: Update, context: ContextTypes.DEFAULT
         return
 
     target_user_obj: User | None = None
+    target_input_str: str | None = None
 
     if update.message.reply_to_message:
         target_user_obj = update.message.reply_to_message.from_user
     elif context.args:
-        target_id_str = context.args[0]
-        try:
-            target_id = int(target_id_str)
+        target_input_str = context.args[0]
+        if target_input_str.startswith("@"):
+            username_to_find = target_input_str[1:]
+            target_user_obj = get_user_from_db_by_username(username_to_find)
+            if not target_user_obj:
+                await update.message.reply_text(f"Mrow? User @{html.escape(username_to_find)} not found in my known contacts. Please use their ID or reply if they are on the blacklist.")
+                return
+        else:
             try:
-                chat_info = await context.bot.get_chat(target_id)
-                if chat_info.type == ChatType.PRIVATE:
-                    target_user_obj = User(id=chat_info.id, first_name=chat_info.first_name or f"User {target_id}", is_bot=getattr(chat_info, 'is_bot', False), username=chat_info.username, last_name=chat_info.last_name)
-                else:
-                    await update.message.reply_text(f"Mrow? ID {target_id} does not seem to be a user.")
-                    return
-            except TelegramError as e:
-                logger.warning(f"Couldn't verify user ID {target_id} for unblacklist: {e}. Unblacklisting ID directly if present.")
-                target_user_obj = User(id=target_id, first_name=f"User {target_id}", is_bot=False)
-        except ValueError:
-            await update.message.reply_text("Mrow? Invalid format. Use /unblacklist <ID> or reply.")
-            return
+                target_id = int(target_input_str)
+                try:
+                    chat_info = await context.bot.get_chat(target_id)
+                    if chat_info.type == ChatType.PRIVATE:
+                        target_user_obj = User(id=chat_info.id, first_name=chat_info.first_name or f"User {target_id}", is_bot=getattr(chat_info, 'is_bot', False), username=chat_info.username, last_name=chat_info.last_name)
+                    else:
+                        logger.warning(f"Attempt to unblacklist non-user ID {target_id} (type: {chat_info.type}). Using ID directly.")
+                        target_user_obj = User(id=target_id, first_name=f"User {target_id}", is_bot=False)
+                except TelegramError as e:
+                    logger.warning(f"Couldn't fully verify user ID {target_id} for unblacklist: {e}. Using ID directly.")
+                    target_user_obj = User(id=target_id, first_name=f"User {target_id}", is_bot=False)
+            except ValueError:
+                await update.message.reply_text("Mrow? Invalid format. Use /unblacklist <ID/@username> or reply.")
+                return
     else:
-        await update.message.reply_text("Mrow? Please specify a user ID or reply to a message to unblacklist.")
+        await update.message.reply_text("Mrow? Please specify a user ID/@username (or reply) to unblacklist.")
         return
 
     if not target_user_obj:
@@ -2044,25 +2052,17 @@ async def unblacklist_user_command(update: Update, context: ContextTypes.DEFAULT
     if remove_from_blacklist(target_user_obj.id):
         logger.info(f"Owner {user.id} unblacklisted user {target_user_obj.id} (@{target_user_obj.username}).")
         user_display = target_user_obj.mention_html() if target_user_obj.username else html.escape(target_user_obj.first_name or str(target_user_obj.id))
-        
         await update.message.reply_html(f"✅ User {user_display} (<code>{target_user_obj.id}</code>) has been removed from the blacklist.")
-
         if OWNER_ID:
             try:
                 current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S UTC")
-                pm_message = (
-                    f"<b>#UNBLACKLISTED</b>\n\n"
-                    f"<b>User:</b> {user_display} (<code>{target_user_obj.id}</code>)\n"
-                    f"<b>Username:</b> @{html.escape(target_user_obj.username) if target_user_obj.username else 'N/A'}\n"
-                    f"<b>Date:</b> <code>{current_time}</code>"
-                )
+                pm_message = (f"<b>#UNBLACKLISTED</b>\n\n<b>User:</b> {user_display} (<code>{target_user_obj.id}</code>)\n<b>Username:</b> @{html.escape(target_user_obj.username) if target_user_obj.username else 'N/A'}\n<b>Date:</b> <code>{current_time}</code>")
                 await context.bot.send_message(chat_id=OWNER_ID, text=pm_message, parse_mode=ParseMode.HTML)
-                logger.info(f"Sent unblacklist notification to Owner PM for user {target_user_obj.id}")
             except Exception as e:
                 logger.error(f"Failed to send unblacklist PM notification to Owner: {e}", exc_info=True)
     else:
         await update.message.reply_text("Mrow? Failed to remove user from the blacklist. Check logs.")
-        
+
 # --- Main Function ---
 def main() -> None:
     init_db()
