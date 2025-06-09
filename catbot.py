@@ -1336,6 +1336,7 @@ Meeeow! 🐾 Here are the commands you can use:
 /github - Get the link to my source code! 💻
 /owner - Info about my designated human! ❤️
 /info [ID/reply/@user] - Get info about a user. 👤
+/cinfo [optional_chat_ID] - Get detailed info about the current or specified chat. 📊
 /gif - Get a random cat GIF! 🖼️
 /photo - Get a random cat photo! 📷
 /meow - Get a random cat sound or phrase. 🔊
@@ -1395,7 +1396,7 @@ def format_user_info(user: User, chat_member_status_str: str | None = None, is_o
     info_lines = [f"👤 <b>User Information:</b>\n"]
     info_lines.extend([f"<b>• ID:</b> <code>{user_id}</code>", f"<b>• First Name:</b> {first_name}"])
     if user.last_name: info_lines.append(f"<b>• Last Name:</b> {last_name}")
-    info_lines.extend([f"<b>• Username:</b> {username_display}", f"<b>• Permalink:</b> {permalink_html}", f"<b>• Is Bot:</b> <code>{is_bot_str}</code>", f"<b>• Language Code:</b> <code>{language_code}</code>\n"])
+    info_lines.extend([f"<b>• Username:</b> {username_display}", f"<b>• Permalink:</b> {permalink_html}", f"<b>• Is Bot:</b> <code>{is_bot_str}</code>", f"<b>• Language Code:</b> <code>{language_code}</code>"])
     if chat_member_status_str:
         display_status = ""
         if chat_member_status_str == "creator": display_status = "<code>Owner</code>"
@@ -1730,6 +1731,142 @@ async def say(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     except Exception as e:
         logger.error(f"Unexpected error during /say execution: {e}", exc_info=True)
         await update.message.reply_text(f"💥 Oops! An unexpected error occurred while trying to send the message to <b>{safe_chat_title}</b> (<code>{target_chat_id}</code>). Check logs.", parse_mode=ParseMode.HTML)
+
+async def chat_info_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    target_chat_id: int | None = None
+    chat_to_inspect: Update.chat | None = None
+
+    if context.args:
+        try:
+            target_chat_id = int(context.args[0])
+            logger.info(f"/cinfo called with target chat ID: {target_chat_id}")
+            try:
+                chat_to_inspect = await context.bot.get_chat(chat_id=target_chat_id)
+            except TelegramError as e:
+                logger.error(f"Failed to get chat info for ID {target_chat_id}: {e}")
+                await update.message.reply_html(f"😿 Mrow! Couldn't fetch info for chat ID <code>{target_chat_id}</code>. Reason: {html.escape(str(e))}. Make sure I am a member of that chat or it's a public channel/group.")
+                return
+            except Exception as e:
+                logger.error(f"Unexpected error fetching chat info for ID {target_chat_id}: {e}", exc_info=True)
+                await update.message.reply_html(f"💥 An unexpected error occurred trying to get info for chat ID <code>{target_chat_id}</code>.")
+                return
+        except ValueError:
+            await update.message.reply_text("Mrow? Invalid chat ID format. Please provide a numeric ID.")
+            return
+    else:
+        chat_to_inspect = update.effective_chat
+        target_chat_id = chat_to_inspect.id
+        logger.info(f"/cinfo called for current chat: {target_chat_id}")
+
+    if not chat_to_inspect:
+        await update.message.reply_text("Mrow? Couldn't determine the chat to inspect.")
+        return
+
+    if chat_to_inspect.type not in [ChatType.GROUP, ChatType.SUPERGROUP, ChatType.CHANNEL]:
+        await update.message.reply_text("Meow! This command provides info about groups, supergroups, or channels.")
+        return
+
+    bot_id = context.bot.id
+    chat_title_display = chat_to_inspect.title or chat_to_inspect.first_name or f"Chat ID {target_chat_id}"
+    info_lines = [f"🔎 <b>Chat Information for: {html.escape(chat_title_display)}</b>"]
+
+    info_lines.append(f"  <b>• ID:</b> <code>{target_chat_id}</code>")
+    info_lines.append(f"  <b>• Type:</b> {chat_to_inspect.type.capitalize()}")
+
+    chat_link_line = ""
+    if chat_to_inspect.username:
+        chat_link = f"https://t.me/{chat_to_inspect.username}"
+        chat_link_line = f"  <b>• Link:</b> <a href=\"{chat_link}\">@{chat_to_inspect.username}</a>"
+    elif chat_to_inspect.type != ChatType.CHANNEL:
+        try:
+            bot_member = await context.bot.get_chat_member(chat_id=target_chat_id, user_id=bot_id)
+            if bot_member.status == ChatMemberStatus.ADMINISTRATOR and bot_member.can_invite_users:
+                link_name = f"cinfo_{str(target_chat_id)[-5:]}_{random.randint(100,999)}"
+                invite_link_obj = await context.bot.create_chat_invite_link(chat_id=target_chat_id, name=link_name)
+                chat_link_line = f"  <b>• Generated Invite Link:</b> {invite_link_obj.invite_link} (temporary)"
+            else:
+                chat_link_line = "  <b>• Link:</b> Private group (no public link, bot cannot generate one)"
+        except TelegramError as e:
+            logger.warning(f"Could not create/check invite link for private chat {target_chat_id}: {e}")
+            chat_link_line = f"  <b>• Link:</b> Private group (no public link, error: {html.escape(str(e))})"
+        except Exception as e:
+            logger.error(f"Unexpected error with invite link for {target_chat_id}: {e}", exc_info=True)
+            chat_link_line = "  <b>• Link:</b> Private group (no public link, unexpected error)"
+    else:
+        chat_link_line = "  <b>• Link:</b> Private channel (no public/invite link via bot)"
+    info_lines.append(chat_link_line)
+
+    member_count_val: int | str = "N/A"
+    admin_count_val: int | str = 0
+    try:
+        member_count_val = await context.bot.get_chat_member_count(chat_id=target_chat_id)
+        info_lines.append(f"  <b>• Total Members:</b> {member_count_val}")
+    except TelegramError as e:
+        info_lines.append(f"  <b>• Total Members:</b> Error fetching ({html.escape(str(e))})")
+    except Exception as e:
+        logger.error(f"Unexpected error getting member count for {target_chat_id}: {e}", exc_info=True)
+        info_lines.append(f"  <b>• Total Members:</b> Unexpected error fetching")
+
+    admin_list_str_parts = ["  <b>• Administrators:</b>"]
+    admin_details_list = []
+    admin_bot_count = 0
+    admin_human_count = 0
+    try:
+        administrators = await context.bot.get_chat_administrators(chat_id=target_chat_id)
+        admin_count_val = len(administrators)
+        admin_list_str_parts.append(f"    <b>• Total:</b> {admin_count_val}")
+
+        for admin in administrators:
+            admin_user = admin.user
+            admin_name = admin_user.mention_html() if admin_user.username else html.escape(admin_user.full_name or admin_user.first_name or f"ID: {admin_user.id}")
+            detail = f"      • {admin_name}"
+            if admin.status == ChatMemberStatus.CREATOR: detail += " (Creator ✨)"
+            if admin_user.is_bot: detail += " (Bot 🤖)"; admin_bot_count += 1
+            else: admin_human_count +=1
+            admin_details_list.append(detail)
+        
+        admin_list_str_parts.append(f"    <b>• Humans:</b> {admin_human_count}")
+        admin_list_str_parts.append(f"    <b>• Bots:</b> {admin_bot_count}")
+        if admin_details_list:
+             admin_list_str_parts.append("    <b>• List (max 10 shown):</b>")
+             admin_list_str_parts.extend(admin_details_list[:10])
+             if len(admin_details_list) > 10: admin_list_str_parts.append(f"      ...and {len(admin_details_list) - 10} more.")
+    except TelegramError as e:
+        admin_list_str_parts.append(f"    <b>• Error fetching admin list:</b> {html.escape(str(e))}")
+        admin_count_val = "Error"
+    except Exception as e:
+        admin_list_str_parts.append("    <b>• Unexpected error fetching admin list.</b>")
+        admin_count_val = "Error"
+        logger.error(f"Unexpected error getting admin list for {target_chat_id}: {e}", exc_info=True)
+    info_lines.append("\n".join(admin_list_str_parts))
+
+    if isinstance(member_count_val, int) and isinstance(admin_count_val, int) and admin_count_val >=0:
+         other_members_count = member_count_val - admin_count_val
+         info_lines.append(f"  <b>• Other Members (approx.):</b> {other_members_count if other_members_count >= 0 else 'N/A'}")
+
+    bot_status_lines = ["\n  <b>• Bot Status in this Chat:</b>"]
+    try:
+        bot_member_on_chat = await context.bot.get_chat_member(chat_id=target_chat_id, user_id=bot_id)
+        bot_status_lines.append(f"    <b>• Status:</b> {bot_member_on_chat.status.capitalize()}")
+        if bot_member_on_chat.status == ChatMemberStatus.ADMINISTRATOR:
+            if bot_member_on_chat.can_restrict_members:
+                bot_status_lines.append("    <b>• Can manage banned users:</b> Yes ✅")
+            else:
+                bot_status_lines.append("    <b>• Can manage banned users:</b> No ❌ (Lacks ban permission)")
+        else:
+            bot_status_lines.append("    <b>• Can manage banned users:</b> No (Bot is not an admin)")
+    except TelegramError as e:
+        if "user not found" in str(e).lower() or "member not found" in str(e).lower():
+             bot_status_lines.append("    <b>• Status:</b> Not a member")
+        else:
+            bot_status_lines.append(f"    <b>• Error fetching bot status:</b> {html.escape(str(e))}")
+    except Exception as e:
+        bot_status_lines.append("    <b>• Unexpected error fetching bot status.</b>")
+        logger.error(f"Unexpected error getting bot's own status in chat {target_chat_id}: {e}", exc_info=True)
+    info_lines.extend(bot_status_lines)
+
+    message_text = "\n".join(info_lines)
+    await update.message.reply_html(message_text, disable_web_page_preview=True)
 
 async def leave_chat(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Makes the bot leave the current or a specified chat (Owner Only)."""
@@ -2083,6 +2220,7 @@ def main() -> None:
     application.add_handler(CommandHandler("github", github))
     application.add_handler(CommandHandler("owner", owner_info))
     application.add_handler(CommandHandler("info", user_info))
+    application.add_handler(CommandHandler("cinfo", chat_info_command))
     application.add_handler(CommandHandler("gif", gif))
     application.add_handler(CommandHandler("photo", photo))
     application.add_handler(CommandHandler("meow", meow))
