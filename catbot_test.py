@@ -1814,7 +1814,6 @@ async def chat_info_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
     admin_list_str_parts = ["<b>• Administrators:</b>"]
     admin_details_list = []
-    admin_bot_count = 0
     admin_human_count = 0
     try:
         administrators = await context.bot.get_chat_administrators(chat_id=target_chat_id)
@@ -1834,19 +1833,18 @@ async def chat_info_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
                 if current_admin_status_str == "creator":
                     detail_line += " (Creator ✨)"
                 
-                if admin_user.is_bot: detail_line += " (Bot 🤖)"; admin_bot_count += 1
-                else: admin_human_count +=1
+                if not admin_user.is_bot:
+                    admin_human_count +=1
+                
                 admin_details_list.append(detail_line)
             else:
                 admin_details_list.append(f"    • Unknown Admin (data unavailable)")
                 logger.warning(f"Admin data unavailable for one admin in chat {target_chat_id}")
         
-        admin_list_str_parts.append(f"  <b>• Humans:</b> {admin_human_count}")
-        admin_list_str_parts.append(f"  <b>• Bots:</b> {admin_bot_count}")
+        admin_list_str_parts.append(f"  <b>• Human Admins:</b> {admin_human_count}")
         if admin_details_list:
-             admin_list_str_parts.append("  <b>• List (max 10 shown):</b>")
-             admin_list_str_parts.extend(admin_details_list[:10])
-             if len(admin_details_list) > 10: admin_list_str_parts.append(f"      ...and {len(admin_details_list) - 10} more.")
+             admin_list_str_parts.append("  <b>• List:</b>")
+             admin_list_str_parts.extend(admin_details_list)
     except TelegramError as e:
         admin_list_str_parts.append(f"  <b>• Error fetching admin list:</b> {html.escape(str(e))}")
         admin_count_val = "Error"
@@ -1880,7 +1878,8 @@ async def chat_info_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     except Exception as e:
         bot_status_lines.append("  <b>• Unexpected error fetching bot status.</b>")
         logger.error(f"Unexpected error getting bot's own status in chat {target_chat_id}: {e}", exc_info=True)
-    info_lines.extend(bot_status_lines)
+    
+    info_lines.append("\n".join(bot_status_lines))
 
     message_text = "\n".join(info_lines)
     await update.message.reply_html(message_text, disable_web_page_preview=True)
