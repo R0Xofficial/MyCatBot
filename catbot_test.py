@@ -1360,10 +1360,10 @@ def format_user_info(user: User, chat_member_status_str: str | None = None, is_o
     permalink_url = f"tg://user?id={user_id}"
     permalink_text_display = "Link" 
     permalink_html = f"<a href=\"{permalink_url}\">{permalink_text_display}</a>"
-    info_lines = [f"👤 <b>User Information:</b>"]
-    info_lines.extend([f"  <b>• ID:</b> <code>{user_id}</code>", f"  <b>• First Name:</b> {first_name}"])
-    if user.last_name: info_lines.append(f"  <b>• Last Name:</b> {last_name}")
-    info_lines.extend([f"  <b>• Username:</b> {username_display}", f"  <b>• Permalink:</b> {permalink_html}", f"  <b>• Is Bot:</b> <code>{is_bot_str}</code>", f"  <b>• Language Code:</b> <code>{language_code}</code>"])
+    info_lines = [f"👤 <b>User Information:</b>\n"]
+    info_lines.extend([f"<b>• ID:</b> <code>{user_id}</code>", f"<b>• First Name:</b> {first_name}"])
+    if user.last_name: info_lines.append(f"<b>• Last Name:</b> {last_name}")
+    info_lines.extend([f"<b>• Username:</b> {username_display}", f"<b>• Permalink:</b> {permalink_html}", f"<b>• Is Bot:</b> <code>{is_bot_str}</code>", f"<b>• Language Code:</b> <code>{language_code}</code>"])
     if chat_member_status_str:
         display_status = ""
         if chat_member_status_str == "creator": display_status = "<code>Owner</code>"
@@ -1374,14 +1374,14 @@ def format_user_info(user: User, chat_member_status_str: str | None = None, is_o
         elif chat_member_status_str == "restricted": display_status = "<code>Muted</code>"
         elif chat_member_status_str == "not_a_member": display_status = "<code>Not in chat</code>"
         else: display_status = f"<code>{html.escape(chat_member_status_str.replace('_', ' ').capitalize())}</code>"
-        info_lines.append(f"  <b>• Status:</b> {display_status}\n")
-        if is_owner: info_lines.append(f"  <b>• Bot Owner:</b> <code>Yes</code>")
+        info_lines.append(f"<b>• Status:</b> {display_status}\n")
+        if is_owner: info_lines.append(f"<b>• Bot Owner:</b> <code>Yes</code>")
 
     if blacklist_reason_str is not None:
-        info_lines.append(f"  <b>• Blacklisted:</b> <code>Yes</code>")
+        info_lines.append(f"<b>• Blacklisted:</b> <code>Yes</code>")
         info_lines.append(f"<b>Reason:</b> {html.escape(blacklist_reason_str)}")
     else:
-        info_lines.append(f"  <b>• Blacklisted:</b> <code>No</code>")
+        info_lines.append(f"<b>• Blacklisted:</b> <code>No</code>")
     return "\n".join(info_lines)
 
 async def user_info(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
