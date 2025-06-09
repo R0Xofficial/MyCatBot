@@ -158,6 +158,62 @@ async def check_blacklist_handler(update: Update, context: ContextTypes.DEFAULT_
         raise ApplicationHandlerStop
 
 # --- User logger ---
+
+def update_user_in_db(user: User | None):
+    if not user:
+        return
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_NAME)
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO users (user_id, username, first_name, last_name, language_code, is_bot, last_seen)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(user_id) DO UPDATE SET
+                username = excluded.username,
+                first_name = excluded.first_name,
+                last_name = excluded.last_name,
+                language_code = excluded.language_code,
+                is_bot = excluded.is_bot,
+                last_seen = excluded.last_seen
+        """, (
+            user.id, user.username, user.first_name, user.last_name,
+            user.language_code, 1 if user.is_bot else 0, datetime.datetime.now()
+        ))
+        conn.commit()
+    except sqlite3.Error as e:
+        logger.error(f"SQLite error updating user {user.id} in users table: {e}", exc_info=True)
+    finally:
+        if conn:
+            conn.close()
+
+def get_user_from_db_by_username(username_query: str) -> User | None:
+    if not username_query:
+        return None
+    conn = None
+    user_obj: User | None = None
+    try:
+        conn = sqlite3.connect(DB_NAME)
+        cursor = conn.cursor()
+        normalized_username = username_query.lstrip('@').lower()
+        cursor.execute(
+            "SELECT user_id, username, first_name, last_name, language_code, is_bot FROM users WHERE LOWER(username) = ?",
+            (normalized_username,)
+        )
+        row = cursor.fetchone()
+        if row:
+            user_obj = User(
+                id=row[0], username=row[1], first_name=row[2] or "",
+                last_name=row[3], language_code=row[4], is_bot=bool(row[5])
+            )
+            logger.info(f"User @{username_query} found in DB with ID {row[0]}.")
+    except sqlite3.Error as e:
+        logger.error(f"SQLite error fetching user by username '{username_query}': {e}", exc_info=True)
+    finally:
+        if conn:
+            conn.close()
+    return user_obj
+
 async def log_user_from_interaction(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if update.effective_user:
         update_user_in_db(update.effective_user)
