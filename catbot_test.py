@@ -157,6 +157,14 @@ async def check_blacklist_handler(update: Update, context: ContextTypes.DEFAULT_
 
         raise ApplicationHandlerStop
 
+# --- User logger ---
+async def log_user_from_interaction(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if update.effective_user:
+        update_user_in_db(update.effective_user)
+    
+    if update.message and update.message.reply_to_message and update.message.reply_to_message.from_user:
+        update_user_in_db(update.message.reply_to_message.from_user)
+
 # --- CAT TEXTS SECTION ---
 # /meow texts - General cat noises and behaviors
 MEOW_TEXTS = [
@@ -1386,119 +1394,79 @@ def format_user_info(user: User, chat_member_status_str: str | None = None, is_o
 
 async def user_info(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     target_user_to_display: User | None = None
-    initial_target_user: User | None = None
+    initial_target_user_data: User | None = None
     target_id_str: str | None = None
     current_chat_id = update.effective_chat.id
 
     if update.message.reply_to_message:
-        initial_target_user = update.message.reply_to_message.from_user
-        logger.info(f"/info target is replied user: {initial_target_user.id}, is_bot: {initial_target_user.is_bot}")
+        initial_target_user_data = update.message.reply_to_message.from_user
+        logger.info(f"/info target is replied user: {initial_target_user_data.id if initial_target_user_data else 'N/A'}")
 
     elif context.args:
         target_id_str = context.args[0]
         logger.info(f"/info target is argument: {target_id_str}")
-        try:
-            chat_id_to_fetch: int | str
-            if target_id_str.startswith("@"):
-                chat_id_to_fetch = target_id_str
-            else:
-                chat_id_to_fetch = int(target_id_str)
-
-            fresh_chat_info_for_arg = await context.bot.get_chat(chat_id=chat_id_to_fetch)
-            
-            if fresh_chat_info_for_arg.type == ChatType.PRIVATE:
-                initial_target_user = User(
-                    id=fresh_chat_info_for_arg.id,
-                    first_name=fresh_chat_info_for_arg.first_name or "",
-                    is_bot=getattr(fresh_chat_info_for_arg, 'is_bot', False),
-                    username=fresh_chat_info_for_arg.username,
-                    last_name=fresh_chat_info_for_arg.last_name
-                )
-                logger.info(f"/info identified by argument: {initial_target_user.id}, initial is_bot: {initial_target_user.is_bot}")
-            else:
-                await update.message.reply_text(f"Mrow? '{html.escape(target_id_str)}' doesn't appear to be a user (it's a {fresh_chat_info_for_arg.type}).")
+        
+        if target_id_str.startswith("@"):
+            username_to_find = target_id_str[1:]
+            initial_target_user_data = get_user_from_db_by_username(username_to_find)
+            if not initial_target_user_data:
+                await update.message.reply_text(f"😿 Mrow! I don't have user @{html.escape(username_to_find)} in my known contacts. Try their ID or reply to their message.")
                 return
-        except ValueError:
-            await update.message.reply_text(f"Mrow? Invalid format: '{html.escape(target_id_str)}'. Please provide a numeric ID or an @username.")
-            return
-        except TelegramError as e:
-            logger.error(f"Error fetching user/chat info for argument '{target_id_str}': {e}")
-            if "chat not found" in str(e).lower():
-                 await update.message.reply_text(
-                    f"😿 Couldn't find user '{html.escape(target_id_str)}'.\n"
-                    f"If using @username, make sure it's correct and the user has interacted with me or is in a mutual group. "
-                    f"Alternatively, reply to their message or use their numeric ID."
-                )
-            else:
-                await update.message.reply_text(f"😿 Couldn't find or access user info for '{html.escape(target_id_str)}': {e}")
-            return
-        except Exception as e:
-            logger.error(f"Unexpected error processing argument '{target_id_str}' for /info: {e}", exc_info=True)
-            await update.message.reply_text(f"💥 An unexpected error occurred processing '{html.escape(target_id_str)}'.")
-            return
-    else:
-        initial_target_user = update.effective_user
-        logger.info(f"/info target is command sender: {initial_target_user.id}, is_bot: {initial_target_user.is_bot}")
-
-    if initial_target_user:
-        is_target_owner = (OWNER_ID is not None and initial_target_user.id == OWNER_ID)
-        member_status_in_current_chat: str | None = None
-        blacklist_reason_from_db = get_blacklist_reason(initial_target_user.id)
-
-        if current_chat_id != initial_target_user.id and update.effective_chat.type in [ChatType.GROUP, ChatType.SUPERGROUP]:
+        else:
             try:
-                chat_member = await context.bot.get_chat_member(chat_id=current_chat_id, user_id=initial_target_user.id)
+                user_id_int = int(target_id_str)
+                initial_target_user_data = User(id=user_id_int, first_name="", is_bot=False) 
+            except ValueError:
+                await update.message.reply_text(f"Mrow? Invalid format: '{html.escape(target_id_str)}'. Please provide a numeric ID or an @username that I know.")
+                return
+    else:
+        initial_target_user_data = update.effective_user
+        logger.info(f"/info target is command sender: {initial_target_user_data.id if initial_target_user_data else 'N/A'}")
+
+    if initial_target_user_data:
+        is_target_owner = (OWNER_ID is not None and initial_target_user_data.id == OWNER_ID)
+        member_status_in_current_chat: str | None = None
+        blacklist_reason_from_db = get_blacklist_reason(initial_target_user_data.id)
+
+        if current_chat_id != initial_target_user_data.id and update.effective_chat.type in [ChatType.GROUP, ChatType.SUPERGROUP]:
+            try:
+                chat_member = await context.bot.get_chat_member(chat_id=current_chat_id, user_id=initial_target_user_data.id)
                 member_status_in_current_chat = chat_member.status
-                logger.info(f"User {initial_target_user.id} status in chat {current_chat_id}: {member_status_in_current_chat}")
             except TelegramError as e:
-                logger.warning(f"Could not get chat member status for {initial_target_user.id} in {current_chat_id}: {e}")
-                if "user not found" in str(e).lower():
-                    member_status_in_current_chat = "not_a_member"
-            except Exception as e:
-                logger.error(f"Unexpected error getting chat member status for {initial_target_user.id}: {e}", exc_info=True)
+                if "user not found" in str(e).lower(): member_status_in_current_chat = "not_a_member"
+                else: logger.warning(f"Could not get status for {initial_target_user_data.id}: {e}")
+            except Exception as e: logger.error(f"Unexpected error getting status: {e}", exc_info=True)
         
         try:
-            fresh_chat_info = await context.bot.get_chat(chat_id=initial_target_user.id)
+            fresh_chat_info = await context.bot.get_chat(chat_id=initial_target_user_data.id)
+            is_bot_flag = getattr(fresh_chat_info, 'is_bot', initial_target_user_data.is_bot if initial_target_user_data else False)
             
-            is_bot_flag = getattr(fresh_chat_info, 'is_bot', None)
-            if is_bot_flag is None and initial_target_user:
-                is_bot_flag = initial_target_user.is_bot
-
             target_user_to_display = User(
                 id=fresh_chat_info.id,
-                first_name=fresh_chat_info.first_name or "",
-                last_name=fresh_chat_info.last_name,
-                username=fresh_chat_info.username,
-                is_bot=is_bot_flag if is_bot_flag is not None else False,
-                language_code=getattr(initial_target_user, 'language_code', getattr(fresh_chat_info, 'language_code', None))
+                first_name=fresh_chat_info.first_name or (initial_target_user_data.first_name if initial_target_user_data else ""),
+                last_name=fresh_chat_info.last_name or (initial_target_user_data.last_name if initial_target_user_data else None),
+                username=fresh_chat_info.username or (initial_target_user_data.username if initial_target_user_data else None),
+                is_bot=is_bot_flag,
+                language_code=getattr(initial_target_user_data, 'language_code', getattr(fresh_chat_info, 'language_code', None))
             )
-            logger.info(f"Refreshed user data for {target_user_to_display.id} from API. First Name: '{target_user_to_display.first_name}', Is Bot: {target_user_to_display.is_bot}")
+            if target_user_to_display:
+                 update_user_in_db(target_user_to_display)
+            logger.info(f"Refreshed user data for {target_user_to_display.id}. Name: '{target_user_to_display.first_name}', Bot: {target_user_to_display.is_bot}")
         except TelegramError as e:
-            logger.warning(f"Could not refresh user data for {initial_target_user.id} from API: {e}. Using initial data if available.")
-            if initial_target_user and (initial_target_user.first_name or initial_target_user.username):
-                target_user_to_display = initial_target_user
-            else:
-                target_user_to_display = None
-                logger.error(f"Failed to get any displayable user data for ID: {initial_target_user.id if initial_target_user else 'Unknown'}")
+            logger.warning(f"Could not refresh user data for {initial_target_user_data.id} from API: {e}. Using data from DB/initial interaction.")
+            target_user_to_display = initial_target_user_data
         except Exception as e:
-            logger.error(f"Unexpected error refreshing user data for {initial_target_user.id}: {e}", exc_info=True)
-            if initial_target_user and (initial_target_user.first_name or initial_target_user.username):
-                target_user_to_display = initial_target_user
-            else:
-                target_user_to_display = None
-                logger.error(f"Failed to get any displayable user data after unexpected error for ID: {initial_target_user.id if initial_target_user else 'Unknown'}")
+            logger.error(f"Unexpected error refreshing data for {initial_target_user_data.id}: {e}", exc_info=True)
+            target_user_to_display = initial_target_user_data
 
         if target_user_to_display:
             info_message = format_user_info(target_user_to_display, member_status_in_current_chat, is_target_owner, blacklist_reason_from_db)
             await update.message.reply_html(info_message)
         else:
-            user_id_for_error = initial_target_user.id if initial_target_user else 'Unknown'
-            logger.error(f"Failed to obtain displayable user data for ID: {user_id_for_error}")
-            await update.message.reply_text("Mrow? Something went wrong fetching user details. Could not get up-to-date information.")
+            await update.message.reply_text("Mrow? Could not obtain user details to display.")
     else:
-        logger.warning("/info command reached end without an initial_target_user.")
         await update.message.reply_text("Mrow? Couldn't determine who to get info for.")
-        
+
 # --- Simple Text Command Definitions ---
 async def send_random_text(update: Update, context: ContextTypes.DEFAULT_TYPE, text_list: list[str], list_name: str) -> None:
     if not text_list: logger.warning(f"Empty list: '{list_name}'"); await update.message.reply_text("Mrow? Internal error: Text list empty. 😿"); return
@@ -1903,7 +1871,7 @@ async def handle_new_group_members(update: Update, context: ContextTypes.DEFAULT
             if OWNER_ID:
                 logger.info(f"!!! Attempting PM to OWNER_ID: {OWNER_ID} !!!")
                 try:
-                    pm_text = (f"<b>#ADDEDTOGROUP</b>\n<b>Name:</b> {safe_chat_title}\n<b>ID:</b> <code>{chat_id}</code>{link_line}")
+                    pm_text = (f"<b>#ADDEDTOGROUP</b>\n\n<b>Name:</b> {safe_chat_title}\n<b>ID:</b> <code>{chat_id}</code>{link_line}")
                     await context.bot.send_message(chat_id=OWNER_ID, text=pm_text, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
                     logger.info(f"Sent join notification to owner ({OWNER_ID}) for group {chat_id}.")
                 except Exception as e:
@@ -2078,6 +2046,12 @@ def main() -> None:
 
     logger.info("Registering blacklist check handler...")
     application.add_handler(MessageHandler(filters.COMMAND, check_blacklist_handler), group=-1)
+
+    logger.info("Registering user interaction logging handler...")
+    application.add_handler(MessageHandler(
+        filters.ALL & (~filters.UpdateType.EDITED_MESSAGE),
+        log_user_from_interaction
+    ), group=10)
 
     logger.info("Registering command handlers...")
     application.add_handler(CommandHandler("start", start))
