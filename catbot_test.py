@@ -1771,72 +1771,72 @@ async def chat_info_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     chat_title_display = chat_to_inspect.title or chat_to_inspect.first_name or f"Chat ID {target_chat_id}"
     info_lines = [f"🔎 <b>Chat Information for: {html.escape(chat_title_display)}</b>"]
 
-    info_lines.append(f"  <b>• ID:</b> <code>{target_chat_id}</code>")
-    info_lines.append(f"  <b>• Type:</b> {chat_to_inspect.type.capitalize()}")
+    info_lines.append(f"<b>• ID:</b> <code>{target_chat_id}</code>")
+    info_lines.append(f"<b>• Type:</b> {chat_to_inspect.type.capitalize()}")
 
     chat_link_line = ""
     if chat_to_inspect.username:
         chat_link = f"https://t.me/{chat_to_inspect.username}"
-        chat_link_line = f"  <b>• Link:</b> <a href=\"{chat_link}\">@{chat_to_inspect.username}</a>"
+        chat_link_line = f"<b>• Link:</b> <a href=\"{chat_link}\">@{chat_to_inspect.username}</a>"
     elif chat_to_inspect.type != ChatType.CHANNEL:
         try:
             bot_member = await context.bot.get_chat_member(chat_id=target_chat_id, user_id=bot_id)
             if bot_member.status == ChatMemberStatus.ADMINISTRATOR and bot_member.can_invite_users:
                 link_name = f"cinfo_{str(target_chat_id)[-5:]}_{random.randint(100,999)}"
                 invite_link_obj = await context.bot.create_chat_invite_link(chat_id=target_chat_id, name=link_name)
-                chat_link_line = f"  <b>• Generated Invite Link:</b> {invite_link_obj.invite_link} (temporary)"
+                chat_link_line = f"<b>• Generated Invite Link:</b> {invite_link_obj.invite_link} (temporary)"
             else:
-                chat_link_line = "  <b>• Link:</b> Private group (no public link, bot cannot generate one)"
+                chat_link_line = "<b>• Link:</b> Private group (no public link, bot cannot generate one)"
         except TelegramError as e:
             logger.warning(f"Could not create/check invite link for private chat {target_chat_id}: {e}")
-            chat_link_line = f"  <b>• Link:</b> Private group (no public link, error: {html.escape(str(e))})"
+            chat_link_line = f"<b>• Link:</b> Private group (no public link, error: {html.escape(str(e))})"
         except Exception as e:
             logger.error(f"Unexpected error with invite link for {target_chat_id}: {e}", exc_info=True)
-            chat_link_line = "  <b>• Link:</b> Private group (no public link, unexpected error)"
+            chat_link_line = "<b>• Link:</b> Private group (no public link, unexpected error)"
     else:
-        chat_link_line = "  <b>• Link:</b> Private channel (no public/invite link via bot)"
+        chat_link_line = "<b>• Link:</b> Private channel (no public/invite link via bot)"
     info_lines.append(chat_link_line)
 
     member_count_val: int | str = "N/A"
     admin_count_val: int | str = 0
     try:
         member_count_val = await context.bot.get_chat_member_count(chat_id=target_chat_id)
-        info_lines.append(f"  <b>• Total Members:</b> {member_count_val}")
+        info_lines.append(f"<b>• Total Members:</b> {member_count_val}")
     except TelegramError as e:
-        info_lines.append(f"  <b>• Total Members:</b> Error fetching ({html.escape(str(e))})")
+        info_lines.append(f"<b>• Total Members:</b> Error fetching ({html.escape(str(e))})")
     except Exception as e:
         logger.error(f"Unexpected error getting member count for {target_chat_id}: {e}", exc_info=True)
-        info_lines.append(f"  <b>• Total Members:</b> Unexpected error fetching")
+        info_lines.append(f"<b>• Total Members:</b> Unexpected error fetching")
 
-    admin_list_str_parts = ["  <b>• Administrators:</b>"]
+    admin_list_str_parts = ["<b>• Administrators:</b>"]
     admin_details_list = []
     admin_bot_count = 0
     admin_human_count = 0
     try:
         administrators = await context.bot.get_chat_administrators(chat_id=target_chat_id)
         admin_count_val = len(administrators)
-        admin_list_str_parts.append(f"    <b>• Total:</b> {admin_count_val}")
+        admin_list_str_parts.append(f"  <b>• Total:</b> {admin_count_val}")
 
         for admin in administrators:
             admin_user = admin.user
             admin_name = admin_user.mention_html() if admin_user.username else html.escape(admin_user.full_name or admin_user.first_name or f"ID: {admin_user.id}")
             detail = f"      • {admin_name}"
-            if admin.status == ChatMemberStatus.CREATOR: detail += " (Creator ✨)"
+            if admin.status == ChatMemberStatus.creator: detail += " (Creator ✨)"
             if admin_user.is_bot: detail += " (Bot 🤖)"; admin_bot_count += 1
             else: admin_human_count +=1
             admin_details_list.append(detail)
         
-        admin_list_str_parts.append(f"    <b>• Humans:</b> {admin_human_count}")
-        admin_list_str_parts.append(f"    <b>• Bots:</b> {admin_bot_count}")
+        admin_list_str_parts.append(f"  <b>• Humans:</b> {admin_human_count}")
+        admin_list_str_parts.append(f"  <b>• Bots:</b> {admin_bot_count}")
         if admin_details_list:
              admin_list_str_parts.append("    <b>• List (max 10 shown):</b>")
              admin_list_str_parts.extend(admin_details_list[:10])
              if len(admin_details_list) > 10: admin_list_str_parts.append(f"      ...and {len(admin_details_list) - 10} more.")
     except TelegramError as e:
-        admin_list_str_parts.append(f"    <b>• Error fetching admin list:</b> {html.escape(str(e))}")
+        admin_list_str_parts.append(f"  <b>• Error fetching admin list:</b> {html.escape(str(e))}")
         admin_count_val = "Error"
     except Exception as e:
-        admin_list_str_parts.append("    <b>• Unexpected error fetching admin list.</b>")
+        admin_list_str_parts.append("  <b>• Unexpected error fetching admin list.</b>")
         admin_count_val = "Error"
         logger.error(f"Unexpected error getting admin list for {target_chat_id}: {e}", exc_info=True)
     info_lines.append("\n".join(admin_list_str_parts))
@@ -1845,24 +1845,24 @@ async def chat_info_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
          other_members_count = member_count_val - admin_count_val
          info_lines.append(f"  <b>• Other Members (approx.):</b> {other_members_count if other_members_count >= 0 else 'N/A'}")
 
-    bot_status_lines = ["\n  <b>• Bot Status in this Chat:</b>"]
+    bot_status_lines = ["\n<b>• Bot Status in this Chat:</b>"]
     try:
         bot_member_on_chat = await context.bot.get_chat_member(chat_id=target_chat_id, user_id=bot_id)
-        bot_status_lines.append(f"    <b>• Status:</b> {bot_member_on_chat.status.capitalize()}")
-        if bot_member_on_chat.status == ChatMemberStatus.ADMINISTRATOR:
+        bot_status_lines.append(f"  <b>• Status:</b> {bot_member_on_chat.status.capitalize()}")
+        if bot_member_on_chat.status == ChatMemberStatus.administrator:
             if bot_member_on_chat.can_restrict_members:
-                bot_status_lines.append("    <b>• Can manage banned users:</b> Yes ✅")
+                bot_status_lines.append("  <b>• Can manage banned users:</b> Yes ✅")
             else:
-                bot_status_lines.append("    <b>• Can manage banned users:</b> No ❌ (Lacks ban permission)")
+                bot_status_lines.append("  <b>• Can manage banned users:</b> No ❌ (Lacks ban permission)")
         else:
-            bot_status_lines.append("    <b>• Can manage banned users:</b> No (Bot is not an admin)")
+            bot_status_lines.append("  <b>• Can manage banned users:</b> No (Bot is not an admin)")
     except TelegramError as e:
         if "user not found" in str(e).lower() or "member not found" in str(e).lower():
-             bot_status_lines.append("    <b>• Status:</b> Not a member")
+             bot_status_lines.append("  <b>• Status:</b> Not a member")
         else:
-            bot_status_lines.append(f"    <b>• Error fetching bot status:</b> {html.escape(str(e))}")
+            bot_status_lines.append(f"  <b>• Error fetching bot status:</b> {html.escape(str(e))}")
     except Exception as e:
-        bot_status_lines.append("    <b>• Unexpected error fetching bot status.</b>")
+        bot_status_lines.append("  <b>• Unexpected error fetching bot status.</b>")
         logger.error(f"Unexpected error getting bot's own status in chat {target_chat_id}: {e}", exc_info=True)
     info_lines.extend(bot_status_lines)
 
