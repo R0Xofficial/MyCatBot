@@ -1470,12 +1470,11 @@ def format_entity_info(entity: "telegram.Chat | User",
     return "\n".join(info_lines)
 
 async def entity_info_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    target_entity_obj: "telegram.Chat | User | None" = None
+    target_entity_obj: Chat | User | None = None
     initial_entity_id_for_refresh: int | None = None
     target_input_str: str | None = None
     current_chat_id = update.effective_chat.id
-    command_caller_id = update.effective_user.id
-
+    
     if update.effective_user:
         update_user_in_db(update.effective_user)
 
@@ -1520,7 +1519,9 @@ async def entity_info_command(update: Update, context: ContextTypes.DEFAULT_TYPE
                 initial_entity_id_for_refresh = int(target_input_str)
                 target_entity_obj = await context.bot.get_chat(initial_entity_id_for_refresh)
                 if isinstance(target_entity_obj, User) or target_entity_obj.type == ChatType.PRIVATE:
-                     update_user_in_db(User(id=target_entity_obj.id, first_name=target_entity_obj.first_name or "", is_bot=getattr(target_entity_obj, 'is_bot', False), username=target_entity_obj.username, last_name=target_entity_obj.last_name, language_code=getattr(target_entity_obj, 'language_code', None)))
+                     current_user_obj_for_db_on_id = User(id=target_entity_obj.id, first_name=target_entity_obj.first_name or "", is_bot=getattr(target_entity_obj, 'is_bot', False), username=target_entity_obj.username, last_name=target_entity_obj.last_name, language_code=getattr(target_entity_obj, 'language_code', None))
+                     update_user_in_db(current_user_obj_for_db_on_id)
+
             except ValueError:
                 await update.message.reply_text(f"Mrow? Invalid format: '{html.escape(target_input_str)}'. Please provide a numeric ID or an @username.")
                 return
@@ -1571,15 +1572,12 @@ async def entity_info_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         if final_entity_to_display:
             info_message = format_entity_info(final_entity_to_display, member_status_in_current_chat_str, is_target_owner_flag, blacklist_reason_str, current_chat_id, context)
             try:
-                await context.bot.send_message(chat_id=command_caller_id, text=info_message, parse_mode=ParseMode.HTML)
-                if update.effective_chat.id != command_caller_id:
-                    await update.message.reply_text("ℹ️ Info has been sent to your private messages.", quote=False)
-            except TelegramError as e_pm:
-                logger.error(f"Failed to send /info as PM to {command_caller_id}: {e_pm}. Replying in chat.")
                 await update.message.reply_html(info_message)
-            except Exception as e_pm_other:
-                logger.error(f"Unexpected error sending /info as PM: {e_pm_other}", exc_info=True)
-                await update.message.reply_html(info_message)
+                logger.info(f"Sent /info response for entity {final_entity_to_display.id} in chat {update.effective_chat.id}")
+            except TelegramError as e_reply:
+                logger.error(f"Failed to send /info reply in chat {update.effective_chat.id}: {e_reply}")
+            except Exception as e_reply_other:
+                logger.error(f"Unexpected error sending /info reply: {e_reply_other}", exc_info=True)
         else:
             await update.message.reply_text("Mrow? Could not obtain entity details to display.")
     else:
