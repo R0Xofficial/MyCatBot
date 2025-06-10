@@ -1337,7 +1337,6 @@ Meeeow! 🐾 Here are the commands you can use:
 /github - Get the link to my source code! 💻
 /owner - Info about my designated human! ❤️
 /info [ID/reply/@user] - Get info about a user. 👤
-/cinfo [optional_chat_ID] - Get detailed info about the current or specified chat. 📊
 /gif - Get a random cat GIF! 🖼️
 /photo - Get a random cat photo! 📷
 /meow - Get a random cat sound or phrase. 🔊
@@ -1356,6 +1355,7 @@ Meeeow! 🐾 Here are the commands you can use:
 
 Owner Only Commands
   /status - Show bot status.
+  /cinfo [optional_chat_ID] - Get detailed info about the current or specified chat. 📊
   /say [optional_chat_id] [your text] - Send message as bot.
   /leave [optional_chat_id] - Make the bot leave a chat.
   /blacklist [ID/reply/@user] [reason] - Add user to blacklist.
@@ -1734,13 +1734,28 @@ async def say(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await update.message.reply_text(f"💥 Oops! An unexpected error occurred while trying to send the message to <b>{safe_chat_title}</b> (<code>{target_chat_id}</code>). Check logs.", parse_mode=ParseMode.HTML)
 
 async def chat_info_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    user = update.effective_user
+    if user.id != OWNER_ID:
+        logger.warning(f"Unauthorized /cinfo attempt by user {user.id}.")
+        owner_mention = f"<code>{OWNER_ID}</code>"
+        try:
+            owner_chat = await context.bot.get_chat(OWNER_ID)
+            owner_mention = owner_chat.mention_html()
+        except Exception: pass
+        if OWNER_ONLY_REFUSAL:
+             refusal_text = random.choice(OWNER_ONLY_REFUSAL).format(owner_mention=owner_mention)
+             await update.message.reply_html(refusal_text)
+        else:
+             await update.message.reply_text("Meeeow! Only my Owner can use this command!")
+        return
+
     target_chat_id: int | None = None
     chat_to_inspect: Update.chat | None = None
 
     if context.args:
         try:
             target_chat_id = int(context.args[0])
-            logger.info(f"/cinfo called with target chat ID: {target_chat_id}")
+            logger.info(f"Owner calling /cinfo with target chat ID: {target_chat_id}")
             try:
                 chat_to_inspect = await context.bot.get_chat(chat_id=target_chat_id)
             except TelegramError as e:
@@ -1758,7 +1773,7 @@ async def chat_info_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         chat_to_inspect = update.effective_chat
         if chat_to_inspect:
              target_chat_id = chat_to_inspect.id
-             logger.info(f"/cinfo called for current chat: {target_chat_id}")
+             logger.info(f"Owner calling /cinfo for current chat: {target_chat_id}")
         else:
              await update.message.reply_text("Mrow? Could not determine current chat.")
              return
