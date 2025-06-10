@@ -1984,7 +1984,7 @@ async def chat_info_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
     if isinstance(member_count_val, int) and isinstance(admin_count_val, int) and admin_count_val >=0:
          other_members_count = member_count_val - admin_count_val
-         info_lines.append(f"<b>• Other Members (approx.):</b> {other_members_count if other_members_count >= 0 else 'N/A'}")
+         info_lines.append(f"<b>• Other Members:</b> {other_members_count if other_members_count >= 0 else 'N/A'}")
 
     bot_status_lines = ["\n<b>• Bot Status in this Chat:</b>"]
     try:
