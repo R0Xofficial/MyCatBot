@@ -1852,7 +1852,7 @@ async def chat_stat_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
 
     chat_title_display = full_chat_object.title or full_chat_object.first_name or f"Chat ID {full_chat_object.id}"
-    info_lines = [f"🔎 <b>Chat stats for: {html.escape(chat_title_display)}</b>"]
+    info_lines = [f"🔎 <b>Chat stats for: {html.escape(chat_title_display)}</b>\n"]
 
     info_lines.append(f"<b>• ID:</b> <code>{full_chat_object.id}</code>")
 
@@ -1953,7 +1953,7 @@ async def chat_info_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
     bot_id = context.bot.id
     chat_title_display = chat_object_for_details.title or chat_object_for_details.first_name or f"Chat ID {target_chat_id}"
-    info_lines = [f"🔎 <b>Chat Information for: {html.escape(chat_title_display)}</b>"]
+    info_lines = [f"🔎 <b>Chat Information for: {html.escape(chat_title_display)}</b>\n"]
 
     info_lines.append(f"<b>• ID:</b> <code>{target_chat_id}</code>")
     info_lines.append(f"<b>• Type:</b> {chat_object_for_details.type.capitalize()}")
