@@ -1383,7 +1383,7 @@ async def owner_info(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     else: await update.message.reply_text("Meow? Owner info not configured! 😿")
 
 # --- User Info Command ---
-def format_entity_info(entity: Update.chat | User,
+def format_entity_info(entity: "telegram.Chat | User",
                        chat_member_status_str: str | None = None,
                        is_target_owner: bool = False,
                        blacklist_reason_str: str | None = None,
@@ -1470,7 +1470,7 @@ def format_entity_info(entity: Update.chat | User,
     return "\n".join(info_lines)
 
 async def entity_info_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    target_entity_obj: Update.chat | User | None = None
+    target_entity_obj: "telegram.Chat | User | None" = None
     initial_entity_id_for_refresh: int | None = None
     target_input_str: str | None = None
     current_chat_id = update.effective_chat.id
