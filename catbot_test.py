@@ -2337,7 +2337,7 @@ def main() -> None:
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CommandHandler("github", github))
     application.add_handler(CommandHandler("owner", owner_info))
-    application.add_handler(CommandHandler("info", user_info))
+    application.add_handler(CommandHandler("info", entity_info_command))
     application.add_handler(CommandHandler("cinfo", chat_info_command))
     application.add_handler(CommandHandler("gif", gif))
     application.add_handler(CommandHandler("photo", photo))
