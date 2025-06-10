@@ -1337,7 +1337,6 @@ Meeeow! 🐾 Here are the commands you can use:
 /github - Get the link to my source code! 💻
 /owner - Info about my designated human! ❤️
 /info [ID/reply/@user] - Get info about a user. 👤
-/cinfo [optional_chat_ID] - Get detailed info about the current or specified chat. 📊
 /gif - Get a random cat GIF! 🖼️
 /photo - Get a random cat photo! 📷
 /meow - Get a random cat sound or phrase. 🔊
@@ -1356,6 +1355,7 @@ Meeeow! 🐾 Here are the commands you can use:
 
 Owner Only Commands
   /status - Show bot status.
+  /cinfo [optional_chat_ID] - Get detailed info about the current or specified chat. 📊
   /say [optional_chat_id] [your text] - Send message as bot.
   /leave [optional_chat_id] - Make the bot leave a chat.
   /blacklist [ID/reply/@user] [reason] - Add user to blacklist.
