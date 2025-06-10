@@ -1329,7 +1329,6 @@ async def get_themed_gif(context: ContextTypes.DEFAULT_TYPE, search_terms: list[
 
 # --- Command Handlers ---
 HELP_TEXT = """
-<b>[I'm now in testing version, errors may occur]</b>
 Meeeow! 🐾 Here are the commands you can use:
 
 /start - Shows the welcome message. ✨
@@ -1400,7 +1399,6 @@ def format_entity_info(entity: Update.chat | User,
     if is_user_type or entity_chat_type == ChatType.PRIVATE:
         user = entity
         info_lines.append(f"👤 <b>User Information:</b>\n")
-        
         first_name = html.escape(getattr(user, 'first_name', "N/A") or "N/A")
         last_name = html.escape(getattr(user, 'last_name', "") or "")
         username_display = f"@{html.escape(user.username)}" if user.username else "N/A"
@@ -1564,96 +1562,6 @@ async def entity_info_command(update: Update, context: ContextTypes.DEFAULT_TYPE
                         if "user not found" in str(e).lower(): member_status_in_current_chat_str = "not_a_member"
                         else: logger.warning(f"Could not get status for {final_entity_to_display.id}: {e}")
                     except Exception as e: logger.error(f"Unexpected error getting status: {e}", exc_info=True)
-            logger.info(f"Refreshed entity data for {final_entity_to_display.id} from API.")
-        except TelegramError as e:
-            logger.warning(f"Could not refresh entity data for {initial_entity_id_for_refresh} from API: {e}. Using initially identified data.")
-        except Exception as e:
-            logger.error(f"Unexpected error refreshing entity data for {initial_entity_id_for_refresh}: {e}", exc_info=True)
-
-        if final_entity_to_display:
-            info_message = format_entity_info(final_entity_to_display, member_status_in_current_chat_str, is_target_owner_flag, blacklist_reason_str, current_chat_id, context)
-            try:
-                await context.bot.send_message(chat_id=command_caller_id, text=info_message, parse_mode=ParseMode.HTML)
-                if update.effective_chat.id != command_caller_id:
-                    await update.message.reply_text("ℹ️ Info has been sent to your private messages.", quote=False)
-            except TelegramError as e_pm:
-                logger.error(f"Failed to send /info as PM to {command_caller_id}: {e_pm}. Replying in chat.")
-                await update.message.reply_html(info_message)
-            except Exception as e_pm_other:
-                logger.error(f"Unexpected error sending /info as PM: {e_pm_other}", exc_info=True)
-                await update.message.reply_html(info_message)
-        else:
-            await update.message.reply_text("Mrow? Could not obtain entity details to display.")
-    else:
-        await update.message.reply_text("Mrow? Couldn't determine what to get info for.")
-
-get_user_from_db_by_username(username_to_find)
-            if user_from_db:
-                target_entity_obj = user_from_db
-                initial_entity_id_for_refresh = user_from_db.id
-            else:
-                logger.info(f"User @{username_to_find} not in local DB, trying Telegram API for @username (channel/user).")
-                try:
-                    target_entity_obj = await context.bot.get_chat(target_input_str)
-                    initial_entity_id_for_refresh = target_entity_obj.id
-                    if isinstance(target_entity_obj, User) or target_entity_obj.type == ChatType.PRIVATE:
-                        update_user_in_db(User(id=target_entity_obj.id, first_name=target_entity_obj.first_name or "", is_bot=getattr(target_entity_obj, 'is_bot', False), username=target_entity_obj.username, last_name=target_entity_obj.last_name, language_code=getattr(target_entity_obj, 'language_code', None)))
-                except TelegramError as e:
-                    logger.error(f"Telegram API error for @ '{target_input_str}': {e}")
-                    await update.message.reply_text(f"😿 Mrow! I couldn't find '{html.escape(target_input_str)}'. Try their ID or reply.")
-                    return
-                except Exception as e:
-                    logger.error(f"Unexpected error processing @ '{target_input_str}': {e}", exc_info=True)
-                    await update.message.reply_text(f"💥 An unexpected error occurred with '{html.escape(target_input_str)}'.")
-                    return
-        else:
-            try:
-                initial_entity_id_for_refresh = int(target_input_str)
-                target_entity_obj = await context.bot.get_chat(initial_entity_id_for_refresh)
-                if isinstance(target_entity_obj, User) or target_entity_obj.type == ChatType.PRIVATE:
-                    update_user_in_db(User(id=target_entity_obj.id, first_name=target_entity_obj.first_name or "", is_bot=getattr(target_entity_obj, 'is_bot', False), username=target_entity_obj.username, last_name=target_entity_obj.last_name, language_code=getattr(target_entity_obj, 'language_code', None)))
-            except ValueError:
-                await update.message.reply_text(f"Mrow? Invalid format: '{html.escape(target_input_str)}'. Please provide a numeric ID or an @username.")
-                return
-            except TelegramError as e:
-                logger.error(f"Error fetching chat/user info for ID '{target_input_str}': {e}")
-                await update.message.reply_text(f"😿 Couldn't find or access info for ID '{html.escape(target_input_str)}': {e}")
-                return
-            except Exception as e:
-                logger.error(f"Unexpected error processing ID '{target_input_str}': {e}", exc_info=True)
-                await update.message.reply_text(f"💥 An unexpected error occurred processing ID '{html.escape(target_input_str)}'.")
-                return
-    else:
-        target_entity_obj = update.effective_user
-        if target_entity_obj:
-            update_user_in_db(target_entity_obj)
-            initial_entity_id_for_refresh = target_entity_obj.id
-            logger.info(f"/info target is command sender: {target_entity_obj.id}")
-
-    if target_entity_obj and initial_entity_id_for_refresh is not None:
-        is_target_owner_flag = False
-        member_status_in_current_chat_str: str | None = None
-        blacklist_reason_str: str | None = None
-
-        if isinstance(target_entity_obj, User) or target_entity_obj.type == ChatType.PRIVATE:
-            is_target_owner_flag = (OWNER_ID is not None and target_entity_obj.id == OWNER_ID)
-            blacklist_reason_str = get_blacklist_reason(target_entity_obj.id)
-            if current_chat_id != target_entity_obj.id and update.effective_chat.type in [ChatType.GROUP, ChatType.SUPERGROUP]:
-                try:
-                    chat_member = await context.bot.get_chat_member(chat_id=current_chat_id, user_id=target_entity_obj.id)
-                    member_status_in_current_chat_str = chat_member.status
-                except TelegramError as e:
-                    if "user not found" in str(e).lower(): member_status_in_current_chat_str = "not_a_member"
-                    else: logger.warning(f"Could not get status for {target_entity_obj.id}: {e}")
-                except Exception as e: logger.error(f"Unexpected error getting status: {e}", exc_info=True)
-        
-        final_entity_to_display = target_entity_obj
-        try:
-            fresh_data = await context.bot.get_chat(chat_id=initial_entity_id_for_refresh)
-            final_entity_to_display = fresh_data
-            if isinstance(final_entity_to_display, User) or final_entity_to_display.type == ChatType.PRIVATE:
-                 current_user_obj_for_db = User(id=final_entity_to_display.id, first_name=final_entity_to_display.first_name or "", is_bot=getattr(final_entity_to_display, 'is_bot', False), username=final_entity_to_display.username, last_name=final_entity_to_display.last_name, language_code=getattr(final_entity_to_display, 'language_code', None))
-                 update_user_in_db(current_user_obj_for_db)
             logger.info(f"Refreshed entity data for {final_entity_to_display.id} from API.")
         except TelegramError as e:
             logger.warning(f"Could not refresh entity data for {initial_entity_id_for_refresh} from API: {e}. Using initially identified data.")
