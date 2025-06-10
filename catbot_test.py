@@ -1443,19 +1443,23 @@ def format_entity_info(entity: "telegram.Chat | User",
         else:
             info_lines.append(f"<b>• Blacklisted:</b> <code>No</code>")
 
-    elif entity_chat_type == ChatType.CHANNEL:
+        elif entity_chat_type == ChatType.CHANNEL:
         channel = entity
         info_lines.append(f"📢 <b>Channel info:</b>\n")
         info_lines.append(f"<b>• ID:</b> <code>{channel.id}</code>")
+        
         channel_name_to_display = channel.title or getattr(channel, 'first_name', None) or f"Channel {channel.id}"
         info_lines.append(f"<b>• Title:</b> {html.escape(channel_name_to_display)}")
         
         if channel.username:
             info_lines.append(f"<b>• Username:</b> @{html.escape(channel.username)}")
-            info_lines.append(f"<b>• Link:</b> <a href=\"https://t.me/{html.escape(channel.username)}\">{html.escape(channel.username)}</a>")
+            permalink_channel_url = f"https://t.me/{html.escape(channel.username)}"
+            permalink_text_display = "Link"
+            permalink_channel_html = f"<a href=\"{permalink_channel_url}\">{permalink_text_display}</a>"
+            info_lines.append(f"<b>• Permalink:</b> {permalink_channel_html}")
         else:
-            info_lines.append(f"<b>• Link:</b> Private channel (no public link)")
-        
+            info_lines.append(f"<b>• Permalink:</b> Private channel (no public link)")
+            
     elif entity_chat_type in [ChatType.GROUP, ChatType.SUPERGROUP]:
         chat = entity
         title = html.escape(chat.title or f"{entity_chat_type.capitalize()} {chat.id}")
