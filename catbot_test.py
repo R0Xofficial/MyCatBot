@@ -1927,7 +1927,7 @@ async def chat_info_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             logger.error(f"Unexpected error with invite link for {target_chat_id}: {e}", exc_info=True)
             chat_link_line = "<b>• Link:</b> Private group (no public link, unexpected error)"
     else:
-        chat_link_line = "  <b>• Link:</b> Private channel (no public/invite link via bot)"
+        chat_link_line = "<b>• Link:</b> Private channel (no public/invite link via bot)"
     info_lines.append(chat_link_line)
 
     pinned_message_obj = getattr(chat_object_for_details, 'pinned_message', None)
@@ -1939,7 +1939,6 @@ async def chat_info_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         elif str(target_chat_id).startswith("-100"):
              chat_id_for_link = str(target_chat_id).replace("-100","")
              pin_link = f"https://t.me/c/{chat_id_for_link}/{pinned_message_obj.message_id}"
-        
         info_lines.append(f"<b>• Pinned Message:</b> <a href=\"{pin_link}\">'{html.escape(pin_text_preview[:50])}{'...' if len(pin_text_preview) > 50 else ''}'</a>")
     
     linked_chat_id_val = getattr(chat_object_for_details, 'linked_chat_id', None)
@@ -2009,12 +2008,11 @@ async def chat_info_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         logger.error(f"Unexpected error getting bot status in {target_chat_id}: {e}", exc_info=True)
     info_lines.append("\n".join(bot_status_lines))
     
-           chat_permissions = getattr(chat_object_for_details, 'permissions', None)
+    chat_permissions = getattr(chat_object_for_details, 'permissions', None)
     if chat_permissions:
         perms = chat_permissions
-        perm_lines = ["\n <b>• Default Member Permissions:</b>"]
+        perm_lines = ["\n<b>• Default Member Permissions:</b>"]
         perm_lines.append(f"  <b>• Send Messages:</b> {'Yes' if getattr(perms, 'can_send_messages', False) else 'No'}")
-        
         can_send_any_media = (
             getattr(perms, 'can_send_photos', False) or
             getattr(perms, 'can_send_videos', False) or
@@ -2028,12 +2026,10 @@ async def chat_info_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         perm_lines.append(f"  <b>• Change Info:</b> {'Yes' if getattr(perms, 'can_change_info', False) else 'No'}")
         perm_lines.append(f"  <b>• Invite Users:</b> {'Yes' if getattr(perms, 'can_invite_users', False) else 'No'}")
         perm_lines.append(f"  <b>• Pin Messages:</b> {'Yes' if getattr(perms, 'can_pin_messages', False) else 'No'}")
-        
         if hasattr(perms, 'can_manage_topics'):
             perm_lines.append(f"  <b>• Manage Topics:</b> {'Yes' if perms.can_manage_topics else 'No'}")
-            
         info_lines.extend(perm_lines)
-        
+
     message_text = "\n".join(info_lines)
     await update.message.reply_html(message_text, disable_web_page_preview=True)
     
