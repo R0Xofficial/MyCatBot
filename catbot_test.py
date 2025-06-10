@@ -1400,9 +1400,6 @@ def format_entity_info(entity: Chat | User,
         user = entity
         info_lines.append(f"👤 <b>User Information:</b>\n")
 
-        if is_target_owner:
-            info_lines.append(f"<b>• Bot Owner:</b> <code>Yes 👑</code>")
-        
         first_name = html.escape(getattr(user, 'first_name', "N/A") or "N/A")
         last_name = html.escape(getattr(user, 'last_name', "") or "")
         username_display = f"@{html.escape(user.username)}" if user.username else "N/A"
@@ -1437,6 +1434,9 @@ def format_entity_info(entity: Chat | User,
             elif chat_member_status_str == "not_a_member": display_status = "<code>Not in chat</code>"
             else: display_status = f"<code>{html.escape(chat_member_status_str.replace('_', ' ').capitalize())}</code>"
             info_lines.append(f"<b>• Status:</b> {display_status}\n")
+
+        if is_target_owner:
+            info_lines.append(f"<b>• Bot Owner:</b> <code>Yes</code>")
         
         if blacklist_reason_str is not None:
             info_lines.append(f"<b>• Blacklisted:</b> <code style=\"color:red;\">Yes</code>")
