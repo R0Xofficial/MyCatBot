@@ -2009,11 +2009,12 @@ async def chat_info_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         logger.error(f"Unexpected error getting bot status in {target_chat_id}: {e}", exc_info=True)
     info_lines.append("\n".join(bot_status_lines))
     
-       chat_permissions = getattr(chat_object_for_details, 'permissions', None)
+           chat_permissions = getattr(chat_object_for_details, 'permissions', None)
     if chat_permissions:
         perms = chat_permissions
-        perm_lines = ["\n<b>• Default Member Permissions:</b>"]
-        perm_lines.append(f"  <b>• Send Messages:</b> {'Yes' if perms.can_send_messages else 'No'}")
+        perm_lines = ["\n <b>• Default Member Permissions:</b>"]
+        perm_lines.append(f"  <b>• Send Messages:</b> {'Yes' if getattr(perms, 'can_send_messages', False) else 'No'}")
+        
         can_send_any_media = (
             getattr(perms, 'can_send_photos', False) or
             getattr(perms, 'can_send_videos', False) or
@@ -2027,8 +2028,10 @@ async def chat_info_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         perm_lines.append(f"  <b>• Change Info:</b> {'Yes' if getattr(perms, 'can_change_info', False) else 'No'}")
         perm_lines.append(f"  <b>• Invite Users:</b> {'Yes' if getattr(perms, 'can_invite_users', False) else 'No'}")
         perm_lines.append(f"  <b>• Pin Messages:</b> {'Yes' if getattr(perms, 'can_pin_messages', False) else 'No'}")
+        
         if hasattr(perms, 'can_manage_topics'):
             perm_lines.append(f"  <b>• Manage Topics:</b> {'Yes' if perms.can_manage_topics else 'No'}")
+            
         info_lines.extend(perm_lines)
         
     message_text = "\n".join(info_lines)
