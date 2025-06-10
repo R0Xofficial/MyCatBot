@@ -1844,7 +1844,7 @@ async def chat_info_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         return
 
     target_chat_id: int | None = None
-    chat_to_inspect: Update.chat | None = None
+    chat_to_inspect: Chat | None = None
 
     if context.args:
         try:
@@ -1854,7 +1854,7 @@ async def chat_info_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
                 chat_to_inspect = await context.bot.get_chat(chat_id=target_chat_id)
             except TelegramError as e:
                 logger.error(f"Failed to get chat info for ID {target_chat_id}: {e}")
-                await update.message.reply_html(f"😿 Mrow! Couldn't fetch info for chat ID <code>{target_chat_id}</code>. Reason: {html.escape(str(e))}. Make sure I am a member of that chat or it's a public channel/group.")
+                await update.message.reply_html(f"😿 Mrow! Couldn't fetch info for chat ID <code>{target_chat_id}</code>. Reason: {html.escape(str(e))}. Make sure I am a member or it's public.")
                 return
             except Exception as e:
                 logger.error(f"Unexpected error fetching chat info for ID {target_chat_id}: {e}", exc_info=True)
@@ -1887,6 +1887,15 @@ async def chat_info_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     info_lines.append(f"<b>• ID:</b> <code>{target_chat_id}</code>")
     info_lines.append(f"<b>• Type:</b> {chat_to_inspect.type.capitalize()}")
 
+    if chat_to_inspect.description:
+        desc_preview = chat_to_inspect.description[:200] # Podgląd opisu
+        info_lines.append(f"<b>• Description:</b> {html.escape(desc_preview)}{'...' if len(chat_to_inspect.description) > 200 else ''}")
+
+    if chat_to_inspect.photo:
+        info_lines.append(f"<b>• Chat Photo:</b> Yes")
+    else:
+        info_lines.append(f"<b>• Chat Photo:</b> No")
+
     chat_link_line = ""
     if chat_to_inspect.username:
         chat_link = f"https://t.me/{chat_to_inspect.username}"
@@ -1910,6 +1919,19 @@ async def chat_info_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         chat_link_line = "<b>• Link:</b> Private channel (no public/invite link via bot)"
     info_lines.append(chat_link_line)
 
+    if chat_to_inspect.pinned_message:
+        pin_msg = chat_to_inspect.pinned_message
+        pin_text_preview = pin_msg.text or pin_msg.caption or "[Media/No Text]"
+        pin_link = f"https://t.me/{chat_to_inspect.username or f'c/{str(target_chat_id).replace("-100","")}'}/{pin_msg.message_id}" if chat_to_inspect.username or str(target_chat_id).startswith("-100") else "#"
+        info_lines.append(f"<b>• Pinned Message:</b> <a href=\"{pin_link}\">'{html.escape(pin_text_preview[:50])}{'...' if len(pin_text_preview) > 50 else ''}'</a>")
+    
+    if hasattr(chat_to_inspect, 'linked_chat_id') and chat_to_inspect.linked_chat_id:
+        info_lines.append(f"<b>• Linked Chat ID:</b> <code>{chat_to_inspect.linked_chat_id}</code>")
+    
+    if hasattr(chat_to_inspect, 'slow_mode_delay') and chat_to_inspect.slow_mode_delay and chat_to_inspect.slow_mode_delay > 0:
+        info_lines.append(f"<b>• Slow Mode:</b> Enabled ({chat_to_inspect.slow_mode_delay}s)")
+
+
     member_count_val: int | str = "N/A"
     admin_count_val: int | str = 0
     try:
@@ -1927,7 +1949,6 @@ async def chat_info_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         administrators = await context.bot.get_chat_administrators(chat_id=target_chat_id)
         admin_count_val = len(administrators)
         admin_list_str_parts.append(f"  <b>• Total:</b> {admin_count_val}")
-
         for admin_member in administrators:
             admin_user = admin_member.user
             admin_name_display = f"Unknown Admin (ID: {admin_user.id if admin_user else 'N/A'})"
@@ -1935,27 +1956,14 @@ async def chat_info_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
                 if admin_user.username: admin_name_display = admin_user.mention_html()
                 elif admin_user.full_name: admin_name_display = html.escape(admin_user.full_name)
                 elif admin_user.first_name: admin_name_display = html.escape(admin_user.first_name)
-                
                 detail_line = f"    • {admin_name_display}"
                 current_admin_status_str = getattr(admin_member, 'status', None)
-                if current_admin_status_str == "creator":
-                    detail_line += " (Creator ✨)"
-                
+                if current_admin_status_str == "creator": detail_line += " (Creator ✨)"
                 admin_details_list.append(detail_line)
-            else:
-                admin_details_list.append(f"    • Unknown Admin (data unavailable)")
-                logger.warning(f"Admin data unavailable for one admin in chat {target_chat_id}")
-        
-        if admin_details_list:
-             admin_list_str_parts.append("  <b>• List:</b>")
-             admin_list_str_parts.extend(admin_details_list)
-    except TelegramError as e:
-        admin_list_str_parts.append(f"  <b>• Error fetching admin list:</b> {html.escape(str(e))}")
-        admin_count_val = "Error"
-    except Exception as e:
-        admin_list_str_parts.append("  <b>• Unexpected error fetching admin list.</b>")
-        admin_count_val = "Error"
-        logger.error(f"Unexpected error getting admin list for {target_chat_id}: {e}", exc_info=True)
+            else: admin_details_list.append(f"    • Unknown Admin (data unavailable)"); logger.warning(f"Admin data unavailable for one admin in chat {target_chat_id}")
+        if admin_details_list: admin_list_str_parts.append("  <b>• List:</b>"); admin_list_str_parts.extend(admin_details_list)
+    except TelegramError as e: admin_list_str_parts.append(f"  <b>• Error fetching admin list:</b> {html.escape(str(e))}"); admin_count_val = "Error"
+    except Exception as e: admin_list_str_parts.append("  <b>• Unexpected error fetching admin list.</b>"); admin_count_val = "Error"; logger.error(f"Unexpected error getting admin list for {target_chat_id}: {e}", exc_info=True)
     info_lines.append("\n".join(admin_list_str_parts))
 
     if isinstance(member_count_val, int) and isinstance(admin_count_val, int) and admin_count_val >=0:
@@ -1968,22 +1976,29 @@ async def chat_info_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         bot_current_status_str = bot_member_on_chat.status
         bot_status_lines.append(f"  <b>• Status:</b> {bot_current_status_str.capitalize()}")
         if bot_current_status_str == "administrator":
-            if bot_member_on_chat.can_restrict_members:
-                bot_status_lines.append("  <b>• Can manage banned users:</b> Yes ✅")
-            else:
-                bot_status_lines.append("  <b>• Can manage banned users:</b> No ❌ (Lacks ban permission)")
-        else:
-            bot_status_lines.append("  <b>• Can manage banned users:</b> No (Bot is not an admin)")
+            bot_status_lines.append(f"  <b>• Can invite users:</b> {'Yes' if bot_member_on_chat.can_invite_users else 'No'}")
+            bot_status_lines.append(f"  <b>• Can restrict members:</b> {'Yes' if bot_member_on_chat.can_restrict_members else 'No'}")
+            bot_status_lines.append(f"  <b>• Can pin messages:</b> {'Yes' if getattr(bot_member_on_chat, 'can_pin_messages', None) else 'No'}")
+            bot_status_lines.append(f"  <b>• Can manage chat:</b> {'Yes' if getattr(bot_member_on_chat, 'can_manage_chat', None) else 'No'}")
+        else: bot_status_lines.append("  <b>• Note:</b> Bot is not an admin here.")
     except TelegramError as e:
-        if "user not found" in str(e).lower() or "member not found" in str(e).lower():
-             bot_status_lines.append("  <b>• Status:</b> Not a member")
-        else:
-            bot_status_lines.append(f"  <b>• Error fetching bot status:</b> {html.escape(str(e))}")
-    except Exception as e:
-        bot_status_lines.append("  <b>• Unexpected error fetching bot status.</b>")
-        logger.error(f"Unexpected error getting bot's own status in chat {target_chat_id}: {e}", exc_info=True)
-    
+        if "user not found" in str(e).lower() or "member not found" in str(e).lower(): bot_status_lines.append("  <b>• Status:</b> Not a member")
+        else: bot_status_lines.append(f"  <b>• Error fetching bot status:</b> {html.escape(str(e))}")
+    except Exception as e: bot_status_lines.append("  <b>• Unexpected error fetching bot status."); logger.error(f"Unexpected error getting bot status in {target_chat_id}: {e}", exc_info=True)
     info_lines.append("\n".join(bot_status_lines))
+
+    if hasattr(chat_to_inspect, 'permissions') and chat_to_inspect.permissions:
+        perms = chat_to_inspect.permissions
+        perm_lines = ["\n<b>• Default Member Permissions:</b>"]
+        perm_lines.append(f"  <b>• Send Messages:</b> {'Yes' if perms.can_send_messages else 'No'}")
+        perm_lines.append(f"  <b>• Send Media:</b> {'Yes' if perms.can_send_media_messages else 'No'}")
+        perm_lines.append(f"  <b>• Send Polls:</b> {'Yes' if perms.can_send_polls else 'No'}")
+        perm_lines.append(f"  <b>• Send Other Messages:</b> {'Yes' if perms.can_send_other_messages else 'No'}")
+        perm_lines.append(f"  <b>• Add Web Page Previews:</b> {'Yes' if perms.can_add_web_page_previews else 'No'}")
+        perm_lines.append(f"  <b>• Change Info:</b> {'Yes' if perms.can_change_info else 'No'}")
+        perm_lines.append(f"  <b>• Invite Users:</b> {'Yes' if perms.can_invite_users else 'No'}")
+        perm_lines.append(f"  <b>• Pin Messages:</b> {'Yes' if perms.can_pin_messages else 'No'}")
+        info_lines.extend(perm_lines)
 
     message_text = "\n".join(info_lines)
     await update.message.reply_html(message_text, disable_web_page_preview=True)
