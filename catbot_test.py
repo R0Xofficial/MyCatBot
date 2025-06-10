@@ -1336,6 +1336,7 @@ Meeeow! 🐾 Here are the commands you can use:
 /github - Get the link to my source code! 💻
 /owner - Info about my designated human! ❤️
 /info [ID/reply/@user] - Get info about a user. 👤
+/chatstat - Get basic stats about the current chat. 📈
 /gif - Get a random cat GIF! 🖼️
 /photo - Get a random cat photo! 📷
 /meow - Get a random cat sound or phrase. 🔊
@@ -1826,6 +1827,66 @@ async def say(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     except Exception as e:
         logger.error(f"Unexpected error during /say execution: {e}", exc_info=True)
         await update.message.reply_text(f"💥 Oops! An unexpected error occurred while trying to send the message to <b>{safe_chat_title}</b> (<code>{target_chat_id}</code>). Check logs.", parse_mode=ParseMode.HTML)
+
+async def chat_stat_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Displays basic statistics about the current chat."""
+    chat = update.effective_chat
+    if not chat:
+        await update.message.reply_text("Mrow? Couldn't get chat information for some reason.")
+        return
+
+    if chat.type not in [ChatType.GROUP, ChatType.SUPERGROUP, ChatType.CHANNEL]:
+        await update.message.reply_text("Meow! This command shows stats for groups, supergroups, or channels.")
+        return
+
+    try:
+        full_chat_object = await context.bot.get_chat(chat_id=chat.id)
+    except TelegramError as e:
+        logger.error(f"Failed to get full chat info for /chatstats in chat {chat.id}: {e}")
+        await update.message.reply_html(f"😿 Mrow! Couldn't fetch detailed stats for this chat. Reason: {html.escape(str(e))}")
+        return
+    except Exception as e:
+        logger.error(f"Unexpected error fetching full chat info for /chatstats in chat {chat.id}: {e}", exc_info=True)
+        await update.message.reply_html(f"💥 An unexpected error occurred while fetching chat stats.")
+        return
+
+
+    chat_title_display = full_chat_object.title or full_chat_object.first_name or f"Chat ID {full_chat_object.id}"
+    info_lines = [f"🔎 <b>Chat stats for: {html.escape(chat_title_display)}</b>"]
+
+    info_lines.append(f"<b>• ID:</b> <code>{full_chat_object.id}</code>")
+
+    chat_description = getattr(full_chat_object, 'description', None)
+    if chat_description:
+        desc_preview = chat_description[:70]
+        info_lines.append(f"<b>• Description:</b> {html.escape(desc_preview)}{'...' if len(chat_description) > 70 else ''}")
+    else:
+        info_lines.append(f"<b>• Description:</b> Not set")
+    
+    if getattr(full_chat_object, 'photo', None):
+        info_lines.append(f"<b>• Chat Photo:</b> Yes")
+    else:
+        info_lines.append(f"<b>• Chat Photo:</b> No")
+
+    slow_mode_delay_val = getattr(full_chat_object, 'slow_mode_delay', None)
+    if slow_mode_delay_val and slow_mode_delay_val > 0:
+        info_lines.append(f"<b>• Slow Mode:</b> Yes ({slow_mode_delay_val}s)")
+    else:
+        info_lines.append(f"<b>• Slow Mode:</b> No")
+
+    try:
+        member_count = await context.bot.get_chat_member_count(chat_id=full_chat_object.id)
+        info_lines.append(f"<b>• Total Members:</b> {member_count}")
+    except TelegramError as e:
+        logger.warning(f"Could not get member count for /chatstats in chat {full_chat_object.id}: {e}")
+        info_lines.append(f"<b>• Total Members:</b> N/A (Error fetching)")
+    except Exception as e:
+        logger.error(f"Unexpected error in get_chat_member_count for /chatstats in {full_chat_object.id}: {e}", exc_info=True)
+        info_lines.append(f"<b>• Total Members:</b> N/A (Unexpected error)")
+
+
+    message_text = "\n".join(info_lines)
+    await update.message.reply_html(message_text, disable_web_page_preview=True)
 
 async def chat_info_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
@@ -2385,6 +2446,7 @@ def main() -> None:
     application.add_handler(CommandHandler("github", github))
     application.add_handler(CommandHandler("owner", owner_info))
     application.add_handler(CommandHandler("info", entity_info_command))
+    application.add_handler(CommandHandler("chatstat", chat_stat_command))
     application.add_handler(CommandHandler("cinfo", chat_info_command))
     application.add_handler(CommandHandler("gif", gif))
     application.add_handler(CommandHandler("photo", photo))
