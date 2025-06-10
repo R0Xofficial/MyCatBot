@@ -42,6 +42,8 @@ If you want run test do this command
 
 /owner - Info about my designated human! ❤️
 
+/info [ID/reply/@user] - Get info about a user. 👤
+
 /gif - Get a random cat GIF! 🖼️
 
 /photo - Get a random cat photo! 📷
@@ -70,7 +72,7 @@ If you want run test do this command
 
 /bite [reply/@user] - Take a playful bite! 😬
 
-/hug [reply/@user] - Offer a comforting hug!🤗
+/hug [reply/@user] - Offer a comforting hug! 🤗
 
 ## (Note: Owner cannot be targeted by attack/kill/punch/slap/bite/hug)
 
@@ -78,6 +80,12 @@ If you want run test do this command
 
   /status - Show bot status.
   
+  /cinfo [optional_chat_ID] - Get detailed info about the current or specified chat. 📊
+  
   /say [optional_chat_id] [your text] - Send message as bot.
-
+  
   /leave [optional_chat_id] - Make the bot leave a chat.
+  
+  /blacklist [ID/reply/@user] [reason] - Add user to blacklist.
+  
+  /unblacklist [ID/reply/@user] - Remove user from blacklist.
