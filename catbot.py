@@ -1396,7 +1396,7 @@ def format_user_info(user: User, chat_member_status_str: str | None = None, is_o
     info_lines = [f"👤 <b>User Information:</b>\n"]
     info_lines.extend([f"<b>• ID:</b> <code>{user_id}</code>", f"<b>• First Name:</b> {first_name}"])
     if user.last_name: info_lines.append(f"<b>• Last Name:</b> {last_name}")
-    info_lines.extend([f"<b>• Username:</b> {username_display}", f"<b>• Permalink:</b> {permalink_html}", f"<b>• Is Bot:</b> <code>{is_bot_str}</code>", f"<b>• Language Code:</b> <code>{language_code}</code>"])
+    info_lines.extend([f"<b>• Username:</b> {username_display}", f"<b>• Permalink:</b> {permalink_html}", f"<b>• Is Bot:</b> <code>{is_bot_str}</code>", f"<b>• Language Code:</b> <code>{language_code}</code>\n"])
     if chat_member_status_str:
         display_status = ""
         if chat_member_status_str == "creator": display_status = "<code>Owner</code>"
