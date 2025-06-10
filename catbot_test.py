@@ -11,7 +11,7 @@ import requests
 import html
 import sqlite3
 from typing import List, Tuple
-from telegram import Update, User, constants
+from telegram import Update, User, Chat, constants
 from telegram.constants import ChatType, ParseMode, ChatMemberStatus
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, ApplicationHandlerStop # Dodano ApplicationHandlerStop
 from telegram.error import TelegramError
