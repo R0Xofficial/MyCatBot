@@ -1383,7 +1383,7 @@ async def owner_info(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     else: await update.message.reply_text("Meow? Owner info not configured! 😿")
 
 # --- User Info Command ---
-def format_entity_info(entity: "telegram.Chat | User",
+def format_entity_info(entity: Chat | User,
                        chat_member_status_str: str | None = None,
                        is_target_owner: bool = False,
                        blacklist_reason_str: str | None = None,
@@ -1399,12 +1399,16 @@ def format_entity_info(entity: "telegram.Chat | User",
     if is_user_type or entity_chat_type == ChatType.PRIVATE:
         user = entity
         info_lines.append(f"👤 <b>User Information:</b>\n")
+
+        if is_target_owner:
+            info_lines.append(f"<b>• Bot Owner:</b> <code>Yes 👑</code>")
+        
         first_name = html.escape(getattr(user, 'first_name', "N/A") or "N/A")
         last_name = html.escape(getattr(user, 'last_name', "") or "")
         username_display = f"@{html.escape(user.username)}" if user.username else "N/A"
-        permalink_url = f"tg://user?id={user.id}"
+        permalink_user_url = f"tg://user?id={user.id}"
         permalink_text_display = "Link" 
-        permalink_html = f"<a href=\"{permalink_url}\">{permalink_text_display}</a>"
+        permalink_html_user = f"<a href=\"{permalink_user_url}\">{permalink_text_display}</a>"
         is_bot_str = "Yes" if getattr(user, 'is_bot', False) else "No"
         language_code = getattr(user, 'language_code', "N/A")
 
@@ -1417,9 +1421,9 @@ def format_entity_info(entity: "telegram.Chat | User",
         
         info_lines.extend([
             f"<b>• Username:</b> {username_display}",
-            f"<b>• Permalink:</b> {permalink_html}",
+            f"<b>• Permalink:</b> {permalink_html_user}",
             f"<b>• Is Bot:</b> <code>{is_bot_str}</code>",
-            f"<b>• Language Code:</b> <code>{language_code if language_code else 'N/A'}</code>"
+            f"<b>• Language Code:</b> <code>{language_code if language_code else 'N/A'}</code>\n"
         ])
 
         if chat_member_status_str and current_chat_id_for_status != user.id and current_chat_id_for_status is not None:
@@ -1433,21 +1437,17 @@ def format_entity_info(entity: "telegram.Chat | User",
             elif chat_member_status_str == "not_a_member": display_status = "<code>Not in chat</code>"
             else: display_status = f"<code>{html.escape(chat_member_status_str.replace('_', ' ').capitalize())}</code>"
             info_lines.append(f"<b>• Status:</b> {display_status}\n")
-
-        if is_target_owner:
-            info_lines.append(f"<b>• Bot Owner:</b> <code>Yes</code>")
         
         if blacklist_reason_str is not None:
-            info_lines.append(f"<b>• Blacklisted:</b> <code>Yes</code>")
+            info_lines.append(f"<b>• Blacklisted:</b> <code style=\"color:red;\">Yes</code>")
             info_lines.append(f"<b>Reason:</b> {html.escape(blacklist_reason_str)}")
         else:
             info_lines.append(f"<b>• Blacklisted:</b> <code>No</code>")
 
-        elif entity_chat_type == ChatType.CHANNEL:
+    elif entity_chat_type == ChatType.CHANNEL:
         channel = entity
         info_lines.append(f"📢 <b>Channel info:</b>\n")
         info_lines.append(f"<b>• ID:</b> <code>{channel.id}</code>")
-        
         channel_name_to_display = channel.title or getattr(channel, 'first_name', None) or f"Channel {channel.id}"
         info_lines.append(f"<b>• Title:</b> {html.escape(channel_name_to_display)}")
         
@@ -1459,7 +1459,7 @@ def format_entity_info(entity: "telegram.Chat | User",
             info_lines.append(f"<b>• Permalink:</b> {permalink_channel_html}")
         else:
             info_lines.append(f"<b>• Permalink:</b> Private channel (no public link)")
-            
+        
     elif entity_chat_type in [ChatType.GROUP, ChatType.SUPERGROUP]:
         chat = entity
         title = html.escape(chat.title or f"{entity_chat_type.capitalize()} {chat.id}")
