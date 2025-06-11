@@ -1846,7 +1846,7 @@ async def photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
 
-    if user.id != OWNER_ID:
+    if not is_privileged_user(user.id):
         logger.warning(f"Unauthorized /status attempt by user {user.id}.")
         owner_mention = f"<code>{OWNER_ID}</code>"
         try:
