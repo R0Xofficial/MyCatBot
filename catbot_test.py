@@ -2533,8 +2533,8 @@ def main() -> None:
     application.add_handler(CommandHandler("status", status))
     application.add_handler(CommandHandler("say", say))
     application.add_handler(CommandHandler("leave", leave_chat))
-    application.add_handler(CommandHandler("blacklist", blacklist_user_command))
-    application.add_handler(CommandHandler("unblacklist", unblacklist_user_command))
+    application.add_handler(CommandHandler("blist", blacklist_user_command))
+    application.add_handler(CommandHandler("unblist", unblacklist_user_command))
 
     logger.info("Registering message handlers for group joins...")
     application.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS & filters.ChatType.GROUPS, handle_new_group_members))
