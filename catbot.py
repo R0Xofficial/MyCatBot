@@ -6,7 +6,6 @@
 import logging
 import random
 import os
-import datetime
 import requests
 import html
 import sqlite3
@@ -15,6 +14,7 @@ from telegram import Update, User, Chat, constants
 from telegram.constants import ChatType, ParseMode, ChatMemberStatus
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, ApplicationHandlerStop
 from telegram.error import TelegramError
+from datetime import datetime, timezone, timedelta
 
 # --- Logging Configuration ---
 logging.basicConfig(
@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 
 # --- Owner ID Configuration & Bot Start Time ---
 OWNER_ID = None
-BOT_START_TIME = datetime.datetime.now()
+BOT_START_TIME = datetime.now()
 TENOR_API_KEY = None
 DB_NAME = "catbot_data.db"
 
@@ -54,22 +54,31 @@ def init_db():
         cursor = conn.cursor()
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS users (
-                user_id INTEGER PRIMARY KEY, username TEXT, first_name TEXT, last_name TEXT,
-                language_code TEXT, is_bot INTEGER, last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                user_id INTEGER PRIMARY KEY,
+                username TEXT,
+                first_name TEXT,
+                last_name TEXT,
+                language_code TEXT,
+                is_bot INTEGER,
+                last_seen TEXT 
             )
         """)
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_username ON users (username)")
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS blacklist (
-                user_id INTEGER PRIMARY KEY, reason TEXT,
-                banned_by_id INTEGER, timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                user_id INTEGER PRIMARY KEY,
+                reason TEXT,
+                banned_by_id INTEGER,
+                timestamp TEXT 
             )
         """)
         conn.commit()
-        logger.info(f"Database '{DB_NAME}' initialized successfully (tables users, blacklist ensured).")
-    except sqlite3.Error as e: logger.error(f"SQLite error during DB initialization: {e}", exc_info=True)
+        logger.info(f"Database '{DB_NAME}' initialized successfully (tables users, blacklist ensured with TEXT for datetime).")
+    except sqlite3.Error as e:
+        logger.error(f"SQLite error during DB initialization: {e}", exc_info=True)
     finally:
-        if conn: conn.close()
+        if conn:
+            conn.close()
 
 # --- Blacklist Helper Functions ---
 def add_to_blacklist(user_id: int, banned_by_id: int, reason: str | None = "No reason provided.") -> bool:
@@ -77,9 +86,10 @@ def add_to_blacklist(user_id: int, banned_by_id: int, reason: str | None = "No r
     try:
         conn = sqlite3.connect(DB_NAME)
         cursor = conn.cursor()
+        current_timestamp_iso = datetime.now(timezone.utc).isoformat()
         cursor.execute(
-            "INSERT OR IGNORE INTO blacklist (user_id, reason, banned_by_id) VALUES (?, ?, ?)",
-            (user_id, reason, banned_by_id)
+            "INSERT OR IGNORE INTO blacklist (user_id, reason, banned_by_id, timestamp) VALUES (?, ?, ?, ?)",
+            (user_id, reason, banned_by_id, current_timestamp_iso)
         )
         conn.commit()
         return cursor.rowcount > 0
@@ -144,7 +154,6 @@ async def check_blacklist_handler(update: Update, context: ContextTypes.DEFAULT_
         raise ApplicationHandlerStop
 
 # --- User logger ---
-
 def update_user_in_db(user: User | None):
     if not user:
         return
@@ -152,6 +161,7 @@ def update_user_in_db(user: User | None):
     try:
         conn = sqlite3.connect(DB_NAME)
         cursor = conn.cursor()
+        current_timestamp_iso = datetime.now(timezone.utc).isoformat()
         cursor.execute("""
             INSERT INTO users (user_id, username, first_name, last_name, language_code, is_bot, last_seen)
             VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -161,10 +171,10 @@ def update_user_in_db(user: User | None):
                 last_name = excluded.last_name,
                 language_code = excluded.language_code,
                 is_bot = excluded.is_bot,
-                last_seen = excluded.last_seen
+                last_seen = excluded.last_seen 
         """, (
             user.id, user.username, user.first_name, user.last_name,
-            user.language_code, 1 if user.is_bot else 0, datetime.datetime.now()
+            user.language_code, 1 if user.is_bot else 0, current_timestamp_iso
         ))
         conn.commit()
     except sqlite3.Error as e:
@@ -1277,14 +1287,24 @@ OWNER_ONLY_REFUSAL = [ # Needed for /status and /say
 # --- END OF TEXT SECTION ---
 
 # --- Utility Functions ---
-def get_readable_time_delta(delta: datetime.timedelta) -> str:
-    total_seconds = int(delta.total_seconds()); days, rem = divmod(total_seconds, 86400); hours, rem = divmod(rem, 3600); minutes, seconds = divmod(rem, 60)
-    parts = [];
-    if days > 0: parts.append(f"{days}d")
-    if hours > 0: parts.append(f"{hours}h")
-    if minutes > 0: parts.append(f"{minutes}m")
-    if seconds >= 0 and not parts: parts.append(f"{seconds}s")
-    elif seconds > 0: parts.append(f"{seconds}s")
+def get_readable_time_delta(delta: timedelta) -> str:
+    total_seconds = int(delta.total_seconds())
+    if total_seconds < 0: 
+        return "0s"
+    days, rem = divmod(total_seconds, 86400)
+    hours, rem = divmod(rem, 3600)
+    minutes, seconds = divmod(rem, 60)
+    parts = []
+    if days > 0: 
+        parts.append(f"{days}d")
+    if hours > 0: 
+        parts.append(f"{hours}h")
+    if minutes > 0: 
+        parts.append(f"{minutes}m")
+    if not parts and seconds >= 0 : 
+        parts.append(f"{seconds}s")
+    elif seconds > 0: 
+        parts.append(f"{seconds}s")
     return ", ".join(parts) if parts else "0s"
 
 # --- Helper Functions (Check Targets, Get GIF) ---
@@ -1353,13 +1373,13 @@ Meeeow! 🐾 Here are the commands you can use:
 /bite [reply/@user] - Take a playful bite! 😬
 /hug [reply/@user] - Offer a comforting hug! 🤗
 
-Owner Only Commands
-  /status - Show bot status.
-  /cinfo [optional_chat_ID] - Get detailed info about the current or specified chat. 📊
-  /say [optional_chat_id] [your text] - Send message as bot.
-  /leave [optional_chat_id] - Make the bot leave a chat.
-  /blacklist [ID/reply/@user] [reason] - Add user to blacklist.
-  /unblacklist [ID/reply/@user] - Remove user from blacklist.
+Owner Only Commands:
+/status - Show bot status.
+/cinfo [optional_chat_ID] - Get detailed info about the current or specified chat. 📊
+/say [optional_chat_id] [your text] - Send message as bot.
+/leave [optional_chat_id] - Make the bot leave a chat.
+/blist [ID/reply/@user] [reason] - Add user to blacklist.
+/unblist [ID/reply/@user] - Remove user from blacklist.
 """
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -1748,17 +1768,30 @@ async def photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_id = update.effective_user.id
     if user_id == OWNER_ID:
-        ping_ms = "N/A"
+        ping_ms_str = "N/A"
         if update.message and update.message.date:
             try:
-                now_utc = datetime.datetime.now(datetime.timezone.utc)
-                msg_utc = update.message.date.astimezone(datetime.timezone.utc)
-                ping_ms = int((now_utc - msg_utc).total_seconds() * 1000)
+                now_utc = datetime.now(timezone.utc)
+                msg_utc = update.message.date.astimezone(timezone.utc)
+                delta_ping = now_utc - msg_utc
+                ping_ms = int(delta_ping.total_seconds() * 1000)
+                if 0 <= ping_ms < 60000:
+                    ping_ms_str = f"{ping_ms} ms"
+                else:
+                    ping_ms_str = f"~{ping_ms} ms (?)"
             except Exception as e:
                 logger.error(f"Error calculating ping: {e}")
-                ping_ms = "Error"
-        uptime_delta = datetime.datetime.now() - BOT_START_TIME; readable_uptime = get_readable_time_delta(uptime_delta)
-        status_msg = (f"<b>Purrrr! Bot Status:</b> ✨\n— Uptime: {readable_uptime} 🕰️\n— Ping: {ping_ms} ms 📶\n— Owner ID: <code>{OWNER_ID}</code> 👑\n— Status: Ready & Purring! 🐾")
+                ping_ms_str = "Error"
+        
+        uptime_delta = datetime.now() - BOT_START_TIME 
+        readable_uptime = get_readable_time_delta(uptime_delta)
+        status_msg = (
+            f"<b>Purrrr! Bot Status:</b> ✨\n"
+            f"<b>• Uptime:</b> {readable_uptime} 🕰️\n"
+            f"<b>• Ping:</b> {ping_ms_str} 📶\n"
+            f"<b>• Owner ID:</b> <code>{OWNER_ID}</code> 👑\n"
+            f"<b>• Status:</b> Ready & Purring! 🐾"
+        )
         await update.message.reply_html(status_msg)
     else:
         logger.warning(f"Unauthorized /status attempt by user {user_id}.")
@@ -1768,8 +1801,11 @@ async def status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             owner_mention = owner_chat.mention_html()
         except Exception:
             pass
-        refusal_text = random.choice(OWNER_ONLY_REFUSAL).format(OWNER_ID=OWNER_ID, owner_mention=owner_mention)
-        await update.message.reply_html(refusal_text)
+        if OWNER_ONLY_REFUSAL:
+            refusal_text = random.choice(OWNER_ONLY_REFUSAL).format(owner_mention=owner_mention)
+            await update.message.reply_html(refusal_text)
+        else:
+            await update.message.reply_text("Meeeow! Only my Owner can use this command!")
 
 async def say(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
@@ -2377,7 +2413,7 @@ async def blacklist_user_command(update: Update, context: ContextTypes.DEFAULT_T
         await update.message.reply_html(f"✅ User {user_display} (<code>{target_user_obj.id}</code>) has been added to the blacklist.\nReason: {html.escape(reason)}")
         if OWNER_ID:
             try:
-                current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S UTC")
+                current_time = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
                 pm_message = (f"<b>#BLACKLISTED</b>\n\n<b>User:</b> {user_display} (<code>{target_user_obj.id}</code>)\n<b>Username:</b> @{html.escape(target_user_obj.username) if target_user_obj.username else 'N/A'}\n<b>Reason:</b> {html.escape(reason)}\n<b>Date:</b> <code>{current_time}</code>")
                 await context.bot.send_message(chat_id=OWNER_ID, text=pm_message, parse_mode=ParseMode.HTML)
             except Exception as e:
@@ -2448,7 +2484,7 @@ async def unblacklist_user_command(update: Update, context: ContextTypes.DEFAULT
         await update.message.reply_html(f"✅ User {user_display} (<code>{target_user_obj.id}</code>) has been removed from the blacklist.")
         if OWNER_ID:
             try:
-                current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S UTC")
+                current_time = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
                 pm_message = (f"<b>#UNBLACKLISTED</b>\n\n<b>User:</b> {user_display} (<code>{target_user_obj.id}</code>)\n<b>Username:</b> @{html.escape(target_user_obj.username) if target_user_obj.username else 'N/A'}\n<b>Date:</b> <code>{current_time}</code>")
                 await context.bot.send_message(chat_id=OWNER_ID, text=pm_message, parse_mode=ParseMode.HTML)
             except Exception as e:
@@ -2497,8 +2533,8 @@ def main() -> None:
     application.add_handler(CommandHandler("status", status))
     application.add_handler(CommandHandler("say", say))
     application.add_handler(CommandHandler("leave", leave_chat))
-    application.add_handler(CommandHandler("blacklist", blacklist_user_command))
-    application.add_handler(CommandHandler("unblacklist", unblacklist_user_command))
+    application.add_handler(CommandHandler("blist", blacklist_user_command))
+    application.add_handler(CommandHandler("unblist", unblacklist_user_command))
 
     logger.info("Registering message handlers for group joins...")
     application.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS & filters.ChatType.GROUPS, handle_new_group_members))
