@@ -1790,7 +1790,7 @@ async def status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             f"<b>— Uptime:</b> {readable_uptime} 🕰️\n"
             f"<b>— Ping:</b> {ping_ms_str} 📶\n"
             f"<b>— Owner ID:</b> <code>{OWNER_ID}</code> 👑\n"
-            f"<b>— Status: Ready & Purring! 🐾</b>"
+            f"<b>— Status:</b> Ready & Purring! 🐾"
         )
         await update.message.reply_html(status_msg)
     else:
