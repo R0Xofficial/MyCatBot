@@ -1787,10 +1787,10 @@ async def status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         readable_uptime = get_readable_time_delta(uptime_delta)
         status_msg = (
             f"<b>Purrrr! Bot Status:</b> ✨\n"
-            f"<b>— Uptime:</b> {readable_uptime} 🕰️\n"
-            f"<b>— Ping:</b> {ping_ms_str} 📶\n"
-            f"<b>— Owner ID:</b> <code>{OWNER_ID}</code> 👑\n"
-            f"<b>— Status:</b> Ready & Purring! 🐾"
+            f"<b>• Uptime:</b> {readable_uptime} 🕰️\n"
+            f"<b>• Ping:</b> {ping_ms_str} 📶\n"
+            f"<b>• Owner ID:</b> <code>{OWNER_ID}</code> 👑\n"
+            f"<b>• Status:</b> Ready & Purring! 🐾"
         )
         await update.message.reply_html(status_msg)
     else:
