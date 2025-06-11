@@ -1333,7 +1333,7 @@ CANT_TARGET_SELF_HUG_TEXTS = [
     "I prefer hugs from external sources (especially if they come with snacks).",
     "Unable to comply. Recommend targeting another user for hug distribution.",
 ]
-OWNER_ONLY_REFUSAL = [ # Needed for /status and /say
+OWNER_ONLY_REFUSAL = [
     "Meeeow! Apologies, but only my designated Human Servant ({owner_mention}) possesses the authority to wield that powerful command. ⛔ Perhaps ask them nicely?",
     "Access Denied! Execution of this command requires Level 5 Clearance (Owner Rank) and possibly a secret handshake involving ear scratches and tuna flakes. 🤝🎁",
     "Hiss! You are attempting to usurp the authority of the Boss of Meow! Only the true leader, {owner_mention}, can issue this decree! 👑 They hold the laser pointer of ultimate power!",
@@ -2424,17 +2424,18 @@ async def handle_new_group_members(update: Update, context: ContextTypes.DEFAULT
 # --- Blacklist Commands ---
 async def blacklist_user_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
-    if user.id != OWNER_ID: # Tylko OWNER_ID może używać tej komendy
+    if not is_privileged_user(user.id): 
+        logger.warning(f"Unauthorized /blacklist attempt by user {user.id}.")
         if OWNER_ONLY_REFUSAL:
             owner_mention = f"<code>{OWNER_ID}</code>"
             try:
-                owner_chat = await context.bot.get_chat(OWNER_ID)
-                owner_mention = owner_chat.mention_html()
+                owner_chat_obj = await context.bot.get_chat(OWNER_ID)
+                owner_mention = owner_chat_obj.mention_html()
             except Exception: pass
             refusal_text = random.choice(OWNER_ONLY_REFUSAL).format(owner_mention=owner_mention)
             await update.message.reply_html(refusal_text)
         else:
-            await update.message.reply_text("Meeeow! Only my Supreme Owner can use this command!")
+            await update.message.reply_text("Meeeow! Only privileged users can use this command!")
         return
 
     target_user_obj: User | None = None
@@ -2513,7 +2514,7 @@ async def blacklist_user_command(update: Update, context: ContextTypes.DEFAULT_T
     if target_user_obj.id == context.bot.id:
         await update.message.reply_text("Purr... I can't blacklist myself! That would be a cat-astrophe! 🙀")
         return
-    if target_user_obj.is_bot: # Nie banujemy innych botów przez tę komendę
+    if target_user_obj.is_bot:
         await update.message.reply_text("Meeeow, I don't usually blacklist other bots. Are you sure?")
         return
 
@@ -2523,7 +2524,7 @@ async def blacklist_user_command(update: Update, context: ContextTypes.DEFAULT_T
         return
 
     if add_to_blacklist(target_user_obj.id, user.id, reason):
-        logger.info(f"Owner {user.id} blacklisted user {target_user_obj.id} (@{target_user_obj.username}). Reason: {reason}")
+        logger.info(f"Privileged user {user.id} blacklisted user {target_user_obj.id} (@{target_user_obj.username}). Reason: {reason}")
         user_display = target_user_obj.mention_html() if target_user_obj.username else html.escape(target_user_obj.first_name or str(target_user_obj.id))
         await update.message.reply_html(f"✅ User {user_display} (<code>{target_user_obj.id}</code>) has been added to the blacklist.\nReason: {html.escape(reason)}")
         if OWNER_ID:
@@ -2539,12 +2540,18 @@ async def blacklist_user_command(update: Update, context: ContextTypes.DEFAULT_T
 
 async def unblacklist_user_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
-    if user.id != OWNER_ID: # Tylko OWNER_ID może używać tej komendy
+    if not is_privileged_user(user.id):
+        logger.warning(f"Unauthorized /unblacklist attempt by user {user.id}.")
         if OWNER_ONLY_REFUSAL:
-            owner_mention = f"<code>{OWNER_ID}</code>"; try: owner_chat = await context.bot.get_chat(OWNER_ID); owner_mention = owner_chat.mention_html()
+            owner_mention = f"<code>{OWNER_ID}</code>"
+            try:
+                owner_chat_obj = await context.bot.get_chat(OWNER_ID)
+                owner_mention = owner_chat_obj.mention_html()
             except Exception: pass
-            refusal_text = random.choice(OWNER_ONLY_REFUSAL).format(owner_mention=owner_mention); await update.message.reply_html(refusal_text)
-        else: await update.message.reply_text("Meeeow! Only my Supreme Owner can use this command!")
+            refusal_text = random.choice(OWNER_ONLY_REFUSAL).format(owner_mention=owner_mention)
+            await update.message.reply_html(refusal_text)
+        else:
+            await update.message.reply_text("Meeeow! Only privileged users can use this command!")
         return
 
     target_user_obj: User | None = None
@@ -2585,8 +2592,8 @@ async def unblacklist_user_command(update: Update, context: ContextTypes.DEFAULT
                     if chat_info.type == ChatType.PRIVATE:
                         target_user_obj = User(id=chat_info.id, first_name=chat_info.first_name or f"User {target_id}", is_bot=getattr(chat_info, 'is_bot', False), username=chat_info.username, last_name=chat_info.last_name)
                     else:
-                         await update.message.reply_text(f"Mrow? ID {target_id} does not seem to be a user (type: {chat_info.type}). Unblacklist can only be applied to users.")
-                         return
+                        logger.warning(f"Attempt to unblacklist non-user ID {target_id} (type: {chat_info.type}). Using ID directly.")
+                        target_user_obj = User(id=target_id, first_name=f"User {target_id}", is_bot=False)
                 except TelegramError: 
                     logger.warning(f"Couldn't fully verify user ID {target_id} for unblacklist. Using minimal User object.")
                     target_user_obj = User(id=target_id, first_name=f"User {target_id}", is_bot=False)
@@ -2604,6 +2611,10 @@ async def unblacklist_user_command(update: Update, context: ContextTypes.DEFAULT
     if not isinstance(target_user_obj, User) or getattr(target_user_obj, 'type', ChatType.PRIVATE) != ChatType.PRIVATE :
         await update.message.reply_text("Mrow? Unblacklist can only be applied to individual users.")
         return
+    
+    if target_user_obj.id == OWNER_ID:
+        await update.message.reply_text("Meow! The Owner is never on the blacklist! 😉")
+        return
 
     if not is_user_blacklisted(target_user_obj.id):
         user_display = target_user_obj.mention_html() if target_user_obj.username else html.escape(target_user_obj.first_name or str(target_user_obj.id))
@@ -2611,7 +2622,7 @@ async def unblacklist_user_command(update: Update, context: ContextTypes.DEFAULT
         return
 
     if remove_from_blacklist(target_user_obj.id):
-        logger.info(f"Owner {user.id} unblacklisted user {target_user_obj.id} (@{target_user_obj.username})")
+        logger.info(f"Privileged user {user.id} unblacklisted user {target_user_obj.id} (@{target_user_obj.username}).")
         user_display = target_user_obj.mention_html() if target_user_obj.username else html.escape(target_user_obj.first_name or str(target_user_obj.id))
         await update.message.reply_html(f"✅ User {user_display} (<code>{target_user_obj.id}</code>) has been removed from the blacklist.")
         if OWNER_ID:
