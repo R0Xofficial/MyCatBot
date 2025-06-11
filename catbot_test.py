@@ -1378,8 +1378,8 @@ Owner Only Commands
   /cinfo [optional_chat_ID] - Get detailed info about the current or specified chat. 📊
   /say [optional_chat_id] [your text] - Send message as bot.
   /leave [optional_chat_id] - Make the bot leave a chat.
-  /blacklist [ID/reply/@user] [reason] - Add user to blacklist.
-  /unblacklist [ID/reply/@user] - Remove user from blacklist.
+  /blist [ID/reply/@user] [reason] - Add user to blacklist.
+  /unblist [ID/reply/@user] - Remove user from blacklist.
 """
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
