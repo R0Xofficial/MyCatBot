@@ -14,7 +14,7 @@ from telegram import Update, User, Chat, constants
 from telegram.constants import ChatType, ParseMode, ChatMemberStatus
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, ApplicationHandlerStop
 from telegram.error import TelegramError
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 # --- Logging Configuration ---
 logging.basicConfig(
@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 
 # --- Owner ID Configuration & Bot Start Time ---
 OWNER_ID = None
-BOT_START_TIME = datetime.datetime.now()
+BOT_START_TIME = datetime.now()
 TENOR_API_KEY = None
 DB_NAME = "catbot_data.db"
 
@@ -86,7 +86,7 @@ def add_to_blacklist(user_id: int, banned_by_id: int, reason: str | None = "No r
     try:
         conn = sqlite3.connect(DB_NAME)
         cursor = conn.cursor()
-        current_timestamp_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        current_timestamp_iso = datetime.now(timezone.utc).isoformat()
         cursor.execute(
             "INSERT OR IGNORE INTO blacklist (user_id, reason, banned_by_id, timestamp) VALUES (?, ?, ?, ?)",
             (user_id, reason, banned_by_id, current_timestamp_iso)
@@ -161,7 +161,7 @@ def update_user_in_db(user: User | None):
     try:
         conn = sqlite3.connect(DB_NAME)
         cursor = conn.cursor()
-        current_timestamp_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        current_timestamp_iso = datetime.now(timezone.utc).isoformat()
         cursor.execute("""
             INSERT INTO users (user_id, username, first_name, last_name, language_code, is_bot, last_seen)
             VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -1761,13 +1761,13 @@ async def status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         ping_ms = "N/A"
         if update.message and update.message.date:
             try:
-                now_utc = datetime.datetime.now(datetime.timezone.utc)
+                now_utc = datetime.now(timezone.utc)
                 msg_utc = update.message.date.astimezone(datetime.timezone.utc)
                 ping_ms = int((now_utc - msg_utc).total_seconds() * 1000)
             except Exception as e:
                 logger.error(f"Error calculating ping: {e}")
                 ping_ms = "Error"
-        uptime_delta = datetime.datetime.now() - BOT_START_TIME; readable_uptime = get_readable_time_delta(uptime_delta)
+        uptime_delta = datetime.now() - BOT_START_TIME; readable_uptime = get_readable_time_delta(uptime_delta)
         status_msg = (f"<b>Purrrr! Bot Status:</b> ✨\n— Uptime: {readable_uptime} 🕰️\n— Ping: {ping_ms} ms 📶\n— Owner ID: <code>{OWNER_ID}</code> 👑\n— Status: Ready & Purring! 🐾")
         await update.message.reply_html(status_msg)
     else:
