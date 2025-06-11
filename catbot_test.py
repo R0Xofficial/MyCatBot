@@ -1401,14 +1401,18 @@ def format_entity_info(entity: Chat | User,
         user = entity
         info_lines.append(f"👤 <b>User Information:</b>\n")
 
+        if is_target_owner:
+            info_lines.append(f"<b>• Bot Owner:</b> <code>Yes 👑</code>")
+        
         first_name = html.escape(getattr(user, 'first_name', "N/A") or "N/A")
         last_name = html.escape(getattr(user, 'last_name', "") or "")
         username_display = f"@{html.escape(user.username)}" if user.username else "N/A"
         permalink_user_url = f"tg://user?id={user.id}"
         permalink_text_display = "Link" 
         permalink_html_user = f"<a href=\"{permalink_user_url}\">{permalink_text_display}</a>"
-        is_bot_str = "Yes" if getattr(user, 'is_bot', False) else "No"
-        language_code = getattr(user, 'language_code', "N/A")
+        is_bot_val = getattr(user, 'is_bot', False)
+        is_bot_str = "Yes" if is_bot_val else "No"
+        language_code_val = getattr(user, 'language_code', "N/A")
 
         info_lines.extend([
             f"<b>• ID:</b> <code>{user.id}</code>",
@@ -1421,7 +1425,7 @@ def format_entity_info(entity: Chat | User,
             f"<b>• Username:</b> {username_display}",
             f"<b>• Permalink:</b> {permalink_html_user}",
             f"<b>• Is Bot:</b> <code>{is_bot_str}</code>",
-            f"<b>• Language Code:</b> <code>{language_code if language_code else 'N/A'}</code>\n"
+            f"<b>• Language Code:</b> <code>{language_code_val if language_code_val else 'N/A'}</code>\n"
         ])
 
         if chat_member_status_str and current_chat_id_for_status != user.id and current_chat_id_for_status is not None:
@@ -1440,7 +1444,7 @@ def format_entity_info(entity: Chat | User,
             info_lines.append(f"<b>• Bot Owner:</b> <code>Yes</code>")
         
         if blacklist_reason_str is not None:
-            info_lines.append(f"<b>• Blacklisted:</b> <code style=\"color:red;\">Yes</code>")
+            info_lines.append(f"<b>• Blacklisted:</b> <code>Yes</code>")
             info_lines.append(f"<b>Reason:</b> {html.escape(blacklist_reason_str)}")
         else:
             info_lines.append(f"<b>• Blacklisted:</b> <code>No</code>")
@@ -1459,7 +1463,7 @@ def format_entity_info(entity: Chat | User,
             permalink_channel_html = f"<a href=\"{permalink_channel_url}\">{permalink_text_display}</a>"
             info_lines.append(f"<b>• Permalink:</b> {permalink_channel_html}")
         else:
-            info_lines.append(f"<b>• Permalink:</b> Private channel (no public link)")
+            info_lines.append(f"<b>• Permalink:</b> Private channel")
         
     elif entity_chat_type in [ChatType.GROUP, ChatType.SUPERGROUP]:
         chat = entity
@@ -1476,44 +1480,51 @@ def format_entity_info(entity: Chat | User,
 
 async def entity_info_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     target_entity_obj: Chat | User | None = None
+    initial_user_obj_from_update: User | None = None
+    target_chat_obj_from_api: Chat | None = None
     initial_entity_id_for_refresh: int | None = None
-    target_input_str: str | None = None
-    current_chat_id = update.effective_chat.id
     
+    current_chat_id = update.effective_chat.id
+    command_caller_id = update.effective_user.id
+
     if update.effective_user:
         update_user_in_db(update.effective_user)
 
     if update.message.reply_to_message:
         if update.message.reply_to_message.sender_chat:
-            target_entity_obj = update.message.reply_to_message.sender_chat
-            initial_entity_id_for_refresh = target_entity_obj.id
-            logger.info(f"/info target is replied sender_chat: ID={target_entity_obj.id}, Title='{target_entity_obj.title}'")
+            target_chat_obj_from_api = update.message.reply_to_message.sender_chat
+            initial_entity_id_for_refresh = target_chat_obj_from_api.id
+            logger.info(f"/info target is replied sender_chat: ID={target_chat_obj_from_api.id}")
         else:
-            target_entity_obj = update.message.reply_to_message.from_user
-            if target_entity_obj:
-                update_user_in_db(target_entity_obj)
-                initial_entity_id_for_refresh = target_entity_obj.id
-                logger.info(f"/info target is replied user: {target_entity_obj.id}")
+            initial_user_obj_from_update = update.message.reply_to_message.from_user
+            if initial_user_obj_from_update:
+                update_user_in_db(initial_user_obj_from_update)
+                initial_entity_id_for_refresh = initial_user_obj_from_update.id
+                logger.info(f"/info target is replied user: {initial_user_obj_from_update.id}")
     elif context.args:
         target_input_str = context.args[0]
         logger.info(f"/info target is argument: {target_input_str}")
         
+        resolved_user_from_db: User | None = None
         if target_input_str.startswith("@"):
             username_to_find = target_input_str[1:]
-            user_from_db = get_user_from_db_by_username(username_to_find)
-            if user_from_db:
-                target_entity_obj = user_from_db
-                initial_entity_id_for_refresh = user_from_db.id
+            resolved_user_from_db = get_user_from_db_by_username(username_to_find)
+            if resolved_user_from_db:
+                initial_user_obj_from_update = resolved_user_from_db
+                initial_entity_id_for_refresh = resolved_user_from_db.id
+                logger.info(f"User @{username_to_find} found in DB, ID: {initial_user_obj_from_update.id}")
             else:
-                logger.info(f"Entity @{username_to_find} not in local user DB, trying Telegram API for @username (channel/user).")
+                logger.info(f"Entity @{username_to_find} not in local user DB, trying Telegram API.")
                 try:
-                    target_entity_obj = await context.bot.get_chat(target_input_str)
-                    initial_entity_id_for_refresh = target_entity_obj.id
-                    if isinstance(target_entity_obj, User) or target_entity_obj.type == ChatType.PRIVATE:
-                        update_user_in_db(User(id=target_entity_obj.id, first_name=target_entity_obj.first_name or "", is_bot=getattr(target_entity_obj, 'is_bot', False), username=target_entity_obj.username, last_name=target_entity_obj.last_name, language_code=getattr(target_entity_obj, 'language_code', None)))
+                    target_chat_obj_from_api = await context.bot.get_chat(target_input_str)
+                    initial_entity_id_for_refresh = target_chat_obj_from_api.id
+                    if target_chat_obj_from_api.type == ChatType.PRIVATE:
+                         user_to_save = User(id=target_chat_obj_from_api.id, first_name=target_chat_obj_from_api.first_name or "", is_bot=getattr(target_chat_obj_from_api, 'is_bot', False), username=target_chat_obj_from_api.username, last_name=target_chat_obj_from_api.last_name, language_code=getattr(target_chat_obj_from_api, 'language_code', None))
+                         update_user_in_db(user_to_save)
+                         initial_user_obj_from_update = user_to_save
                 except TelegramError as e:
                     logger.error(f"Telegram API error for @ '{target_input_str}': {e}")
-                    await update.message.reply_text(f"😿 Mrow! I couldn't find '{html.escape(target_input_str)}'. Try their ID or reply.")
+                    await update.message.reply_text(f"😿 Mrow! I couldn't find '{html.escape(target_input_str)}'.")
                     return
                 except Exception as e:
                     logger.error(f"Unexpected error processing @ '{target_input_str}': {e}", exc_info=True)
@@ -1521,14 +1532,15 @@ async def entity_info_command(update: Update, context: ContextTypes.DEFAULT_TYPE
                     return
         else:
             try:
-                initial_entity_id_for_refresh = int(target_input_str)
-                target_entity_obj = await context.bot.get_chat(initial_entity_id_for_refresh)
-                if isinstance(target_entity_obj, User) or target_entity_obj.type == ChatType.PRIVATE:
-                     current_user_obj_for_db_on_id = User(id=target_entity_obj.id, first_name=target_entity_obj.first_name or "", is_bot=getattr(target_entity_obj, 'is_bot', False), username=target_entity_obj.username, last_name=target_entity_obj.last_name, language_code=getattr(target_entity_obj, 'language_code', None))
-                     update_user_in_db(current_user_obj_for_db_on_id)
-
+                target_id = int(target_input_str)
+                initial_entity_id_for_refresh = target_id
+                target_chat_obj_from_api = await context.bot.get_chat(target_id)
+                if target_chat_obj_from_api.type == ChatType.PRIVATE:
+                    user_to_save = User(id=target_chat_obj_from_api.id, first_name=target_chat_obj_from_api.first_name or "", is_bot=getattr(target_chat_obj_from_api, 'is_bot', False), username=target_chat_obj_from_api.username, last_name=target_chat_obj_from_api.last_name, language_code=getattr(target_chat_obj_from_api, 'language_code', None))
+                    update_user_in_db(user_to_save)
+                    initial_user_obj_from_update = user_to_save
             except ValueError:
-                await update.message.reply_text(f"Mrow? Invalid format: '{html.escape(target_input_str)}'. Please provide a numeric ID or an @username.")
+                await update.message.reply_text(f"Mrow? Invalid format: '{html.escape(target_input_str)}'.")
                 return
             except TelegramError as e:
                 logger.error(f"Error fetching chat/user info for ID '{target_input_str}': {e}")
@@ -1539,46 +1551,65 @@ async def entity_info_command(update: Update, context: ContextTypes.DEFAULT_TYPE
                 await update.message.reply_text(f"💥 An unexpected error occurred processing ID '{html.escape(target_input_str)}'.")
                 return
     else:
-        target_entity_obj = update.effective_user
-        if target_entity_obj:
-            update_user_in_db(target_entity_obj)
-            initial_entity_id_for_refresh = target_entity_obj.id
-            logger.info(f"/info target is command sender: {target_entity_obj.id}")
+        initial_user_obj_from_update = update.effective_user
+        if initial_user_obj_from_update:
+            update_user_in_db(initial_user_obj_from_update)
+            initial_entity_id_for_refresh = initial_user_obj_from_update.id
+            logger.info(f"/info target is command sender: {initial_user_obj_from_update.id}")
 
-    if target_entity_obj and initial_entity_id_for_refresh is not None:
+    target_entity_obj_final_display = None
+    if initial_user_obj_from_update:
+        target_entity_obj_final_display = initial_user_obj_from_update
+    elif target_chat_obj_from_api:
+        target_entity_obj_final_display = target_chat_obj_from_api
+
+    if target_entity_obj_final_display and initial_entity_id_for_refresh is not None:
         is_target_owner_flag = False
         member_status_in_current_chat_str: str | None = None
         blacklist_reason_str: str | None = None
 
-        final_entity_to_display = target_entity_obj 
         try:
-            fresh_data = await context.bot.get_chat(chat_id=initial_entity_id_for_refresh)
-            final_entity_to_display = fresh_data
+            fresh_data_chat_obj = await context.bot.get_chat(chat_id=initial_entity_id_for_refresh)
             
-            if isinstance(final_entity_to_display, User) or final_entity_to_display.type == ChatType.PRIVATE:
-                 current_user_obj_for_db = User(id=final_entity_to_display.id, first_name=final_entity_to_display.first_name or "", is_bot=getattr(final_entity_to_display, 'is_bot', False), username=final_entity_to_display.username, last_name=final_entity_to_display.last_name, language_code=getattr(final_entity_to_display, 'language_code', None))
-                 update_user_in_db(current_user_obj_for_db)
-                 is_target_owner_flag = (OWNER_ID is not None and final_entity_to_display.id == OWNER_ID)
-                 blacklist_reason_str = get_blacklist_reason(final_entity_to_display.id)
-                 if current_chat_id != final_entity_to_display.id and update.effective_chat.type in [ChatType.GROUP, ChatType.SUPERGROUP]:
+            if isinstance(target_entity_obj_final_display, User) or fresh_data_chat_obj.type == ChatType.PRIVATE:
+                current_is_bot = getattr(target_entity_obj_final_display, 'is_bot', False) if isinstance(target_entity_obj_final_display, User) else False
+                current_lang_code = getattr(target_entity_obj_final_display, 'language_code', None) if isinstance(target_entity_obj_final_display, User) else None
+
+                refreshed_user = User(
+                    id=fresh_data_chat_obj.id,
+                    first_name=fresh_data_chat_obj.first_name or getattr(target_entity_obj_final_display, 'first_name', None) or "",
+                    last_name=fresh_data_chat_obj.last_name or getattr(target_entity_obj_final_display, 'last_name', None),
+                    username=fresh_data_chat_obj.username or getattr(target_entity_obj_final_display, 'username', None),
+                    is_bot=getattr(fresh_data_chat_obj, 'is_bot', current_is_bot),
+                    language_code=getattr(fresh_data_chat_obj, 'language_code', current_lang_code)
+                )
+                update_user_in_db(refreshed_user)
+                target_entity_obj_final_display = refreshed_user
+                
+                is_target_owner_flag = (OWNER_ID is not None and target_entity_obj_final_display.id == OWNER_ID)
+                blacklist_reason_str = get_blacklist_reason(target_entity_obj_final_display.id)
+                if current_chat_id != target_entity_obj_final_display.id and update.effective_chat.type in [ChatType.GROUP, ChatType.SUPERGROUP]:
                     try:
-                        chat_member = await context.bot.get_chat_member(chat_id=current_chat_id, user_id=final_entity_to_display.id)
+                        chat_member = await context.bot.get_chat_member(chat_id=current_chat_id, user_id=target_entity_obj_final_display.id)
                         member_status_in_current_chat_str = chat_member.status
                     except TelegramError as e:
                         if "user not found" in str(e).lower(): member_status_in_current_chat_str = "not_a_member"
-                        else: logger.warning(f"Could not get status for {final_entity_to_display.id}: {e}")
+                        else: logger.warning(f"Could not get status for {target_entity_obj_final_display.id}: {e}")
                     except Exception as e: logger.error(f"Unexpected error getting status: {e}", exc_info=True)
-            logger.info(f"Refreshed entity data for {final_entity_to_display.id} from API.")
+            else:
+                target_entity_obj_final_display = fresh_data_chat_obj
+
+            logger.info(f"Refreshed entity data for {target_entity_obj_final_display.id} from API.")
         except TelegramError as e:
             logger.warning(f"Could not refresh entity data for {initial_entity_id_for_refresh} from API: {e}. Using initially identified data.")
         except Exception as e:
             logger.error(f"Unexpected error refreshing entity data for {initial_entity_id_for_refresh}: {e}", exc_info=True)
 
-        if final_entity_to_display:
-            info_message = format_entity_info(final_entity_to_display, member_status_in_current_chat_str, is_target_owner_flag, blacklist_reason_str, current_chat_id, context)
+        if target_entity_obj_final_display:
+            info_message = format_entity_info(target_entity_obj_final_display, member_status_in_current_chat_str, is_target_owner_flag, blacklist_reason_str, current_chat_id, context)
             try:
                 await update.message.reply_html(info_message)
-                logger.info(f"Sent /info response for entity {final_entity_to_display.id} in chat {update.effective_chat.id}")
+                logger.info(f"Sent /info response for entity {target_entity_obj_final_display.id} in chat {update.effective_chat.id}")
             except TelegramError as e_reply:
                 logger.error(f"Failed to send /info reply in chat {update.effective_chat.id}: {e_reply}")
             except Exception as e_reply_other:
