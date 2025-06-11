@@ -1870,9 +1870,9 @@ async def chat_stat_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
     slow_mode_delay_val = getattr(full_chat_object, 'slow_mode_delay', None)
     if slow_mode_delay_val and slow_mode_delay_val > 0:
-        info_lines.append(f"<b>• Slow Mode:</b> Yes ({slow_mode_delay_val}s)")
+        info_lines.append(f"<b>• Slow Mode:</b> Enabled ({slow_mode_delay_val}s)")
     else:
-        info_lines.append(f"<b>• Slow Mode:</b> No")
+        info_lines.append(f"<b>• Slow Mode:</b> Disabled")
 
     try:
         member_count = await context.bot.get_chat_member_count(chat_id=full_chat_object.id)
