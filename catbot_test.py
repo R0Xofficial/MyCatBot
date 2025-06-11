@@ -1515,7 +1515,7 @@ def format_entity_info(entity: Chat | User,
             f"<b>• Username:</b> {username_display}",
             f"<b>• Permalink:</b> {permalink_html_user}",
             f"<b>• Is Bot:</b> <code>{is_bot_str}</code>",
-            f"<b>• Language Code:</b> <code>{language_code_val if language_code_val else 'N/A'}</code>"
+            f"<b>• Language Code:</b> <code>{language_code_val if language_code_val else 'N/A'}</code>\n"
         ])
 
         if chat_member_status_str and current_chat_id_for_status != user.id and current_chat_id_for_status is not None:
