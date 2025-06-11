@@ -6,7 +6,6 @@
 import logging
 import random
 import os
-import datetime
 import requests
 import html
 import sqlite3
@@ -15,6 +14,7 @@ from telegram import Update, User, Chat, constants
 from telegram.constants import ChatType, ParseMode, ChatMemberStatus
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, ApplicationHandlerStop
 from telegram.error import TelegramError
+from datetime import datetime, timezone
 
 # --- Logging Configuration ---
 logging.basicConfig(
@@ -54,22 +54,31 @@ def init_db():
         cursor = conn.cursor()
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS users (
-                user_id INTEGER PRIMARY KEY, username TEXT, first_name TEXT, last_name TEXT,
-                language_code TEXT, is_bot INTEGER, last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                user_id INTEGER PRIMARY KEY,
+                username TEXT,
+                first_name TEXT,
+                last_name TEXT,
+                language_code TEXT,
+                is_bot INTEGER,
+                last_seen TEXT 
             )
         """)
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_username ON users (username)")
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS blacklist (
-                user_id INTEGER PRIMARY KEY, reason TEXT,
-                banned_by_id INTEGER, timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                user_id INTEGER PRIMARY KEY,
+                reason TEXT,
+                banned_by_id INTEGER,
+                timestamp TEXT 
             )
         """)
         conn.commit()
-        logger.info(f"Database '{DB_NAME}' initialized successfully (tables users, blacklist ensured).")
-    except sqlite3.Error as e: logger.error(f"SQLite error during DB initialization: {e}", exc_info=True)
+        logger.info(f"Database '{DB_NAME}' initialized successfully (tables users, blacklist ensured with TEXT for datetime).")
+    except sqlite3.Error as e:
+        logger.error(f"SQLite error during DB initialization: {e}", exc_info=True)
     finally:
-        if conn: conn.close()
+        if conn:
+            conn.close()
 
 # --- Blacklist Helper Functions ---
 def add_to_blacklist(user_id: int, banned_by_id: int, reason: str | None = "No reason provided.") -> bool:
@@ -77,9 +86,10 @@ def add_to_blacklist(user_id: int, banned_by_id: int, reason: str | None = "No r
     try:
         conn = sqlite3.connect(DB_NAME)
         cursor = conn.cursor()
+        current_timestamp_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
         cursor.execute(
-            "INSERT OR IGNORE INTO blacklist (user_id, reason, banned_by_id) VALUES (?, ?, ?)",
-            (user_id, reason, banned_by_id)
+            "INSERT OR IGNORE INTO blacklist (user_id, reason, banned_by_id, timestamp) VALUES (?, ?, ?, ?)",
+            (user_id, reason, banned_by_id, current_timestamp_iso)
         )
         conn.commit()
         return cursor.rowcount > 0
@@ -144,7 +154,6 @@ async def check_blacklist_handler(update: Update, context: ContextTypes.DEFAULT_
         raise ApplicationHandlerStop
 
 # --- User logger ---
-
 def update_user_in_db(user: User | None):
     if not user:
         return
@@ -152,6 +161,7 @@ def update_user_in_db(user: User | None):
     try:
         conn = sqlite3.connect(DB_NAME)
         cursor = conn.cursor()
+        current_timestamp_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
         cursor.execute("""
             INSERT INTO users (user_id, username, first_name, last_name, language_code, is_bot, last_seen)
             VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -161,10 +171,10 @@ def update_user_in_db(user: User | None):
                 last_name = excluded.last_name,
                 language_code = excluded.language_code,
                 is_bot = excluded.is_bot,
-                last_seen = excluded.last_seen
+                last_seen = excluded.last_seen 
         """, (
             user.id, user.username, user.first_name, user.last_name,
-            user.language_code, 1 if user.is_bot else 0, datetime.datetime.now()
+            user.language_code, 1 if user.is_bot else 0, current_timestamp_iso
         ))
         conn.commit()
     except sqlite3.Error as e:
