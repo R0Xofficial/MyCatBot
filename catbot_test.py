@@ -2424,14 +2424,14 @@ async def handle_new_group_members(update: Update, context: ContextTypes.DEFAULT
 # --- Blacklist Commands ---
 async def blacklist_user_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
-    if not is_privileged_user(user.id): 
+    if not is_privileged_user(user.id):
         logger.warning(f"Unauthorized /blacklist attempt by user {user.id}.")
+        owner_mention = f"<code>{OWNER_ID}</code>"
+        try:
+            owner_chat_obj = await context.bot.get_chat(OWNER_ID)
+            owner_mention = owner_chat_obj.mention_html()
+        except Exception: pass
         if OWNER_ONLY_REFUSAL:
-            owner_mention = f"<code>{OWNER_ID}</code>"
-            try:
-                owner_chat_obj = await context.bot.get_chat(OWNER_ID)
-                owner_mention = owner_chat_obj.mention_html()
-            except Exception: pass
             refusal_text = random.choice(OWNER_ONLY_REFUSAL).format(owner_mention=owner_mention)
             await update.message.reply_html(refusal_text)
         else:
@@ -2537,7 +2537,6 @@ async def blacklist_user_command(update: Update, context: ContextTypes.DEFAULT_T
     else:
         await update.message.reply_text("Mrow? Failed to add user to the blacklist. Check logs.")
 
-
 async def unblacklist_user_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
     if not is_privileged_user(user.id):
@@ -2611,7 +2610,7 @@ async def unblacklist_user_command(update: Update, context: ContextTypes.DEFAULT
     if not isinstance(target_user_obj, User) or getattr(target_user_obj, 'type', ChatType.PRIVATE) != ChatType.PRIVATE :
         await update.message.reply_text("Mrow? Unblacklist can only be applied to individual users.")
         return
-    
+
     if target_user_obj.id == OWNER_ID:
         await update.message.reply_text("Meow! The Owner is never on the blacklist! 😉")
         return
