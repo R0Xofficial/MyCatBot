@@ -1287,14 +1287,24 @@ OWNER_ONLY_REFUSAL = [ # Needed for /status and /say
 # --- END OF TEXT SECTION ---
 
 # --- Utility Functions ---
-def get_readable_time_delta(delta: datetime.timedelta) -> str:
-    total_seconds = int(delta.total_seconds()); days, rem = divmod(total_seconds, 86400); hours, rem = divmod(rem, 3600); minutes, seconds = divmod(rem, 60)
-    parts = [];
-    if days > 0: parts.append(f"{days}d")
-    if hours > 0: parts.append(f"{hours}h")
-    if minutes > 0: parts.append(f"{minutes}m")
-    if seconds >= 0 and not parts: parts.append(f"{seconds}s")
-    elif seconds > 0: parts.append(f"{seconds}s")
+def get_readable_time_delta(delta: timedelta) -> str:
+    total_seconds = int(delta.total_seconds())
+    if total_seconds < 0: 
+        return "0s"
+    days, rem = divmod(total_seconds, 86400)
+    hours, rem = divmod(rem, 3600)
+    minutes, seconds = divmod(rem, 60)
+    parts = []
+    if days > 0: 
+        parts.append(f"{days}d")
+    if hours > 0: 
+        parts.append(f"{hours}h")
+    if minutes > 0: 
+        parts.append(f"{minutes}m")
+    if not parts and seconds >= 0 : 
+        parts.append(f"{seconds}s")
+    elif seconds > 0: 
+        parts.append(f"{seconds}s")
     return ", ".join(parts) if parts else "0s"
 
 # --- Helper Functions (Check Targets, Get GIF) ---
