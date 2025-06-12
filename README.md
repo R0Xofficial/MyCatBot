@@ -15,7 +15,7 @@ Meet **MyCatbot**, the playful and quirky cat-themed Telegram bot that will make
 
 1. Clone repo:
    
-Run **git clone https://R0Xofficial/MyCatbot catbot**
+Run **git clone https://github.com/R0Xofficial/MyCatbot catbot**
 
 3. Install requirements
    
