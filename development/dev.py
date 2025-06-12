@@ -1436,6 +1436,7 @@ async def get_themed_gif(context: ContextTypes.DEFAULT_TYPE, search_terms: list[
 HELP_TEXT = """
 Meeeow! 🐾 Here are the commands you can use:
 
+<b>User Commands:</b>
 /start - Shows the welcome message. ✨
 /help - Shows this help message. ❓
 /github - Get the link to my source code! 💻
@@ -1458,14 +1459,14 @@ Meeeow! 🐾 Here are the commands you can use:
 /bite [reply/@user] - Take a playful bite! 😬
 /hug [reply/@user] - Offer a comforting hug! 🤗
 
-Owner/Sudo Commands:
+<b>Owner/Sudo Commands:</b>
 /status - Show bot status.
-/cinfo [optional_chat_ID] - Get detailed info about the current or specified chat. 📊
+/cinfo [optional_chat_ID] - Get detailed info about the current or specified chat.
 /say [optional_chat_id] [your text] - Send message as bot.
 /blist [ID/reply/@user] [reason] - Add user to blacklist.
 /unblist [ID/reply/@user] - Remove user from blacklist.
 
-Owner Only Commands:
+<b>Owner Only Commands:</b>
 /leave [optional_chat_id] - Make the bot leave a chat.
 /addsudo [ID/reply/@user] - Give user sudo permissions.
 /delsudo [ID/reply/@user] - Remove user sudo permissions.
