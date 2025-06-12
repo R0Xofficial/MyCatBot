@@ -2468,7 +2468,7 @@ async def send_operational_log(context: ContextTypes.DEFAULT_TYPE, message: str,
 # --- Blacklist Commands ---
 async def blacklist_user_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
-    if user.id != OWNER_ID:
+    if not is_privileged_user(user.id):
         logger.warning(f"Unauthorized /blacklist attempt by user {user.id}.")
         owner_mention = f"<code>{OWNER_ID}</code>"
         if OWNER_ONLY_REFUSAL:
@@ -2588,7 +2588,7 @@ async def blacklist_user_command(update: Update, context: ContextTypes.DEFAULT_T
 
 async def unblacklist_user_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
-    if user.id != OWNER_ID:
+    if not is_privileged_user(user.id):
         logger.warning(f"Unauthorized /unblacklist attempt by user {user.id}.")
         if OWNER_ONLY_REFUSAL:
             owner_mention = f"<code>{OWNER_ID}</code>"
