@@ -2646,13 +2646,12 @@ async def unblacklist_user_command(update: Update, context: ContextTypes.DEFAULT
 async def add_sudo_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
     if user.id != OWNER_ID:
-        logger.warning(f"Unauthorized /addsudo attempt by user {user.id}.")
-        owner_mention = f"<code>{OWNER_ID}</code>"
-        try:
-            owner_chat_obj = await context.bot.get_chat(OWNER_ID)
-            owner_mention = owner_chat_obj.mention_html()
-        except Exception: pass
         if OWNER_ONLY_REFUSAL:
+            owner_mention = f"<code>{OWNER_ID}</code>"
+            try:
+                owner_chat_obj = await context.bot.get_chat(OWNER_ID)
+                owner_mention = owner_chat_obj.mention_html()
+            except Exception: pass
             refusal_text = random.choice(OWNER_ONLY_REFUSAL).format(owner_mention=owner_mention)
             await update.message.reply_html(refusal_text)
         else:
@@ -2660,7 +2659,7 @@ async def add_sudo_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         return
 
     target_user_obj: User | None = None
-    reason = "No reason provided."
+    reason = "No reason provided." 
     target_input_str: str | None = None
 
     if update.message.reply_to_message:
@@ -2671,7 +2670,7 @@ async def add_sudo_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             await update.message.reply_text("Mrow? Please reply to a user's message to add them to sudo.")
             return
         if context.args:
-            reason = " ".join(context.args)
+            reason = " ".join(context.args) 
     elif context.args:
         target_input_str = context.args[0]
         
@@ -2695,8 +2694,8 @@ async def add_sudo_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
                     logger.error(f"Unexpected error for @{username_to_find} in addsudo: {e}", exc_info=True)
                     await update.message.reply_text("Mrow? An error occurred while trying to find the user.")
                     return
-            if target_user_obj and len(context.args) > 1:
-                reason = " ".join(context.args[1:])
+            if target_user_obj and len(context.args) > 1: 
+                reason = " ".join(context.args[1:]) 
         else:
             try:
                 target_id = int(target_input_str)
@@ -2748,9 +2747,24 @@ async def add_sudo_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         logger.info(f"Owner {user.id} added sudo user {target_user_obj.id} (@{target_user_obj.username})")
         user_display = target_user_obj.mention_html() if target_user_obj.username else html.escape(target_user_obj.first_name or str(target_user_obj.id))
         await update.message.reply_html(f"✅ User {user_display} (<code>{target_user_obj.id}</code>) has been granted sudo powers!")
+        
         if target_user_obj.id != OWNER_ID:
              try: await context.bot.send_message(target_user_obj.id, "Meeeow! You have been granted sudo privileges by my Owner! Use them wisely. 🐾")
              except Exception as e: logger.warning(f"Failed to send PM to new sudo user {target_user_obj.id}: {e}")
+        
+        if OWNER_ID and user.id == OWNER_ID :
+            try:
+                current_time = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+                pm_message_to_owner = (
+                    f"<b>#SUDO</b>\n\n"
+                    f"<b>User:</b> {user_display} (<code>{target_user_obj.id}</code>)\n"
+                    f"<b>Username:</b> @{html.escape(target_user_obj.username) if target_user_obj.username else 'N/A'}\n"
+                    f"<b>Date:</b> <code>{current_time}</code>"
+                )
+                await context.bot.send_message(chat_id=OWNER_ID, text=pm_message_to_owner, parse_mode=ParseMode.HTML)
+                logger.info(f"Sent #SUDO notification to Owner PM for user {target_user_obj.id}")
+            except Exception as e:
+                logger.error(f"Failed to send #SUDO PM notification to Owner: {e}", exc_info=True)
     else:
         await update.message.reply_text("Mrow? Failed to add user to sudo list. Check logs.")
 
@@ -2760,15 +2774,10 @@ async def del_sudo_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     if user.id != OWNER_ID:
         logger.warning(f"Unauthorized /delsudo attempt by user {user.id}.")
         if OWNER_ONLY_REFUSAL:
-            owner_mention = f"<code>{OWNER_ID}</code>"
-            try:
-                owner_chat_obj = await context.bot.get_chat(OWNER_ID)
-                owner_mention = owner_chat_obj.mention_html()
+            owner_mention = f"<code>{OWNER_ID}</code>"; try: owner_chat_obj = await context.bot.get_chat(OWNER_ID); owner_mention = owner_chat_obj.mention_html()
             except Exception: pass
-            refusal_text = random.choice(OWNER_ONLY_REFUSAL).format(owner_mention=owner_mention)
-            await update.message.reply_html(refusal_text)
-        else:
-            await update.message.reply_text("Meeeow! Only my Supreme Owner can revoke sudo powers!")
+            refusal_text = random.choice(OWNER_ONLY_REFUSAL).format(owner_mention=owner_mention); await update.message.reply_html(refusal_text)
+        else: await update.message.reply_text("Meeeow! Only my Supreme Owner can revoke sudo powers!")
         return
 
     target_user_obj: User | None = None
@@ -2842,8 +2851,23 @@ async def del_sudo_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         logger.info(f"Owner {user.id} removed sudo for user {target_user_obj.id} (@{target_user_obj.username})")
         user_display = target_user_obj.mention_html() if target_user_obj.username else html.escape(target_user_obj.first_name or str(target_user_obj.id))
         await update.message.reply_html(f"✅ Sudo powers for user {user_display} (<code>{target_user_obj.id}</code>) have been revoked.")
+        
         try: await context.bot.send_message(target_user_obj.id, "Meeeow... Your sudo privileges have been revoked by my Owner.")
         except Exception as e: logger.warning(f"Failed to send PM to revoked sudo user {target_user_obj.id}: {e}")
+
+        if OWNER_ID and user.id == OWNER_ID:
+            try:
+                current_time = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+                pm_message_to_owner = (
+                    f"<b>#UNSUDO</b>\n\n"
+                    f"<b>User:</b> {user_display} (<code>{target_user_obj.id}</code>)\n"
+                    f"<b>Username:</b> @{html.escape(target_user_obj.username) if target_user_obj.username else 'N/A'}\n"
+                    f"<b>Date:</b> <code>{current_time}</code>"
+                )
+                await context.bot.send_message(chat_id=OWNER_ID, text=pm_message_to_owner, parse_mode=ParseMode.HTML)
+                logger.info(f"Sent #UNSUDO notification to Owner PM for user {target_user_obj.id}")
+            except Exception as e:
+                logger.error(f"Failed to send #UNSUDO PM notification to Owner: {e}", exc_info=True)
     else:
         await update.message.reply_text("Mrow? Failed to remove user from sudo list. Check logs.")
 
