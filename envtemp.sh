@@ -3,9 +3,17 @@
 # Set your BOT token here in "".
 # To generate a BOT token, create your bot with @BotFather in Telegram.
 export TELEGRAM_BOT_TOKEN="PASTE_HERE"
+
 # Set your OWNER ID here in "".
 # To get your account ID, you can use any bot that has the /info command, e.g. @MissRose_bot
 export TELEGRAM_OWNER_ID="PASTE_HERE"
+
+# Set your bot log ID chat/channel here in "".
+# If you don't set it, the bot will send logs to the owner's PM.
+# Note that this does not require to run bot.
+# However, if you want to use this, remember to delete the hastag before the command below.
+# export LOG_CHAT_ID="PASTE_HERE"
+
 # Set your TENOR API here so that gifs appear with the commands /kill, /punch, /bite, /hug, /slap, /attack, /fed
 # Go to https://developers.google.com/tenor/guides/quickstart?hl=en and generate your tenor api key.
 # Note that this does not require to run bot.
@@ -16,5 +24,3 @@ echo "done"
 
 # Use this command to start bot:
 # cd ~/catbot && . ./env.sh && python catbot.py
-
- 
