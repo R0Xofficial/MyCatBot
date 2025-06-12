@@ -25,11 +25,11 @@ Run **pip install -r requirements.txt**
 
 3. Set your environment in env.sh (use this command: **nano ~/catbot/env.sh**)
 
-4. To run bot use this command:
+4. To run bot use command:
 
 **cd ~/catbot && . ./env.sh && python catbot.py**
 
-If you want run test do this command
+If you want run test bot version use command:
 
 **cd ~/catbot && . ./env.sh && python catbot_test.py**
 
