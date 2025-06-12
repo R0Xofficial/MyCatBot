@@ -2768,16 +2768,23 @@ async def add_sudo_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     else:
         await update.message.reply_text("Mrow? Failed to add user to sudo list. Check logs.")
 
-
 async def del_sudo_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
-    if user.id != OWNER_ID:
+    if user.id != OWNER_ID: # Tylko OWNER może używać tej komendy
         logger.warning(f"Unauthorized /delsudo attempt by user {user.id}.")
+        owner_mention = f"<code>{OWNER_ID}</code>" # Domyślna wzmianka
+        try:
+            # Spróbuj pobrać lepszą wzmiankę
+            owner_chat_for_refusal = await context.bot.get_chat(OWNER_ID) # Użyj innej nazwy zmiennej
+            owner_mention = owner_chat_for_refusal.mention_html()
+        except Exception:
+            pass # Użyj domyślnej, jeśli pobranie się nie uda
+
         if OWNER_ONLY_REFUSAL:
-            owner_mention = f"<code>{OWNER_ID}</code>"; try: owner_chat_obj = await context.bot.get_chat(OWNER_ID); owner_mention = owner_chat_obj.mention_html()
-            except Exception: pass
-            refusal_text = random.choice(OWNER_ONLY_REFUSAL).format(owner_mention=owner_mention); await update.message.reply_html(refusal_text)
-        else: await update.message.reply_text("Meeeow! Only my Supreme Owner can revoke sudo powers!")
+            refusal_text = random.choice(OWNER_ONLY_REFUSAL).format(owner_mention=owner_mention)
+            await update.message.reply_html(refusal_text)
+        else:
+            await update.message.reply_text("Meeeow! Only my Supreme Owner can revoke sudo powers!")
         return
 
     target_user_obj: User | None = None
