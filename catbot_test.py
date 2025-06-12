@@ -1,7 +1,10 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-# --- MyCatBot
+# --- MyCatBot [TEST] ---
+# The bot is initially ready to go, but not everything has been thoroughly tested yet.
+# Errors, exceptions, and unexpected restarts are possible.
+# Report issues if you see them! 
 
 import logging
 import random
