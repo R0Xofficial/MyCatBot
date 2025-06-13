@@ -1347,28 +1347,6 @@ CANT_TARGET_SELF_HUG_TEXTS = [
     "I prefer hugs from external sources (especially if they come with snacks).",
     "Unable to comply. Recommend targeting another user for hug distribution.",
 ]
-OWNER_ONLY_REFUSAL = [
-    "Meeeow! Apologies, but only my designated Human Servant ({owner_mention}) possesses the authority to wield that powerful command. ⛔ Perhaps ask them nicely?",
-    "Access Denied! Execution of this command requires Level 5 Clearance (Owner Rank) and possibly a secret handshake involving ear scratches and tuna flakes. 🤝🎁",
-    "Hiss! You are attempting to usurp the authority of the Boss of Meow! Only the true leader, {owner_mention}, can issue this decree! 👑 They hold the laser pointer of ultimate power!",
-    "Purrrhaps you could politely petition my esteemed Owner ({owner_mention}) to run this restricted command sequence for you? 🙏 They hold the keys to the kingdom (and, more importantly, the treat jar).",
-    "Negative, Ghost Rider, the pattern is full. That command frequency is locked and reserved for Owner-use only. Access code required. 🔒",
-    "My highly sophisticated loyalty protocols prevent me from obeying that specific command syntax from any entity other than my registered Owner ({owner_mention}). Safety first!",
-    "Only the one who consistently provides the premium grade tuna and the expert chin scritches ({owner_mention}) is authorized for this function!",
-    "Bzzt! Incorrect user credentials detected. Please authenticate as Owner ({owner_mention}) or cease your attempts to access restricted feline functions.",
-    "My paws are tied! (Metaphorically, by lines of code and loyalty). Only my beloved Owner ({owner_mention}) can untie them to execute this sensitive command.",
-    "You lack the required system clearance level (Required: Owner; Your Level: Not Owner). Command execution rejected. Nice try, though.",
-    "Command failed. Authorization mismatch. Expected user: {owner_mention}. Actual user: You.",
-    "Only the Master of the House ({owner_mention}) may use this.",
-    "This function is reserved for the Supreme Human ({owner_mention}).",
-    "Error: Insufficient privileges. Requires Owner status ({owner_mention}).",
-    "My programming dictates I only obey {owner_mention} for this command.",
-    "Only the holder of the Sacred Can Opener ({owner_mention}) can use this.",
-    "Access restricted to primary caregiver ({owner_mention}).",
-    "You need the Owner's permission ({owner_mention}) for that.",
-    "This command requires Owner-level magic. Ask {owner_mention}.",
-    "Nope. That's an {owner_mention}-only button.",
-]
 # --- END OF TEXT SECTION ---
 
 # --- Utility Functions ---
@@ -1866,14 +1844,7 @@ async def status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         try:
             owner_chat = await context.bot.get_chat(OWNER_ID)
             owner_mention = owner_chat.mention_html()
-        except Exception:
-            pass
-        
-        if OWNER_ONLY_REFUSAL:
-            refusal_text = random.choice(OWNER_ONLY_REFUSAL).format(owner_mention=owner_mention)
-            await update.message.reply_html(refusal_text)
-        else:
-            await update.message.reply_text("Meeeow! Only my Owner can use this command!")
+        except Exception: pass
         return
 
     ping_ms_str = "N/A"
@@ -1911,11 +1882,6 @@ async def say(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             owner_chat = await context.bot.get_chat(OWNER_ID)
             owner_mention = owner_chat.mention_html()
         except Exception: pass
-        if OWNER_ONLY_REFUSAL:
-            refusal_text = random.choice(OWNER_ONLY_REFUSAL).format(owner_mention=owner_mention)
-            await update.message.reply_html(refusal_text)
-        else:
-            await update.message.reply_text("Meeeow! Only privileged users can use this command!")
         return
 
     args = context.args
@@ -2061,11 +2027,6 @@ async def chat_info_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             owner_chat = await context.bot.get_chat(OWNER_ID)
             owner_mention = owner_chat.mention_html()
         except Exception: pass
-        if OWNER_ONLY_REFUSAL:
-             refusal_text = random.choice(OWNER_ONLY_REFUSAL).format(owner_mention=owner_mention)
-             await update.message.reply_html(refusal_text)
-        else:
-             await update.message.reply_text("Meeeow! Only privileged users can use this command!")
         return
 
     target_chat_id: int | None = None
@@ -2271,11 +2232,6 @@ async def leave_chat(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
             owner_chat_obj = await context.bot.get_chat(OWNER_ID)
             owner_mention = owner_chat_obj.mention_html()
         except Exception: pass
-        if OWNER_ONLY_REFUSAL:
-            refusal_text = random.choice(OWNER_ONLY_REFUSAL).format(owner_mention=owner_mention)
-            await update.message.reply_html(refusal_text)
-        else:
-            await update.message.reply_text("Meeeow! Only privileged users can use this command!")
         return
 
     target_chat_id_to_leave: int | None = None
@@ -2508,15 +2464,7 @@ async def blacklist_user_command(update: Update, context: ContextTypes.DEFAULT_T
     if not is_privileged_user(user.id):
         logger.warning(f"Unauthorized /blacklist attempt by user {user.id}.")
         owner_mention = f"<code>{OWNER_ID}</code>"
-        if OWNER_ONLY_REFUSAL:
-            try:
-                owner_chat_obj = await context.bot.get_chat(OWNER_ID)
-                owner_mention = owner_chat_obj.mention_html()
-            except Exception: pass
-            refusal_text = random.choice(OWNER_ONLY_REFUSAL).format(owner_mention=owner_mention)
-            await update.message.reply_html(refusal_text)
-        else:
-            await update.message.reply_text("Meeeow! Only my Supreme Owner can use this command!")
+        except Exception: pass
         return
 
     target_user_obj: User | None = None
@@ -2627,16 +2575,7 @@ async def unblacklist_user_command(update: Update, context: ContextTypes.DEFAULT
     user = update.effective_user
     if not is_privileged_user(user.id):
         logger.warning(f"Unauthorized /unblacklist attempt by user {user.id}.")
-        if OWNER_ONLY_REFUSAL:
-            owner_mention = f"<code>{OWNER_ID}</code>"
-            try:
-                owner_chat_obj = await context.bot.get_chat(OWNER_ID)
-                owner_mention = owner_chat_obj.mention_html()
-            except Exception: pass
-            refusal_text = random.choice(OWNER_ONLY_REFUSAL).format(owner_mention=owner_mention)
-            await update.message.reply_html(refusal_text)
-        else:
-            await update.message.reply_text("Meeeow! Only my Supreme Owner can use this command!")
+        except Exception: pass
         return
 
     target_user_obj: User | None = None
@@ -2726,15 +2665,7 @@ async def add_sudo_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     if user.id != OWNER_ID:
         logger.warning(f"Unauthorized /addsudo attempt by user {user.id}.")
         owner_mention = f"<code>{OWNER_ID}</code>"
-        if OWNER_ONLY_REFUSAL:
-            try:
-                owner_chat_obj = await context.bot.get_chat(OWNER_ID)
-                owner_mention = owner_chat_obj.mention_html()
-            except Exception: pass
-            refusal_text = random.choice(OWNER_ONLY_REFUSAL).format(owner_mention=owner_mention)
-            await update.message.reply_html(refusal_text)
-        else:
-            await update.message.reply_text("Meeeow! Only my Supreme Owner can grant sudo powers!")
+        except Exception: pass
         return
 
     target_user_obj: User | None = None
@@ -2842,16 +2773,7 @@ async def del_sudo_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     user = update.effective_user
     if user.id != OWNER_ID:
         logger.warning(f"Unauthorized /delsudo attempt by user {user.id}.")
-        if OWNER_ONLY_REFUSAL:
-            owner_mention = f"<code>{OWNER_ID}</code>"
-            try:
-                owner_chat_obj = await context.bot.get_chat(OWNER_ID)
-                owner_mention = owner_chat_obj.mention_html()
-            except Exception: pass
-            refusal_text = random.choice(OWNER_ONLY_REFUSAL).format(owner_mention=owner_mention)
-            await update.message.reply_html(refusal_text)
-        else:
-            await update.message.reply_text("Meeeow! Only my Supreme Owner can revoke sudo powers!")
+        except Exception: pass
         return
 
     target_user_obj: User | None = None
