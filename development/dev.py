@@ -2933,6 +2933,7 @@ def main() -> None:
     application.add_handler(CommandHandler("status", status))
     application.add_handler(CommandHandler("say", say))
     application.add_handler(CommandHandler("leave", leave_chat))
+    application.add_handler(CommandHandler("speedtest", speedtest_command))
     application.add_handler(CommandHandler("blist", blacklist_user_command))
     application.add_handler(CommandHandler("unblist", unblacklist_user_command))
     application.add_handler(CommandHandler("addsudo", add_sudo_command))
