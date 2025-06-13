@@ -2468,9 +2468,9 @@ async def blacklist_user_command(update: Update, context: ContextTypes.DEFAULT_T
     if not is_privileged_user(user.id):
         logger.warning(f"Unauthorized /blacklist attempt by user {user.id}.")
         owner_mention = f"<code>{OWNER_ID}</code>"
-        except Exception:
-            pass
-        return
+    except Exception:
+        pass
+    return
 
     target_user_obj: User | None = None
     reason = "No reason provided."
@@ -2580,9 +2580,9 @@ async def unblacklist_user_command(update: Update, context: ContextTypes.DEFAULT
     user = update.effective_user
     if not is_privileged_user(user.id):
         logger.warning(f"Unauthorized /unblacklist attempt by user {user.id}.")
-        except Exception:
-            pass
-        return
+    except Exception:
+        pass
+    return
 
     target_user_obj: User | None = None
     target_input_str: str | None = None
@@ -2671,9 +2671,9 @@ async def add_sudo_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     if user.id != OWNER_ID:
         logger.warning(f"Unauthorized /addsudo attempt by user {user.id}.")
         owner_mention = f"<code>{OWNER_ID}</code>"
-        except Exception:
-            pass
-        return
+    except Exception:
+        pass
+    return
 
     target_user_obj: User | None = None
     target_input_str: str | None = None
@@ -2780,9 +2780,9 @@ async def del_sudo_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     user = update.effective_user
     if user.id != OWNER_ID:
         logger.warning(f"Unauthorized /delsudo attempt by user {user.id}.")
-        except Exception:
-            pass
-        return
+    except Exception:
+        pass
+    return
 
     target_user_obj: User | None = None
     target_input_str: str | None = None
