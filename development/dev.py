@@ -1860,7 +1860,6 @@ async def photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 async def status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
-
     if not is_privileged_user(user.id):
         logger.warning(f"Unauthorized /status attempt by user {user.id}.")
         owner_mention = f"<code>{OWNER_ID}</code>"
@@ -1905,7 +1904,6 @@ async def status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 async def say(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
-
     if not is_privileged_user(user.id):
         logger.warning(f"Unauthorized /say attempt by user {user.id}.")
         owner_mention = f"<code>{OWNER_ID}</code>"
