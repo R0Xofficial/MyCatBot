@@ -1890,7 +1890,7 @@ async def status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             now_utc = datetime.now(timezone.utc)
             msg_utc = update.message.date.astimezone(timezone.utc)
             delta_ping = now_utc - msg_utc
-            ping_ms = int(delta_ping.total_seconds() * 1000)
+            ping_ms = int(delta_ping.total_seconds() * 100)
             if 0 <= ping_ms < 60000: ping_ms_str = f"{ping_ms} ms"
             else: ping_ms_str = f"~{ping_ms} ms (?)"
         except Exception as e:
