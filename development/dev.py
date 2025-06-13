@@ -1844,7 +1844,8 @@ async def status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         try:
             owner_chat = await context.bot.get_chat(OWNER_ID)
             owner_mention = owner_chat.mention_html()
-        except Exception: pass
+        except Exception:
+            pass
         return
 
     ping_ms_str = "N/A"
@@ -1881,7 +1882,8 @@ async def say(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         try:
             owner_chat = await context.bot.get_chat(OWNER_ID)
             owner_mention = owner_chat.mention_html()
-        except Exception: pass
+        except Exception:
+            pass
         return
 
     args = context.args
@@ -2026,7 +2028,8 @@ async def chat_info_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         try:
             owner_chat = await context.bot.get_chat(OWNER_ID)
             owner_mention = owner_chat.mention_html()
-        except Exception: pass
+        except Exception:
+            pass
         return
 
     target_chat_id: int | None = None
@@ -2231,7 +2234,8 @@ async def leave_chat(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
         try:
             owner_chat_obj = await context.bot.get_chat(OWNER_ID)
             owner_mention = owner_chat_obj.mention_html()
-        except Exception: pass
+        except Exception:
+            pass
         return
 
     target_chat_id_to_leave: int | None = None
@@ -2464,7 +2468,8 @@ async def blacklist_user_command(update: Update, context: ContextTypes.DEFAULT_T
     if not is_privileged_user(user.id):
         logger.warning(f"Unauthorized /blacklist attempt by user {user.id}.")
         owner_mention = f"<code>{OWNER_ID}</code>"
-        except Exception: pass
+        except Exception:
+            pass
         return
 
     target_user_obj: User | None = None
@@ -2575,7 +2580,8 @@ async def unblacklist_user_command(update: Update, context: ContextTypes.DEFAULT
     user = update.effective_user
     if not is_privileged_user(user.id):
         logger.warning(f"Unauthorized /unblacklist attempt by user {user.id}.")
-        except Exception: pass
+        except Exception:
+            pass
         return
 
     target_user_obj: User | None = None
@@ -2665,7 +2671,8 @@ async def add_sudo_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     if user.id != OWNER_ID:
         logger.warning(f"Unauthorized /addsudo attempt by user {user.id}.")
         owner_mention = f"<code>{OWNER_ID}</code>"
-        except Exception: pass
+        except Exception:
+            pass
         return
 
     target_user_obj: User | None = None
@@ -2773,7 +2780,8 @@ async def del_sudo_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     user = update.effective_user
     if user.id != OWNER_ID:
         logger.warning(f"Unauthorized /delsudo attempt by user {user.id}.")
-        except Exception: pass
+        except Exception:
+            pass
         return
 
     target_user_obj: User | None = None
