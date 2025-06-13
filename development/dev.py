@@ -2197,23 +2197,26 @@ async def chat_info_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     message_text = "\n".join(info_lines)
     await update.message.reply_html(message_text, disable_web_page_preview=True)
 
-async def run_speed_test_blocking():
+def run_speed_test_blocking():
     try:
+        logger.info("Starting blocking speed test...")
         s = speedtest.Speedtest()
-        s.get_best_server()
+        logger.info("Getting download speed...")
         s.download()
+        logger.info("Getting upload speed...")
         s.upload()
         results_dict = s.results.dict()
+        logger.info("Speed test finished successfully (blocking part).")
         return results_dict
     except speedtest.ConfigRetrievalError as e:
         logger.error(f"Speedtest config retrieval error: {e}")
-        return {"error": "Config retrieval error"}
+        return {"error": f"Config retrieval error: {str(e)}"}
     except speedtest.NoMatchedServers as e:
         logger.error(f"Speedtest no matched servers: {e}")
-        return {"error": "No suitable test servers found"}
+        return {"error": f"No suitable test servers found: {str(e)}"}
     except Exception as e:
-        logger.error(f"General error during speedtest: {e}", exc_info=True)
-        return {"error": f"An error occurred: {type(e).__name__}"}
+        logger.error(f"General error during blocking speedtest function: {e}", exc_info=True)
+        return {"error": f"A general error occurred during test: {type(e).__name__}"}
 
 async def speedtest_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
@@ -2229,18 +2232,29 @@ async def speedtest_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
         if results and "error" not in results:
             ping = results.get("ping", "N/A")
-            download_mbps = results.get("download", 0) / 1024 / 1024
-            upload_mbps = results.get("upload", 0) / 1024 / 1024
+            download_mbps = results.get("download", 0) / 1000 / 1000
+            upload_mbps = results.get("upload", 0) / 1000 / 1000
             server_info = results.get("server", {})
             server_name = server_info.get("name", "N/A")
             server_country = server_info.get("country", "N/A")
             server_sponsor = server_info.get("sponsor", "N/A")
+            
+            timestamp_str = results.get("timestamp", "N/A")
+            formatted_timestamp = ""
+            if timestamp_str != "N/A":
+                try:
+                    dt_obj = datetime.fromisoformat(timestamp_str.replace("Z", "+00:00"))
+                    formatted_timestamp = f"\n<b>• Timestamp:</b> <code>{dt_obj.strftime('%Y-%m-%d %H:%M:%S %Z')}</code>"
+                except ValueError:
+                    logger.warning(f"Could not parse speedtest timestamp: {timestamp_str}")
+                    formatted_timestamp = f"\n<b>• Timestamp:</b> <code>{html.escape(timestamp_str)}</code>"
+
 
             result_lines = [
                 "<b>Ookla Speedtest Results:</b> 💨\n",
                 f"<b>• Ping:</b> <code>{ping:.2f} ms</code>" if isinstance(ping, float) else f"<b>• Ping:</b> <code>{ping}</code>",
                 f"<b>• Download:</b> <code>{download_mbps:.2f} Mbps</code>",
-                f"<b>• Upload:</b> <code>{upload_mbps:.2f} Mbps</code>\n",
+                f"<b>• Upload:</b> <code>{upload_mbps:.2f} Mbps</code>{formatted_timestamp}\n",
                 "<b>Test Server:</b>",
                 f"  <b>• Name:</b> <code>{html.escape(server_name)}</code>",
                 f"  <b>• Sponsor:</b> <code>{html.escape(server_sponsor)}</code>",
@@ -2252,10 +2266,10 @@ async def speedtest_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             error_msg = results["error"]
             await context.bot.edit_message_text(chat_id=message.chat_id, message_id=message.message_id, text=f"😿 Mrow! Speed test failed: {html.escape(error_msg)}")
         else:
-            await context.bot.edit_message_text(chat_id=message.chat_id, message_id=message.message_id, text="😿 Mrow! Speed test failed to return results.")
+            await context.bot.edit_message_text(chat_id=message.chat_id, message_id=message.message_id, text="😿 Mrow! Speed test failed to return results or returned an unexpected format.")
 
     except Exception as e:
-        logger.error(f"Error in speedtest_command: {e}", exc_info=True)
+        logger.error(f"Error in speedtest_command outer try-except: {e}", exc_info=True)
         try:
             await context.bot.edit_message_text(chat_id=message.chat_id, message_id=message.message_id, text=f"💥 An unexpected error occurred during the speed test: {html.escape(str(e))}")
         except Exception:
