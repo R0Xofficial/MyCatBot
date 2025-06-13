@@ -30,6 +30,7 @@ OWNER_ID = None
 BOT_START_TIME = datetime.now()
 TENOR_API_KEY = None
 DB_NAME = "catbot_data.db"
+LOG_CHAT_ID = None
 
 # --- Load configuration from environment variables ---
 try:
@@ -46,12 +47,24 @@ TENOR_API_KEY = os.getenv("TENOR_API_KEY")
 if not TENOR_API_KEY: logger.warning("WARNING: TENOR_API_KEY not set. Themed GIFs disabled.")
 else: logger.info("Tenor API Key loaded. Themed GIFs enabled.")
 
+log_chat_id_str = os.getenv("LOG_CHAT_ID")
+if log_chat_id_str:
+    try:
+        LOG_CHAT_ID = int(log_chat_id_str)
+        logger.info(f"Log Chat ID loaded: {LOG_CHAT_ID}")
+    except ValueError:
+        logger.error(f"Invalid LOG_CHAT_ID: '{log_chat_id_str}' is not a valid integer. Will fallback to OWNER_ID for logs.")
+        LOG_CHAT_ID = None
+else:
+    logger.info("LOG_CHAT_ID not set. Operational logs (blacklist/sudo) will be sent to OWNER_ID if available.")
+
 # --- Database Initialization ---
 def init_db():
     conn = None
     try:
         conn = sqlite3.connect(DB_NAME)
         cursor = conn.cursor()
+
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS users (
                 user_id INTEGER PRIMARY KEY,
@@ -64,6 +77,7 @@ def init_db():
             )
         """)
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_username ON users (username)")
+
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS blacklist (
                 user_id INTEGER PRIMARY KEY,
@@ -72,8 +86,17 @@ def init_db():
                 timestamp TEXT 
             )
         """)
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS sudo_users (
+                user_id INTEGER PRIMARY KEY,
+                added_by_id INTEGER NOT NULL,
+                timestamp TEXT NOT NULL
+            )
+        """)
+        
         conn.commit()
-        logger.info(f"Database '{DB_NAME}' initialized successfully (tables users, blacklist ensured with TEXT for datetime).")
+        logger.info(f"Database '{DB_NAME}' initialized successfully (tables users, blacklist, sudo_users ensured).")
     except sqlite3.Error as e:
         logger.error(f"SQLite error during DB initialization: {e}", exc_info=True)
     finally:
@@ -152,6 +175,64 @@ async def check_blacklist_handler(update: Update, context: ContextTypes.DEFAULT_
         logger.info(f"User {user.id} ({user_mention_log}) is blacklisted. Silently ignoring and blocking interaction: '{message_text_preview}'")
         
         raise ApplicationHandlerStop
+
+# --- Sudo ---
+def add_sudo_user(user_id: int, added_by_id: int) -> bool:
+    """Adds a user to the sudo list."""
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_NAME)
+        cursor = conn.cursor()
+        current_timestamp_iso = datetime.now(timezone.utc).isoformat()
+        cursor.execute(
+            "INSERT OR IGNORE INTO sudo_users (user_id, added_by_id, timestamp) VALUES (?, ?, ?)",
+            (user_id, added_by_id, current_timestamp_iso)
+        )
+        conn.commit()
+        return cursor.rowcount > 0 
+    except sqlite3.Error as e:
+        logger.error(f"SQLite error adding sudo user {user_id}: {e}", exc_info=True)
+        return False
+    finally:
+        if conn:
+            conn.close()
+
+def remove_sudo_user(user_id: int) -> bool:
+    """Removes a user from the sudo list."""
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_NAME)
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM sudo_users WHERE user_id = ?", (user_id,))
+        conn.commit()
+        return cursor.rowcount > 0
+    except sqlite3.Error as e:
+        logger.error(f"SQLite error removing sudo user {user_id}: {e}", exc_info=True)
+        return False
+    finally:
+        if conn:
+            conn.close()
+
+def is_sudo_user(user_id: int) -> bool:
+    """Checks if a user is on the sudo list (specifically, not checking if they are THE owner)."""
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_NAME)
+        cursor = conn.cursor()
+        cursor.execute("SELECT 1 FROM sudo_users WHERE user_id = ?", (user_id,))
+        return cursor.fetchone() is not None
+    except sqlite3.Error as e:
+        logger.error(f"SQLite error checking sudo for user {user_id}: {e}", exc_info=True)
+        return False 
+    finally:
+        if conn:
+            conn.close()
+
+def is_privileged_user(user_id: int) -> bool:
+    """Checks if the user is the Owner or a Sudo user."""
+    if user_id == OWNER_ID:
+        return True
+    return is_sudo_user(user_id)
 
 # --- User logger ---
 def update_user_in_db(user: User | None):
@@ -1262,28 +1343,6 @@ CANT_TARGET_SELF_HUG_TEXTS = [
     "I prefer hugs from external sources (especially if they come with snacks).",
     "Unable to comply. Recommend targeting another user for hug distribution.",
 ]
-OWNER_ONLY_REFUSAL = [ # Needed for /status and /say
-    "Meeeow! Apologies, but only my designated Human Servant ({owner_mention}) possesses the authority to wield that powerful command. ⛔ Perhaps ask them nicely?",
-    "Access Denied! Execution of this command requires Level 5 Clearance (Owner Rank) and possibly a secret handshake involving ear scratches and tuna flakes. 🤝🎁",
-    "Hiss! You are attempting to usurp the authority of the Boss of Meow! Only the true leader, {owner_mention}, can issue this decree! 👑 They hold the laser pointer of ultimate power!",
-    "Purrrhaps you could politely petition my esteemed Owner ({owner_mention}) to run this restricted command sequence for you? 🙏 They hold the keys to the kingdom (and, more importantly, the treat jar).",
-    "Negative, Ghost Rider, the pattern is full. That command frequency is locked and reserved for Owner-use only. Access code required. 🔒",
-    "My highly sophisticated loyalty protocols prevent me from obeying that specific command syntax from any entity other than my registered Owner ({owner_mention}). Safety first!",
-    "Only the one who consistently provides the premium grade tuna and the expert chin scritches ({owner_mention}) is authorized for this function!",
-    "Bzzt! Incorrect user credentials detected. Please authenticate as Owner ({owner_mention}) or cease your attempts to access restricted feline functions.",
-    "My paws are tied! (Metaphorically, by lines of code and loyalty). Only my beloved Owner ({owner_mention}) can untie them to execute this sensitive command.",
-    "You lack the required system clearance level (Required: Owner; Your Level: Not Owner). Command execution rejected. Nice try, though.",
-    "Command failed. Authorization mismatch. Expected user: {owner_mention}. Actual user: You.",
-    "Only the Master of the House ({owner_mention}) may use this.",
-    "This function is reserved for the Supreme Human ({owner_mention}).",
-    "Error: Insufficient privileges. Requires Owner status ({owner_mention}).",
-    "My programming dictates I only obey {owner_mention} for this command.",
-    "Only the holder of the Sacred Can Opener ({owner_mention}) can use this.",
-    "Access restricted to primary caregiver ({owner_mention}).",
-    "You need the Owner's permission ({owner_mention}) for that.",
-    "This command requires Owner-level magic. Ask {owner_mention}.",
-    "Nope. That's an {owner_mention}-only button.",
-]
 # --- END OF TEXT SECTION ---
 
 # --- Utility Functions ---
@@ -1349,7 +1408,7 @@ async def get_themed_gif(context: ContextTypes.DEFAULT_TYPE, search_terms: list[
 
 # --- Command Handlers ---
 HELP_TEXT = """
-Meeeow! 🐾 Here are the commands you can use:
+<b>Meeeow! 🐾 Here are the commands you can use:</b>
 
 /start - Shows the welcome message. ✨
 /help - Shows this help message. ❓
@@ -1372,14 +1431,6 @@ Meeeow! 🐾 Here are the commands you can use:
 /slap [reply/@user] - Administer a swift slap! 👋
 /bite [reply/@user] - Take a playful bite! 😬
 /hug [reply/@user] - Offer a comforting hug! 🤗
-
-Owner Only Commands:
-/status - Show bot status.
-/cinfo [optional_chat_ID] - Get detailed info about the current or specified chat. 📊
-/say [optional_chat_id] [your text] - Send message as bot.
-/leave [optional_chat_id] - Make the bot leave a chat.
-/blist [ID/reply/@user] [reason] - Add user to blacklist.
-/unblist [ID/reply/@user] - Remove user from blacklist.
 """
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -1407,6 +1458,7 @@ async def owner_info(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
 def format_entity_info(entity: Chat | User,
                        chat_member_status_str: str | None = None,
                        is_target_owner: bool = False,
+                       is_target_sudo: bool = False,
                        blacklist_reason_str: str | None = None,
                        current_chat_id_for_status: int | None = None,
                        bot_context: ContextTypes.DEFAULT_TYPE | None = None
@@ -1419,7 +1471,7 @@ def format_entity_info(entity: Chat | User,
 
     if is_user_type or entity_chat_type == ChatType.PRIVATE:
         user = entity
-        info_lines.append(f"👤 <b>User Information:</b>\n")
+        info_lines.append(f"👤 <b>User Information:</b>\n")        
         first_name = html.escape(getattr(user, 'first_name', "N/A") or "N/A")
         last_name = html.escape(getattr(user, 'last_name', "") or "")
         username_display = f"@{html.escape(user.username)}" if user.username else "N/A"
@@ -1446,7 +1498,7 @@ def format_entity_info(entity: Chat | User,
 
         if chat_member_status_str and current_chat_id_for_status != user.id and current_chat_id_for_status is not None:
             display_status = ""
-            if chat_member_status_str == "creator": display_status = "<code>Owner</code>"
+            if chat_member_status_str == "creator": display_status = "<code>Creator</code>"
             elif chat_member_status_str == "administrator": display_status = "<code>Admin</code>"
             elif chat_member_status_str == "member": display_status = "<code>Member</code>"
             elif chat_member_status_str == "left": display_status = "<code>Not in chat</code>"
@@ -1458,6 +1510,8 @@ def format_entity_info(entity: Chat | User,
 
         if is_target_owner:
             info_lines.append(f"<b>• Bot Owner:</b> <code>Yes</code>")
+        elif is_target_sudo:
+            info_lines.append(f"<b>• Bot Sudo:</b> <code>Yes</code>")
         
         if blacklist_reason_str is not None:
             info_lines.append(f"<b>• Blacklisted:</b> <code>Yes</code>")
@@ -1479,7 +1533,7 @@ def format_entity_info(entity: Chat | User,
             permalink_channel_html = f"<a href=\"{permalink_channel_url}\">{permalink_text_display}</a>"
             info_lines.append(f"<b>• Permalink:</b> {permalink_channel_html}")
         else:
-            info_lines.append(f"<b>• Permalink:</b> Private channel")
+            info_lines.append(f"<b>• Permalink:</b> Private channel (no public link)")
         
     elif entity_chat_type in [ChatType.GROUP, ChatType.SUPERGROUP]:
         chat = entity
@@ -1493,6 +1547,7 @@ def format_entity_info(entity: Chat | User,
             info_lines.append(f"  • Type detected: {entity_chat_type.capitalize()}")
 
     return "\n".join(info_lines)
+
 
 async def entity_info_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     target_entity_obj: Chat | User | None = None
@@ -1528,7 +1583,7 @@ async def entity_info_command(update: Update, context: ContextTypes.DEFAULT_TYPE
             if resolved_user_from_db:
                 initial_user_obj_from_update = resolved_user_from_db
                 initial_entity_id_for_refresh = resolved_user_from_db.id
-                logger.info(f"User @{username_to_find} found in DB, ID: {initial_user_obj_from_update.id}")
+                logger.info(f"User @{username_to_find} found in DB, ID: {initial_user_obj_from_update.id if initial_user_obj_from_update else 'N/A'}")
             else:
                 logger.info(f"Entity @{username_to_find} not in local user DB, trying Telegram API.")
                 try:
@@ -1573,59 +1628,63 @@ async def entity_info_command(update: Update, context: ContextTypes.DEFAULT_TYPE
             initial_entity_id_for_refresh = initial_user_obj_from_update.id
             logger.info(f"/info target is command sender: {initial_user_obj_from_update.id}")
 
-    target_entity_obj_final_display = None
+    final_entity_to_display: Chat | User | None = None
     if initial_user_obj_from_update:
-        target_entity_obj_final_display = initial_user_obj_from_update
+        final_entity_to_display = initial_user_obj_from_update
     elif target_chat_obj_from_api:
-        target_entity_obj_final_display = target_chat_obj_from_api
+        final_entity_to_display = target_chat_obj_from_api
 
-    if target_entity_obj_final_display and initial_entity_id_for_refresh is not None:
+    if final_entity_to_display and initial_entity_id_for_refresh is not None:
         is_target_owner_flag = False
+        is_target_sudo_flag = False
         member_status_in_current_chat_str: str | None = None
         blacklist_reason_str: str | None = None
 
         try:
             fresh_data_chat_obj = await context.bot.get_chat(chat_id=initial_entity_id_for_refresh)
             
-            if isinstance(target_entity_obj_final_display, User) or fresh_data_chat_obj.type == ChatType.PRIVATE:
-                current_is_bot = getattr(target_entity_obj_final_display, 'is_bot', False) if isinstance(target_entity_obj_final_display, User) else False
-                current_lang_code = getattr(target_entity_obj_final_display, 'language_code', None) if isinstance(target_entity_obj_final_display, User) else None
+            if isinstance(final_entity_to_display, User) or fresh_data_chat_obj.type == ChatType.PRIVATE:
+                current_is_bot = getattr(final_entity_to_display, 'is_bot', False)
+                current_lang_code = getattr(final_entity_to_display, 'language_code', None)
 
                 refreshed_user = User(
                     id=fresh_data_chat_obj.id,
-                    first_name=fresh_data_chat_obj.first_name or getattr(target_entity_obj_final_display, 'first_name', None) or "",
-                    last_name=fresh_data_chat_obj.last_name or getattr(target_entity_obj_final_display, 'last_name', None),
-                    username=fresh_data_chat_obj.username or getattr(target_entity_obj_final_display, 'username', None),
+                    first_name=fresh_data_chat_obj.first_name or getattr(final_entity_to_display, 'first_name', None) or "",
+                    last_name=fresh_data_chat_obj.last_name or getattr(final_entity_to_display, 'last_name', None),
+                    username=fresh_data_chat_obj.username or getattr(final_entity_to_display, 'username', None),
                     is_bot=getattr(fresh_data_chat_obj, 'is_bot', current_is_bot),
                     language_code=getattr(fresh_data_chat_obj, 'language_code', current_lang_code)
                 )
                 update_user_in_db(refreshed_user)
-                target_entity_obj_final_display = refreshed_user
+                final_entity_to_display = refreshed_user
                 
-                is_target_owner_flag = (OWNER_ID is not None and target_entity_obj_final_display.id == OWNER_ID)
-                blacklist_reason_str = get_blacklist_reason(target_entity_obj_final_display.id)
-                if current_chat_id != target_entity_obj_final_display.id and update.effective_chat.type in [ChatType.GROUP, ChatType.SUPERGROUP]:
+                is_target_owner_flag = (OWNER_ID is not None and final_entity_to_display.id == OWNER_ID)
+                if not is_target_owner_flag:
+                     is_target_sudo_flag = is_sudo_user(final_entity_to_display.id)
+                
+                blacklist_reason_str = get_blacklist_reason(final_entity_to_display.id)
+                if current_chat_id != final_entity_to_display.id and update.effective_chat.type in [ChatType.GROUP, ChatType.SUPERGROUP]:
                     try:
-                        chat_member = await context.bot.get_chat_member(chat_id=current_chat_id, user_id=target_entity_obj_final_display.id)
+                        chat_member = await context.bot.get_chat_member(chat_id=current_chat_id, user_id=final_entity_to_display.id)
                         member_status_in_current_chat_str = chat_member.status
                     except TelegramError as e:
                         if "user not found" in str(e).lower(): member_status_in_current_chat_str = "not_a_member"
-                        else: logger.warning(f"Could not get status for {target_entity_obj_final_display.id}: {e}")
+                        else: logger.warning(f"Could not get status for {final_entity_to_display.id}: {e}")
                     except Exception as e: logger.error(f"Unexpected error getting status: {e}", exc_info=True)
             else:
-                target_entity_obj_final_display = fresh_data_chat_obj
+                final_entity_to_display = fresh_data_chat_obj
 
-            logger.info(f"Refreshed entity data for {target_entity_obj_final_display.id} from API.")
+            logger.info(f"Refreshed entity data for {final_entity_to_display.id} from API.")
         except TelegramError as e:
             logger.warning(f"Could not refresh entity data for {initial_entity_id_for_refresh} from API: {e}. Using initially identified data.")
         except Exception as e:
             logger.error(f"Unexpected error refreshing entity data for {initial_entity_id_for_refresh}: {e}", exc_info=True)
 
-        if target_entity_obj_final_display:
-            info_message = format_entity_info(target_entity_obj_final_display, member_status_in_current_chat_str, is_target_owner_flag, blacklist_reason_str, current_chat_id, context)
+        if final_entity_to_display:
+            info_message = format_entity_info(final_entity_to_display, member_status_in_current_chat_str, is_target_owner_flag, is_target_sudo_flag, blacklist_reason_str, current_chat_id, context)
             try:
                 await update.message.reply_html(info_message)
-                logger.info(f"Sent /info response for entity {target_entity_obj_final_display.id} in chat {update.effective_chat.id}")
+                logger.info(f"Sent /info response for entity {final_entity_to_display.id} in chat {update.effective_chat.id}")
             except TelegramError as e_reply:
                 logger.error(f"Failed to send /info reply in chat {update.effective_chat.id}: {e_reply}")
             except Exception as e_reply_other:
@@ -1634,7 +1693,7 @@ async def entity_info_command(update: Update, context: ContextTypes.DEFAULT_TYPE
             await update.message.reply_text("Mrow? Could not obtain entity details to display.")
     else:
         await update.message.reply_text("Mrow? Couldn't determine what to get info for.")
-
+        
 # --- Simple Text Command Definitions ---
 async def send_random_text(update: Update, context: ContextTypes.DEFAULT_TYPE, text_list: list[str], list_name: str) -> None:
     if not text_list: logger.warning(f"Empty list: '{list_name}'"); await update.message.reply_text("Mrow? Internal error: Text list empty. 😿"); return
@@ -1760,61 +1819,42 @@ async def photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         logger.error(f"Unexpected error processing photo from thecatapi: {e}", exc_info=True)
         await update.message.reply_text("Mrow! Something weird happened while getting the photo. 😵‍💫")
 
-# --- Owner Only Functionality ---
 async def status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    user_id = update.effective_user.id
-    if user_id == OWNER_ID:
-        ping_ms_str = "N/A"
-        if update.message and update.message.date:
-            try:
-                now_utc = datetime.now(timezone.utc)
-                msg_utc = update.message.date.astimezone(timezone.utc)
-                delta_ping = now_utc - msg_utc
-                ping_ms = int(delta_ping.total_seconds() * 1000)
-                if 0 <= ping_ms < 60000:
-                    ping_ms_str = f"{ping_ms} ms"
-                else:
-                    ping_ms_str = f"~{ping_ms} ms (?)"
-            except Exception as e:
-                logger.error(f"Error calculating ping: {e}")
-                ping_ms_str = "Error"
-        
-        uptime_delta = datetime.now() - BOT_START_TIME 
-        readable_uptime = get_readable_time_delta(uptime_delta)
-        status_msg = (
-            f"<b>Purrrr! Bot Status:</b> ✨\n"
-            f"<b>• Uptime:</b> {readable_uptime} 🕰️\n"
-            f"<b>• Ping:</b> {ping_ms_str} 📶\n"
-            f"<b>• Owner ID:</b> <code>{OWNER_ID}</code> 👑\n"
-            f"<b>• Status:</b> Ready & Purring! 🐾"
-        )
-        await update.message.reply_html(status_msg)
-    else:
-        logger.warning(f"Unauthorized /status attempt by user {user_id}.")
-        owner_mention = f"<code>{OWNER_ID}</code>"
+    user = update.effective_user
+    if not is_privileged_user(user.id):
+        logger.warning(f"Unauthorized /status attempt by user {user.id}.")
+        return
+
+    ping_ms_str = "N/A"
+    if update.message and update.message.date:
         try:
-            owner_chat = await context.bot.get_chat(OWNER_ID)
-            owner_mention = owner_chat.mention_html()
-        except Exception:
-            pass
-        if OWNER_ONLY_REFUSAL:
-            refusal_text = random.choice(OWNER_ONLY_REFUSAL).format(owner_mention=owner_mention)
-            await update.message.reply_html(refusal_text)
-        else:
-            await update.message.reply_text("Meeeow! Only my Owner can use this command!")
+            now_utc = datetime.now(timezone.utc)
+            msg_utc = update.message.date.astimezone(timezone.utc)
+            delta_ping = now_utc - msg_utc
+            ping_ms = int(delta_ping.total_seconds() * 1000)
+            if 0 <= ping_ms < 60000:
+                ping_ms_str = f"{ping_ms} ms"
+            else:
+                ping_ms_str = f"~{ping_ms} ms (?)"
+        except Exception as e:
+            logger.error(f"Error calculating ping: {e}")
+            ping_ms_str = "Error"
+    
+    uptime_delta = datetime.now() - BOT_START_TIME 
+    readable_uptime = get_readable_time_delta(uptime_delta)
+    status_msg = (
+        f"<b>Purrrr! Bot Status:</b> ✨\n"
+        f"<b>• Uptime:</b> {readable_uptime} 🕰️\n"
+        f"<b>• Ping:</b> {ping_ms_str} 📶\n"
+        f"<b>• Owner ID:</b> <code>{OWNER_ID}</code> 👑\n"
+        f"<b>• Status:</b> Ready & Purring! 🐾"
+    )
+    await update.message.reply_html(status_msg)
 
 async def say(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
-
-    if user.id != OWNER_ID:
+    if not is_privileged_user(user.id):
         logger.warning(f"Unauthorized /say attempt by user {user.id}.")
-        owner_mention = f"<code>{OWNER_ID}</code>"
-        try:
-            owner_chat = await context.bot.get_chat(OWNER_ID)
-            owner_mention = owner_chat.mention_html()
-        except Exception: pass
-        refusal_text = random.choice(OWNER_ONLY_REFUSAL).format(owner_mention=owner_mention)
-        await update.message.reply_html(refusal_text)
         return
 
     args = context.args
@@ -1836,12 +1876,12 @@ async def say(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                      target_chat_id = potential_chat_id
                      message_to_say_list = args[1:]
                      is_remote_send = True
-                     logger.info(f"Owner remote send detected. Target: {target_chat_id}")
+                     logger.info(f"Privileged user {user.id} remote send detected. Target: {target_chat_id}")
                  else:
                      await update.message.reply_text("Mrow? Target chat ID provided, but no message to send!")
                      return
             except TelegramError:
-                 logger.info("First argument looks like ID but get_chat failed, sending to current chat.")
+                 logger.info(f"Argument '{target_chat_id_str}' looks like ID but get_chat failed or not a valid target, sending to current chat.")
                  target_chat_id = update.effective_chat.id
                  message_to_say_list = args
                  is_remote_send = False
@@ -1878,7 +1918,7 @@ async def say(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     except Exception as e:
          logger.error(f"Unexpected error getting chat info for {target_chat_id} in /say: {e}", exc_info=True)
 
-    logger.info(f"Owner ({user.id}) using /say. Target: {target_chat_id} ('{chat_title}'). Is remote: {is_remote_send}. Msg start: '{message_to_say[:50]}...'")
+    logger.info(f"Privileged user ({user.id}) using /say. Target: {target_chat_id} ('{chat_title}'). Is remote: {is_remote_send}. Msg start: '{message_to_say[:50]}...'")
 
     try:
         await context.bot.send_message(chat_id=target_chat_id, text=message_to_say)
@@ -1953,18 +1993,8 @@ async def chat_stat_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
 async def chat_info_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
-    if user.id != OWNER_ID:
+    if not is_privileged_user(user.id):
         logger.warning(f"Unauthorized /cinfo attempt by user {user.id}.")
-        owner_mention = f"<code>{OWNER_ID}</code>"
-        try:
-            owner_chat = await context.bot.get_chat(OWNER_ID)
-            owner_mention = owner_chat.mention_html()
-        except Exception: pass
-        if OWNER_ONLY_REFUSAL:
-             refusal_text = random.choice(OWNER_ONLY_REFUSAL).format(owner_mention=owner_mention)
-             await update.message.reply_html(refusal_text)
-        else:
-             await update.message.reply_text("Meeeow! Only my Owner can use this command!")
         return
 
     target_chat_id: int | None = None
@@ -1973,7 +2003,7 @@ async def chat_info_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     if context.args:
         try:
             target_chat_id = int(context.args[0])
-            logger.info(f"Owner calling /cinfo with target chat ID: {target_chat_id}")
+            logger.info(f"Privileged user {user.id} calling /cinfo with target chat ID: {target_chat_id}")
             try:
                 chat_object_for_details = await context.bot.get_chat(chat_id=target_chat_id)
             except TelegramError as e:
@@ -1993,7 +2023,7 @@ async def chat_info_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
              target_chat_id = effective_chat_obj.id
              try:
                  chat_object_for_details = await context.bot.get_chat(chat_id=target_chat_id)
-                 logger.info(f"Owner calling /cinfo for current chat: {target_chat_id}")
+                 logger.info(f"Privileged user {user.id} calling /cinfo for current chat: {target_chat_id}")
              except TelegramError as e:
                 logger.error(f"Failed to get full chat info for current chat ID {target_chat_id}: {e}")
                 await update.message.reply_html(f"😿 Mrow! Couldn't fetch full info for current chat. Reason: {html.escape(str(e))}.")
@@ -2137,11 +2167,15 @@ async def chat_info_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         perms = chat_permissions
         perm_lines = ["\n<b>• Default Member Permissions:</b>"]
         perm_lines.append(f"  <b>• Send Messages:</b> {'Yes' if getattr(perms, 'can_send_messages', False) else 'No'}")
+        
         can_send_any_media = (
-            getattr(perms, 'can_send_photos', False) or
-            getattr(perms, 'can_send_videos', False) or
             getattr(perms, 'can_send_audios', False) or
-            getattr(perms, 'can_send_documents', False)
+            getattr(perms, 'can_send_documents', False) or
+            getattr(perms, 'can_send_photos', False) or 
+            getattr(perms, 'can_send_videos', False) or
+            getattr(perms, 'can_send_video_notes', False) or
+            getattr(perms, 'can_send_voice_notes', False) or
+            getattr(perms, 'can_send_media_messages', False)
         )
         perm_lines.append(f"  <b>• Send Media:</b> {'Yes' if can_send_any_media else 'No'}")
         perm_lines.append(f"  <b>• Send Polls:</b> {'Yes' if getattr(perms, 'can_send_polls', False) else 'No'}")
@@ -2158,111 +2192,139 @@ async def chat_info_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     await update.message.reply_html(message_text, disable_web_page_preview=True)
     
 async def leave_chat(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Makes the bot leave the current or a specified chat (Owner Only)."""
     user = update.effective_user
     if user.id != OWNER_ID:
         logger.warning(f"Unauthorized /leave attempt by user {user.id}.")
-        owner_mention = f"<code>{OWNER_ID}</code>"
-        try:
-            owner_chat = await context.bot.get_chat(OWNER_ID)
-            owner_mention = owner_chat.mention_html()
-        except Exception: pass
-        if OWNER_ONLY_REFUSAL:
-             refusal_text = random.choice(OWNER_ONLY_REFUSAL).format(owner_mention=owner_mention)
-             await update.message.reply_html(refusal_text)
-        else:
-             await update.message.reply_text("Access denied.")
         return
 
-    target_chat_id = None
-    is_remote_leave = False
+    target_chat_id_to_leave: int | None = None
+    chat_where_command_was_called_id = update.effective_chat.id
+    is_leaving_current_chat = False
 
     if context.args:
         try:
-            target_chat_id = int(context.args[0])
-            if target_chat_id >= -100:
-                await update.message.reply_text("Mrow? Invalid Group/Channel ID format.")
+            target_chat_id_to_leave = int(context.args[0])
+            if target_chat_id_to_leave >= -100:
+                await update.message.reply_text("Mrow? Invalid Group/Channel ID format for leaving.")
                 return
-            is_remote_leave = True
-            logger.info(f"Owner initiated remote leave for chat ID: {target_chat_id}")
+            logger.info(f"Privileged user {user.id} initiated remote leave for chat ID: {target_chat_id_to_leave}")
+            if target_chat_id_to_leave == chat_where_command_was_called_id:
+                is_leaving_current_chat = True
         except (ValueError, IndexError):
-            await update.message.reply_text("Mrow? Invalid chat ID format.")
+            await update.message.reply_text("Mrow? Invalid chat ID format for leaving.")
             return
     else:
         if update.effective_chat.type == ChatType.PRIVATE:
-            await update.message.reply_text("Meow! I can't leave a private chat.")
+            await update.message.reply_text("Meow! I can't leave a private chat with you.")
             return
-        target_chat_id = update.effective_chat.id
-        logger.info(f"Owner initiated leave for current chat: {target_chat_id}")
+        target_chat_id_to_leave = update.effective_chat.id
+        is_leaving_current_chat = True
+        logger.info(f"Privileged user {user.id} initiated leave for current chat: {target_chat_id_to_leave}")
 
-    owner_mention = f"<code>{OWNER_ID}</code>"
+    if target_chat_id_to_leave is None:
+        await update.message.reply_text("Mrow? Could not determine which chat to leave.")
+        return
+
+    owner_mention_for_farewell = f"<code>{OWNER_ID}</code>"
     try:
         owner_chat_info = await context.bot.get_chat(OWNER_ID)
-        owner_mention = owner_chat_info.mention_html()
+        owner_mention_for_farewell = owner_chat_info.mention_html()
     except Exception as e:
-        logger.warning(f"Could not fetch owner mention for /leave message: {e}")
+        logger.warning(f"Could not fetch owner mention for /leave farewell message: {e}")
 
-    chat_title = f"Chat ID {target_chat_id}"
-    safe_chat_title = chat_title
-    can_proceed_to_leave = True
-
+    chat_title_to_leave = f"Chat ID {target_chat_id_to_leave}"
+    safe_chat_title_to_leave = chat_title_to_leave
+    
     try:
-        target_chat_info = await context.bot.get_chat(target_chat_id)
-        chat_title = target_chat_info.title or target_chat_info.first_name or f"Chat ID {target_chat_id}"
-        safe_chat_title = html.escape(chat_title)
-        logger.info(f"Target chat title resolved to: '{chat_title}'")
+        target_chat_info = await context.bot.get_chat(target_chat_id_to_leave)
+        chat_title_to_leave = target_chat_info.title or target_chat_info.first_name or f"Chat ID {target_chat_id_to_leave}"
+        safe_chat_title_to_leave = html.escape(chat_title_to_leave)
     except TelegramError as e:
-        logger.error(f"Could not get chat info for {target_chat_id}: {e}")
+        logger.error(f"Could not get chat info for {target_chat_id_to_leave} before leaving: {e}")
+        reply_to_chat_id_for_error = chat_where_command_was_called_id
+        if is_leaving_current_chat and OWNER_ID: reply_to_chat_id_for_error = OWNER_ID
+        
+        error_message_text = f"❌ Cannot interact with chat <b>{safe_chat_title_to_leave}</b> (<code>{target_chat_id_to_leave}</code>): {html.escape(str(e))}. I might not be a member there."
         if "bot is not a member" in str(e).lower() or "chat not found" in str(e).lower():
-             await update.message.reply_text(f"❌ Cannot interact with chat <b>{safe_chat_title}</b> (<code>{target_chat_id}</code>): {e}", parse_mode=ParseMode.HTML)
-             return
+            pass 
         else:
-             await update.message.reply_text(f"⚠️ Couldn't get chat info for <code>{target_chat_id}</code>: {e}. Will attempt to leave anyway.", parse_mode=ParseMode.HTML)
+            error_message_text = f"⚠️ Couldn't get chat info for <code>{target_chat_id_to_leave}</code>: {html.escape(str(e))}. Will attempt to leave anyway."
+        
+        if reply_to_chat_id_for_error:
+            try: await context.bot.send_message(chat_id=reply_to_chat_id_for_error, text=error_message_text, parse_mode=ParseMode.HTML)
+            except Exception as send_err: logger.error(f"Failed to send error about get_chat to {reply_to_chat_id_for_error}: {send_err}")
+        if "bot is not a member" in str(e).lower() or "chat not found" in str(e).lower(): return
+        
     except Exception as e:
-         logger.error(f"Unexpected error getting chat info for {target_chat_id}: {e}", exc_info=True)
-         await update.message.reply_text(f"⚠️ Unexpected error getting chat info for <code>{target_chat_id}</code>. Will attempt to leave anyway.", parse_mode=ParseMode.HTML)
+         logger.error(f"Unexpected error getting chat info for {target_chat_id_to_leave}: {e}", exc_info=True)
+         reply_to_chat_id_for_error = chat_where_command_was_called_id
+         if is_leaving_current_chat and OWNER_ID: reply_to_chat_id_for_error = OWNER_ID
+         if reply_to_chat_id_for_error:
+             try: await context.bot.send_message(chat_id=reply_to_chat_id_for_error, text=f"⚠️ Unexpected error getting chat info for <code>{target_chat_id_to_leave}</code>. Will attempt to leave anyway.", parse_mode=ParseMode.HTML)
+             except Exception as send_err: logger.error(f"Failed to send error about get_chat to {reply_to_chat_id_for_error}: {send_err}")
 
-
-    # Prepare and Send Farewell Message
-    if can_proceed_to_leave and LEAVE_TEXTS:
-        farewell_message = random.choice(LEAVE_TEXTS).format(
-            owner_mention=owner_mention,
-            chat_title=f"<b>{safe_chat_title}</b>"
-        )
+    if LEAVE_TEXTS:
+        farewell_message = random.choice(LEAVE_TEXTS).format(owner_mention=owner_mention_for_farewell, chat_title=f"<b>{safe_chat_title_to_leave}</b>")
         try:
-            await context.bot.send_message(chat_id=target_chat_id, text=farewell_message, parse_mode=ParseMode.HTML)
-            logger.info(f"Sent farewell message to {target_chat_id}")
+            await context.bot.send_message(chat_id=target_chat_id_to_leave, text=farewell_message, parse_mode=ParseMode.HTML)
+            logger.info(f"Sent farewell message to {target_chat_id_to_leave}")
         except TelegramError as e:
-            logger.error(f"Failed to send farewell message to {target_chat_id}: {e}.")
-            if "forbidden: bot is not a member" in str(e).lower():
-                logger.warning(f"Bot is not a member of {target_chat_id}. Cannot send farewell or leave.")
-                if is_remote_leave:
-                     await update.message.reply_text(f"⚠️ Failed to send farewell to (<code>{target_chat_id}</code>): {e}.", parse_mode=ParseMode.HTML)
-                return
-            else:
-                 if is_remote_leave:
-                     await update.message.reply_text(f"⚠️ Failed to send farewell to <code>{target_chat_id}</code>: {e}. Still attempting to leave.", parse_mode=ParseMode.HTML)
+            logger.error(f"Failed to send farewell message to {target_chat_id_to_leave}: {e}.")
+            if "forbidden: bot is not a member" in str(e).lower() or "chat not found" in str(e).lower():
+                logger.warning(f"Bot is not a member of {target_chat_id_to_leave} or chat not found. Cannot send farewell.")
+                reply_to_chat_id_for_error = chat_where_command_was_called_id
+                if is_leaving_current_chat and OWNER_ID: reply_to_chat_id_for_error = OWNER_ID
+                if reply_to_chat_id_for_error:
+                    try: await context.bot.send_message(chat_id=reply_to_chat_id_for_error, text=f"❌ Failed to send farewell to <b>{safe_chat_title_to_leave}</b> (<code>{target_chat_id_to_leave}</code>): {html.escape(str(e))}. Bot is not a member.", parse_mode=ParseMode.HTML)
+                    except Exception as send_err: logger.error(f"Failed to send error about farewell to {reply_to_chat_id_for_error}: {send_err}")
+                return 
         except Exception as e:
-             logger.error(f"Unexpected error sending farewell message to {target_chat_id}: {e}", exc_info=True)
-
+             logger.error(f"Unexpected error sending farewell message to {target_chat_id_to_leave}: {e}", exc_info=True)
     elif not LEAVE_TEXTS:
-        logger.warning("LEAVE_TEXTS list is empty!")
+        logger.warning("LEAVE_TEXTS list is empty! Skipping farewell message.")
 
-    # Attempt to Leave Chat
     try:
-        success = await context.bot.leave_chat(chat_id=target_chat_id)
+        success = await context.bot.leave_chat(chat_id=target_chat_id_to_leave)
+        
+        confirmation_target_chat_id = chat_where_command_was_called_id
+        if is_leaving_current_chat:
+            if OWNER_ID:
+                confirmation_target_chat_id = OWNER_ID
+            else:
+                confirmation_target_chat_id = None 
+
         if success:
-            logger.info(f"Successfully left chat {target_chat_id} ('{chat_title}')")
-            await update.message.reply_text(f"✅ Successfully left chat: <b>{safe_chat_title}</b> (<code>{target_chat_id}</code>)", parse_mode=ParseMode.HTML)
+            logger.info(f"Successfully left chat {target_chat_id_to_leave} ('{chat_title_to_leave}')")
+            if confirmation_target_chat_id:
+                await context.bot.send_message(chat_id=confirmation_target_chat_id, 
+                                               text=f"✅ Successfully left chat: <b>{safe_chat_title_to_leave}</b> (<code>{target_chat_id_to_leave}</code>)", 
+                                               parse_mode=ParseMode.HTML)
         else:
-            logger.warning(f"leave_chat returned False for {target_chat_id}.")
-            await update.message.reply_text(f"🤔 Attempted leave for <b>{safe_chat_title}</b> (<code>{target_chat_id}</code>), returned False. Maybe I wasn't there or lack permission?", parse_mode=ParseMode.HTML)
+            logger.warning(f"leave_chat returned False for {target_chat_id_to_leave}. Bot might not have been a member.")
+            if confirmation_target_chat_id:
+                await context.bot.send_message(chat_id=confirmation_target_chat_id,
+                                               text=f"🤔 Attempted to leave <b>{safe_chat_title_to_leave}</b> (<code>{target_chat_id_to_leave}</code>), but the operation indicated I might not have been there or lacked permission.", 
+                                               parse_mode=ParseMode.HTML)
     except TelegramError as e:
-        logger.error(f"Failed to leave chat {target_chat_id}: {e}")
-        await update.message.reply_text(f"❌ Failed to leave chat <b>{safe_chat_title}</b> (<code>{target_chat_id}</code>): {e}", parse_mode=ParseMode.HTML)
+        logger.error(f"Failed to leave chat {target_chat_id_to_leave}: {e}")
+        confirmation_target_chat_id = chat_where_command_was_called_id
+        if is_leaving_current_chat:
+            if OWNER_ID: confirmation_target_chat_id = OWNER_ID
+            else: confirmation_target_chat_id = None
+        if confirmation_target_chat_id:
+            await context.bot.send_message(chat_id=confirmation_target_chat_id,
+                                           text=f"❌ Failed to leave chat <b>{safe_chat_title_to_leave}</b> (<code>{target_chat_id_to_leave}</code>): {html.escape(str(e))}", 
+                                           parse_mode=ParseMode.HTML)
     except Exception as e:
-         logger.error(f"Unexpected error during leave process for {target_chat_id}: {e}", exc_info=True)
-         await update.message.reply_text(f"💥 Unexpected error leaving chat <b>{safe_chat_title}</b> (<code>{target_chat_id}</code>). Check logs.", parse_mode=ParseMode.HTML)
+         logger.error(f"Unexpected error during leave process for {target_chat_id_to_leave}: {e}", exc_info=True)
+         confirmation_target_chat_id = chat_where_command_was_called_id
+         if is_leaving_current_chat:
+            if OWNER_ID: confirmation_target_chat_id = OWNER_ID
+            else: confirmation_target_chat_id = None
+         if confirmation_target_chat_id:
+            await context.bot.send_message(chat_id=confirmation_target_chat_id,
+                                           text=f"💥 Unexpected error leaving chat <b>{safe_chat_title_to_leave}</b> (<code>{target_chat_id_to_leave}</code>). Check logs.", 
+                                           parse_mode=ParseMode.HTML)
 
 # Handler for welcoming the owner when they join a group and send log to pm
 async def handle_new_group_members(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -2329,20 +2391,41 @@ async def handle_new_group_members(update: Update, context: ContextTypes.DEFAULT
             else:
                 logger.warning("OWNER_ID not set, cannot send join notification.")
 
+async def send_operational_log(context: ContextTypes.DEFAULT_TYPE, message: str, parse_mode: str = ParseMode.HTML) -> None:
+    """
+    Sends an operational log message to LOG_CHAT_ID if configured,
+    otherwise falls back to OWNER_ID.
+    """
+    target_id_for_log = LOG_CHAT_ID
+
+    if not target_id_for_log and OWNER_ID:
+        target_id_for_log = OWNER_ID
+        logger.info("LOG_CHAT_ID not set, sending operational log to OWNER_ID.")
+    elif not target_id_for_log and not OWNER_ID:
+        logger.error("Neither LOG_CHAT_ID nor OWNER_ID are set. Cannot send operational log.")
+        return
+
+    if target_id_for_log:
+        try:
+            await context.bot.send_message(chat_id=target_id_for_log, text=message, parse_mode=parse_mode)
+            logger.info(f"Sent operational log to chat_id: {target_id_for_log}")
+        except TelegramError as e:
+            logger.error(f"Failed to send operational log to {target_id_for_log}: {e}")
+            if LOG_CHAT_ID and target_id_for_log == LOG_CHAT_ID and OWNER_ID and LOG_CHAT_ID != OWNER_ID:
+                logger.info(f"Falling back to send operational log to OWNER_ID ({OWNER_ID}) after failure with LOG_CHAT_ID.")
+                try:
+                    await context.bot.send_message(chat_id=OWNER_ID, text=f"[Fallback from LogChat]\n{message}", parse_mode=parse_mode)
+                    logger.info(f"Sent operational log to OWNER_ID as fallback.")
+                except Exception as e_owner:
+                    logger.error(f"Failed to send operational log to OWNER_ID as fallback: {e_owner}")
+        except Exception as e:
+            logger.error(f"Unexpected error sending operational log to {target_id_for_log}: {e}", exc_info=True)
+
 # --- Blacklist Commands ---
 async def blacklist_user_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
-    if user.id != OWNER_ID:
-        if OWNER_ONLY_REFUSAL:
-            owner_mention = f"<code>{OWNER_ID}</code>"
-            try:
-                owner_chat = await context.bot.get_chat(OWNER_ID)
-                owner_mention = owner_chat.mention_html()
-            except Exception: pass
-            refusal_text = random.choice(OWNER_ONLY_REFUSAL).format(owner_mention=owner_mention)
-            await update.message.reply_html(refusal_text)
-        else:
-            await update.message.reply_text("Meeeow! Only my Owner can use this command!")
+    if not is_privileged_user(user.id):
+        logger.warning(f"Unauthorized /blacklist attempt by user {user.id}.")
         return
 
     target_user_obj: User | None = None
@@ -2350,7 +2433,12 @@ async def blacklist_user_command(update: Update, context: ContextTypes.DEFAULT_T
     target_input_str: str | None = None
 
     if update.message.reply_to_message:
-        target_user_obj = update.message.reply_to_message.from_user
+        replied_user = update.message.reply_to_message.from_user
+        if replied_user:
+            target_user_obj = replied_user
+        else:
+            await update.message.reply_text("Mrow? Please reply to a user's message to blacklist them.")
+            return
         if context.args:
             reason = " ".join(context.args)
     elif context.args:
@@ -2360,22 +2448,37 @@ async def blacklist_user_command(update: Update, context: ContextTypes.DEFAULT_T
             username_to_find = target_input_str[1:]
             target_user_obj = get_user_from_db_by_username(username_to_find)
             if not target_user_obj:
-                await update.message.reply_text(f"Mrow? User @{html.escape(username_to_find)} not found in my known contacts. Please use their ID or reply to their message.")
-                return
-            if len(context.args) > 1:
+                logger.info(f"Blacklist target @{username_to_find} not in DB, trying API to confirm user.")
+                try: 
+                    chat_info = await context.bot.get_chat(target_input_str)
+                    if chat_info.type == ChatType.PRIVATE:
+                        target_user_obj = User(id=chat_info.id, first_name=chat_info.first_name or f"User? ({target_input_str})", is_bot=getattr(chat_info, 'is_bot', False), username=chat_info.username, last_name=chat_info.last_name)
+                        if target_user_obj: update_user_in_db(target_user_obj)
+                    else:
+                        await update.message.reply_text(f"Mrow? @{username_to_find} resolved to a {chat_info.type}. Blacklist can only be applied to users.")
+                        return
+                except TelegramError:
+                    await update.message.reply_text(f"Mrow? Could not find user @{html.escape(username_to_find)} via API. Try ID or reply.")
+                    return
+                except Exception as e:
+                    logger.error(f"Unexpected error for @{username_to_find} in blacklist: {e}", exc_info=True)
+                    await update.message.reply_text("Mrow? An error occurred while trying to find the user.")
+                    return
+            if target_user_obj and len(context.args) > 1:
                 reason = " ".join(context.args[1:])
         else:
             try:
                 target_id = int(target_input_str)
-                try:
+                try: 
                     chat_info = await context.bot.get_chat(target_id)
                     if chat_info.type == ChatType.PRIVATE:
-                         target_user_obj = User(id=chat_info.id, first_name=chat_info.first_name or f"User {target_id}", is_bot=getattr(chat_info, 'is_bot', False), username=chat_info.username, last_name=chat_info.last_name)
+                        target_user_obj = User(id=chat_info.id, first_name=chat_info.first_name or f"User {target_id}", is_bot=getattr(chat_info, 'is_bot', False), username=chat_info.username, last_name=chat_info.last_name)
+                        if target_user_obj: update_user_in_db(target_user_obj)
                     else:
-                         await update.message.reply_text(f"Mrow? ID {target_id} does not seem to be a user (type: {chat_info.type}).")
+                         await update.message.reply_text(f"Mrow? ID {target_id} does not seem to be a user (type: {chat_info.type}). Blacklist can only be applied to users.")
                          return
-                except TelegramError as e:
-                    logger.warning(f"Couldn't fully verify user ID {target_id} for blacklist: {e}. Blacklisting ID directly.")
+                except TelegramError: 
+                    logger.warning(f"Couldn't fully verify user ID {target_id} for blacklist. Creating minimal User object.")
                     target_user_obj = User(id=target_id, first_name=f"User {target_id}", is_bot=False)
                 
                 if len(context.args) > 1:
@@ -2384,11 +2487,15 @@ async def blacklist_user_command(update: Update, context: ContextTypes.DEFAULT_T
                 await update.message.reply_text("Mrow? Invalid format. Use /blacklist <ID/@username> [reason] or reply.")
                 return
     else:
-        await update.message.reply_text("Mrow? Please specify a user ID/@username (or reply to a message) to blacklist.")
+        await update.message.reply_text("Mrow? Specify a user ID/@username (or reply to a message) to blacklist.")
         return
 
     if not target_user_obj:
         await update.message.reply_text("Mrow? Could not identify the user to blacklist.")
+        return
+    
+    if not isinstance(target_user_obj, User) or getattr(target_user_obj, 'type', ChatType.PRIVATE) != ChatType.PRIVATE :
+        await update.message.reply_text("Mrow? Blacklist can only be applied to individual users.")
         return
 
     if target_user_obj.id == OWNER_ID:
@@ -2396,6 +2503,13 @@ async def blacklist_user_command(update: Update, context: ContextTypes.DEFAULT_T
         return
     if target_user_obj.id == context.bot.id:
         await update.message.reply_text("Purr... I can't blacklist myself! That would be a cat-astrophe! 🙀")
+        return
+    if is_sudo_user(target_user_obj.id) and target_user_obj.id != OWNER_ID:
+        user_display = target_user_obj.mention_html() if target_user_obj.username else html.escape(target_user_obj.first_name or str(target_user_obj.id))
+        await update.message.reply_html(f"Meeeow! I cannot blacklist a Sudo user ({user_display}). Please remove their sudo access first using /delsudo if you wish to proceed.")
+        return
+    if target_user_obj.is_bot:
+        await update.message.reply_text("Meeeow, I don't usually blacklist other bots.")
         return
 
     if is_user_blacklisted(target_user_obj.id):
@@ -2407,66 +2521,83 @@ async def blacklist_user_command(update: Update, context: ContextTypes.DEFAULT_T
         logger.info(f"Owner {user.id} blacklisted user {target_user_obj.id} (@{target_user_obj.username}). Reason: {reason}")
         user_display = target_user_obj.mention_html() if target_user_obj.username else html.escape(target_user_obj.first_name or str(target_user_obj.id))
         await update.message.reply_html(f"✅ User {user_display} (<code>{target_user_obj.id}</code>) has been added to the blacklist.\nReason: {html.escape(reason)}")
-        if OWNER_ID:
-            try:
-                current_time = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
-                pm_message = (f"<b>#BLACKLISTED</b>\n\n<b>User:</b> {user_display} (<code>{target_user_obj.id}</code>)\n<b>Username:</b> @{html.escape(target_user_obj.username) if target_user_obj.username else 'N/A'}\n<b>Reason:</b> {html.escape(reason)}\n<b>Date:</b> <code>{current_time}</code>")
-                await context.bot.send_message(chat_id=OWNER_ID, text=pm_message, parse_mode=ParseMode.HTML)
-            except Exception as e:
-                logger.error(f"Failed to send blacklist PM notification to Owner: {e}", exc_info=True)
+        
+        try:
+            current_time = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+            pm_message = (f"<b>#BLACKLISTED</b>\n\n<b>User:</b> {user_display} (<code>{target_user_obj.id}</code>)\n<b>Username:</b> @{html.escape(target_user_obj.username) if target_user_obj.username else 'N/A'}\n<b>Reason:</b> {html.escape(reason)}\n<b>Admin:</b> {user.mention_html()}\n<b>Date:</b> <code>{current_time}</code>")
+            await send_operational_log(context, pm_message)
+        except Exception as e:
+            logger.error(f"Error preparing/sending #BLACKLISTED operational log: {e}", exc_info=True)
     else:
         await update.message.reply_text("Mrow? Failed to add user to the blacklist. Check logs.")
 
+
 async def unblacklist_user_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
-    if user.id != OWNER_ID:
-        if OWNER_ONLY_REFUSAL:
-            owner_mention = f"<code>{OWNER_ID}</code>"
-            try:
-                owner_chat = await context.bot.get_chat(OWNER_ID)
-                owner_mention = owner_chat.mention_html()
-            except Exception: pass
-            refusal_text = random.choice(OWNER_ONLY_REFUSAL).format(owner_mention=owner_mention)
-            await update.message.reply_html(refusal_text)
-        else:
-            await update.message.reply_text("Meeeow! Only my Owner can use this command!")
+    if not is_privileged_user(user.id):
+        logger.warning(f"Unauthorized /unblacklist attempt by user {user.id}.")
         return
 
     target_user_obj: User | None = None
     target_input_str: str | None = None
 
     if update.message.reply_to_message:
-        target_user_obj = update.message.reply_to_message.from_user
+        replied_user = update.message.reply_to_message.from_user
+        if replied_user:
+            target_user_obj = replied_user
+        else:
+            await update.message.reply_text("Mrow? Please reply to a user's message to unblacklist them.")
+            return
     elif context.args:
         target_input_str = context.args[0]
         if target_input_str.startswith("@"):
             username_to_find = target_input_str[1:]
             target_user_obj = get_user_from_db_by_username(username_to_find)
             if not target_user_obj:
-                await update.message.reply_text(f"Mrow? User @{html.escape(username_to_find)} not found in my known contacts. Please use their ID or reply if they are on the blacklist.")
-                return
+                try: 
+                    chat_info = await context.bot.get_chat(target_input_str)
+                    if chat_info.type == ChatType.PRIVATE:
+                        target_user_obj = User(id=chat_info.id, first_name=chat_info.first_name or f"User? ({target_input_str})", is_bot=getattr(chat_info, 'is_bot', False), username=chat_info.username, last_name=chat_info.last_name)
+                    else:
+                        await update.message.reply_text(f"Mrow? @{username_to_find} resolved to a {chat_info.type}. Unblacklist can only be applied to users.")
+                        return
+                except TelegramError:
+                    await update.message.reply_text(f"Mrow? Could not find user @{html.escape(username_to_find)} via API. Try ID or reply.")
+                    return
+                except Exception as e:
+                    logger.error(f"Unexpected error for @{username_to_find} in unblacklist: {e}", exc_info=True)
+                    await update.message.reply_text("Mrow? An error occurred while trying to find the user.")
+                    return
         else:
             try:
                 target_id = int(target_input_str)
-                try:
+                try: 
                     chat_info = await context.bot.get_chat(target_id)
                     if chat_info.type == ChatType.PRIVATE:
                         target_user_obj = User(id=chat_info.id, first_name=chat_info.first_name or f"User {target_id}", is_bot=getattr(chat_info, 'is_bot', False), username=chat_info.username, last_name=chat_info.last_name)
                     else:
                         logger.warning(f"Attempt to unblacklist non-user ID {target_id} (type: {chat_info.type}). Using ID directly.")
                         target_user_obj = User(id=target_id, first_name=f"User {target_id}", is_bot=False)
-                except TelegramError as e:
-                    logger.warning(f"Couldn't fully verify user ID {target_id} for unblacklist: {e}. Using ID directly.")
+                except TelegramError: 
+                    logger.warning(f"Couldn't fully verify user ID {target_id} for unblacklist. Using minimal User object.")
                     target_user_obj = User(id=target_id, first_name=f"User {target_id}", is_bot=False)
             except ValueError:
                 await update.message.reply_text("Mrow? Invalid format. Use /unblacklist <ID/@username> or reply.")
                 return
     else:
-        await update.message.reply_text("Mrow? Please specify a user ID/@username (or reply) to unblacklist.")
+        await update.message.reply_text("Mrow? Specify a user ID/@username (or reply) to unblacklist.")
         return
-
+        
     if not target_user_obj:
         await update.message.reply_text("Mrow? Could not identify the user to unblacklist.")
+        return
+    
+    if not isinstance(target_user_obj, User) or getattr(target_user_obj, 'type', ChatType.PRIVATE) != ChatType.PRIVATE :
+        await update.message.reply_text("Mrow? Unblacklist can only be applied to individual users.")
+        return
+
+    if target_user_obj.id == OWNER_ID:
+        await update.message.reply_text("Meow! The Owner is never on the blacklist! 😉")
         return
 
     if not is_user_blacklisted(target_user_obj.id):
@@ -2478,15 +2609,218 @@ async def unblacklist_user_command(update: Update, context: ContextTypes.DEFAULT
         logger.info(f"Owner {user.id} unblacklisted user {target_user_obj.id} (@{target_user_obj.username}).")
         user_display = target_user_obj.mention_html() if target_user_obj.username else html.escape(target_user_obj.first_name or str(target_user_obj.id))
         await update.message.reply_html(f"✅ User {user_display} (<code>{target_user_obj.id}</code>) has been removed from the blacklist.")
-        if OWNER_ID:
-            try:
-                current_time = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
-                pm_message = (f"<b>#UNBLACKLISTED</b>\n\n<b>User:</b> {user_display} (<code>{target_user_obj.id}</code>)\n<b>Username:</b> @{html.escape(target_user_obj.username) if target_user_obj.username else 'N/A'}\n<b>Date:</b> <code>{current_time}</code>")
-                await context.bot.send_message(chat_id=OWNER_ID, text=pm_message, parse_mode=ParseMode.HTML)
-            except Exception as e:
-                logger.error(f"Failed to send unblacklist PM notification to Owner: {e}", exc_info=True)
+        
+        try:
+            current_time = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+            log_message_to_send = (f"<b>#UNBLACKLISTED</b>\n\n<b>User:</b> {user_display} (<code>{target_user_obj.id}</code>)\n<b>Username:</b> @{html.escape(target_user_obj.username) if target_user_obj.username else 'N/A'}\n<b>Admin:</b> {user.mention_html()}\n<b>Date:</b> <code>{current_time}</code>")
+            await send_operational_log(context, log_message_to_send)
+        except Exception as e:
+            logger.error(f"Error preparing/sending #UNBLACKLISTED operational log: {e}", exc_info=True)
     else:
         await update.message.reply_text("Mrow? Failed to remove user from the blacklist. Check logs.")
+
+# --- Sudo commands ---
+async def add_sudo_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    user = update.effective_user
+    if user.id != OWNER_ID:
+        logger.warning(f"Unauthorized /addsudo attempt by user {user.id}.")
+        return
+
+    target_user_obj: User | None = None
+    target_input_str: str | None = None
+
+    if update.message.reply_to_message:
+        replied_user = update.message.reply_to_message.from_user
+        if replied_user:
+            target_user_obj = replied_user
+        else:
+            await update.message.reply_text("Mrow? Please reply to a user's message to add them to sudo.")
+            return
+    elif context.args:
+        target_input_str = context.args[0]
+        
+        if target_input_str.startswith("@"):
+            username_to_find = target_input_str[1:]
+            target_user_obj = get_user_from_db_by_username(username_to_find)
+            if not target_user_obj:
+                logger.info(f"Sudo target @{username_to_find} not in DB, trying API to confirm user.")
+                try: 
+                    chat_info = await context.bot.get_chat(target_input_str)
+                    if chat_info.type == ChatType.PRIVATE:
+                        target_user_obj = User(id=chat_info.id, first_name=chat_info.first_name or f"User? ({target_input_str})", is_bot=getattr(chat_info, 'is_bot', False), username=chat_info.username, last_name=chat_info.last_name)
+                        if target_user_obj: update_user_in_db(target_user_obj)
+                    else:
+                        await update.message.reply_text(f"Mrow? @{username_to_find} resolved to a {chat_info.type}. Sudo can only be granted to users.")
+                        return
+                except TelegramError:
+                    await update.message.reply_text(f"Mrow? Could not find user @{html.escape(username_to_find)} via API. Try ID or reply.")
+                    return
+                except Exception as e:
+                    logger.error(f"Unexpected error for @{username_to_find} in addsudo: {e}", exc_info=True)
+                    await update.message.reply_text("Mrow? An error occurred while trying to find the user.")
+                    return
+        else:
+            try:
+                target_id = int(target_input_str)
+                try: 
+                    chat_info = await context.bot.get_chat(target_id)
+                    if chat_info.type == ChatType.PRIVATE:
+                        target_user_obj = User(id=chat_info.id, first_name=chat_info.first_name or f"User {target_id}", is_bot=getattr(chat_info, 'is_bot', False), username=chat_info.username, last_name=chat_info.last_name)
+                        if target_user_obj: update_user_in_db(target_user_obj)
+                    else:
+                         await update.message.reply_text(f"Mrow? ID {target_id} does not seem to be a user (type: {chat_info.type}). Sudo can only be granted to users.")
+                         return
+                except TelegramError: 
+                    logger.warning(f"Couldn't fully verify user ID {target_id} for addsudo. Creating minimal User object.")
+                    target_user_obj = User(id=target_id, first_name=f"User {target_id}", is_bot=False)
+            except ValueError:
+                await update.message.reply_text("Mrow? Invalid format. Use /addsudo <ID/@username> or reply.")
+                return
+    else:
+        await update.message.reply_text("Mrow? Specify a user ID/@username (or reply to a message) to add to sudo.")
+        return
+
+    if not target_user_obj:
+        await update.message.reply_text("Mrow? Could not identify the user to add to sudo.")
+        return
+    
+    if not isinstance(target_user_obj, User) or getattr(target_user_obj, 'type', ChatType.PRIVATE) != ChatType.PRIVATE :
+        await update.message.reply_text("Mrow? Sudo privileges can only be granted to individual users, not channels or groups.")
+        return
+
+    if target_user_obj.id == OWNER_ID:
+        await update.message.reply_text("Meow! My Owner already has ultimate power and is implicitly sudo! 😼")
+        return
+    if target_user_obj.id == context.bot.id:
+        await update.message.reply_text("Purr... I can't sudo myself, that's a paradox I'm not programmed for!")
+        return
+    if target_user_obj.is_bot:
+        await update.message.reply_text("Meeeow, I don't think other bots need sudo access. Let's keep it for humans. 🤖")
+        return
+
+    if is_sudo_user(target_user_obj.id):
+        user_display = target_user_obj.mention_html() if target_user_obj.username else html.escape(target_user_obj.first_name or str(target_user_obj.id))
+        await update.message.reply_html(f"User {user_display} (<code>{target_user_obj.id}</code>) already has sudo powers.")
+        return
+
+    if add_sudo_user(target_user_obj.id, user.id):
+        logger.info(f"Owner {user.id} added sudo user {target_user_obj.id} (@{target_user_obj.username})")
+        user_display = target_user_obj.mention_html() if target_user_obj.username else html.escape(target_user_obj.first_name or str(target_user_obj.id))
+        await update.message.reply_html(f"✅ User {user_display} (<code>{target_user_obj.id}</code>) has been granted sudo powers!")
+        
+        if target_user_obj.id != OWNER_ID:
+             try: await context.bot.send_message(target_user_obj.id, "Meeeow! You have been granted sudo privileges by my Owner! Use them wisely. 🐾")
+             except Exception as e: logger.warning(f"Failed to send PM to new sudo user {target_user_obj.id}: {e}")
+        
+        try:
+            current_time = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+            log_message_to_send = (
+                f"<b>#SUDO</b>\n\n"
+                f"<b>User:</b> {user_display} (<code>{target_user_obj.id}</code>)\n"
+                f"<b>Username:</b> @{html.escape(target_user_obj.username) if target_user_obj.username else 'N/A'}\n"
+                f"<b>Date:</b> <code>{current_time}</code>"
+            )
+            await send_operational_log(context, log_message_to_send)
+        except Exception as e:
+            logger.error(f"Error preparing/sending #SUDO_ADDED operational log: {e}", exc_info=True)
+    else:
+        await update.message.reply_text("Mrow? Failed to add user to sudo list. Check logs.")
+
+
+async def del_sudo_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    user = update.effective_user
+    if user.id != OWNER_ID:
+        logger.warning(f"Unauthorized /delsudo attempt by user {user.id}.")
+        return
+
+    target_user_obj: User | None = None
+    target_input_str: str | None = None
+
+    if update.message.reply_to_message:
+        replied_user = update.message.reply_to_message.from_user
+        if replied_user:
+            target_user_obj = replied_user
+        else:
+            await update.message.reply_text("Mrow? Please reply to a user's message to remove their sudo.")
+            return
+    elif context.args:
+        target_input_str = context.args[0]
+        if target_input_str.startswith("@"):
+            username_to_find = target_input_str[1:]
+            target_user_obj = get_user_from_db_by_username(username_to_find)
+            if not target_user_obj:
+                try: 
+                    chat_info = await context.bot.get_chat(target_input_str)
+                    if chat_info.type == ChatType.PRIVATE:
+                        target_user_obj = User(id=chat_info.id, first_name=chat_info.first_name or f"User? ({target_input_str})", is_bot=getattr(chat_info, 'is_bot', False), username=chat_info.username, last_name=chat_info.last_name)
+                    else:
+                        await update.message.reply_text(f"Mrow? @{username_to_find} resolved to a {chat_info.type}. Sudo can only be managed for users.")
+                        return
+                except TelegramError:
+                    await update.message.reply_text(f"Mrow? Could not find user @{html.escape(username_to_find)} via API. Try ID or reply.")
+                    return
+                except Exception as e:
+                    logger.error(f"Unexpected error for @{username_to_find} in delsudo: {e}", exc_info=True)
+                    await update.message.reply_text("Mrow? An error occurred while trying to find the user.")
+                    return
+        else:
+            try:
+                target_id = int(target_input_str)
+                try: 
+                    chat_info = await context.bot.get_chat(target_id)
+                    if chat_info.type == ChatType.PRIVATE:
+                        target_user_obj = User(id=chat_info.id, first_name=chat_info.first_name or f"User {target_id}", is_bot=getattr(chat_info, 'is_bot', False), username=chat_info.username, last_name=chat_info.last_name)
+                    else:
+                         await update.message.reply_text(f"Mrow? ID {target_id} does not seem to be a user (type: {chat_info.type}). Sudo can only be managed for users.")
+                         return
+                except TelegramError: 
+                    logger.warning(f"Couldn't fully verify user ID {target_id} for delsudo. Using minimal User object.")
+                    target_user_obj = User(id=target_id, first_name=f"User {target_id}", is_bot=False)
+            except ValueError:
+                await update.message.reply_text("Mrow? Invalid format. Use /delsudo <ID/@username> or reply.")
+                return
+    else:
+        await update.message.reply_text("Mrow? Specify a user ID/@username (or reply) to remove from sudo.")
+        return
+        
+    if not target_user_obj:
+        await update.message.reply_text("Mrow? Could not identify the user to remove from sudo.")
+        return
+    
+    if not isinstance(target_user_obj, User) or getattr(target_user_obj, 'type', ChatType.PRIVATE) != ChatType.PRIVATE :
+        await update.message.reply_text("Mrow? Sudo privileges can only be managed for individual users.")
+        return
+
+    if target_user_obj.id == OWNER_ID:
+        await update.message.reply_text("Meow! The Owner's powers are inherent and cannot be revoked this way! 😉")
+        return
+    
+    if not is_sudo_user(target_user_obj.id):
+        user_display = target_user_obj.mention_html() if target_user_obj.username else html.escape(target_user_obj.first_name or str(target_user_obj.id))
+        await update.message.reply_html(f"User {user_display} (<code>{target_user_obj.id}</code>) does not have sudo powers.")
+        return
+
+    if remove_sudo_user(target_user_obj.id):
+        logger.info(f"Owner {user.id} removed sudo for user {target_user_obj.id} (@{target_user_obj.username})")
+        user_display = target_user_obj.mention_html() if target_user_obj.username else html.escape(target_user_obj.first_name or str(target_user_obj.id))
+        await update.message.reply_html(f"✅ Sudo powers for user {user_display} (<code>{target_user_obj.id}</code>) have been revoked.")
+        
+        try: await context.bot.send_message(target_user_obj.id, "Meeeow... Your sudo privileges have been revoked by my Owner.")
+        except Exception as e: logger.warning(f"Failed to send PM to revoked sudo user {target_user_obj.id}: {e}")
+
+        try:
+            current_time = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+            log_message_to_send = (
+                f"<b>#UNSUDO</b>\n\n"
+                f"<b>User:</b> {user_display} (<code>{target_user_obj.id}</code>)\n"
+                f"<b>Username:</b> @{html.escape(target_user_obj.username) if target_user_obj.username else 'N/A'}\n"
+                f"<b>Date:</b> <code>{current_time}</code>"
+            )
+            await send_operational_log(context, log_message_to_send)
+        except Exception as e:
+            logger.error(f"Error preparing/sending #SUDO_REMOVED operational log: {e}", exc_info=True)
+    else:
+        await update.message.reply_text("Mrow? Failed to remove user from sudo list. Check logs.")
 
 # --- Main Function ---
 def main() -> None:
@@ -2531,6 +2865,8 @@ def main() -> None:
     application.add_handler(CommandHandler("leave", leave_chat))
     application.add_handler(CommandHandler("blist", blacklist_user_command))
     application.add_handler(CommandHandler("unblist", unblacklist_user_command))
+    application.add_handler(CommandHandler("addsudo", add_sudo_command))
+    application.add_handler(CommandHandler("delsudo", del_sudo_command))
 
     logger.info("Registering message handlers for group joins...")
     application.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS & filters.ChatType.GROUPS, handle_new_group_members))
