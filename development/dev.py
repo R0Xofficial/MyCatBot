@@ -1976,7 +1976,7 @@ async def status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         f"<b>• System Resources:</b>",
         f"<b>CPU Usage:</b> {cpu_bar_str}",
         f"<b>RAM Usage:</b> {ram_bar_str} {ram_info_str}",
-        f"<b>Disk Usage (/):</b> {disk_bar_str} {disk_info_str}",
+        f"<b>Disk Usage:</b> {disk_bar_str} {disk_info_str}",
     ]
 
     status_msg = "\n".join(status_lines)
