@@ -2217,7 +2217,7 @@ async def run_speed_test_blocking():
 
 async def speedtest_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
-    if user.id != OWNER_ID
+    if user.id != OWNER_ID:
         logger.warning(f"Unauthorized /speedtest attempt by user {user.id}.")
         return
 
