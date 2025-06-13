@@ -13,6 +13,8 @@ import os
 import requests
 import html
 import sqlite3
+import speedtest
+import asyncio
 from typing import List, Tuple
 from telegram import Update, User, Chat, constants
 from telegram.constants import ChatType, ParseMode, ChatMemberStatus
@@ -2194,6 +2196,70 @@ async def chat_info_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
     message_text = "\n".join(info_lines)
     await update.message.reply_html(message_text, disable_web_page_preview=True)
+
+async def run_speed_test_blocking():
+    try:
+        s = speedtest.Speedtest()
+        s.get_best_server()
+        s.download()
+        s.upload()
+        results_dict = s.results.dict()
+        return results_dict
+    except speedtest.ConfigRetrievalError as e:
+        logger.error(f"Speedtest config retrieval error: {e}")
+        return {"error": "Config retrieval error"}
+    except speedtest.NoMatchedServers as e:
+        logger.error(f"Speedtest no matched servers: {e}")
+        return {"error": "No suitable test servers found"}
+    except Exception as e:
+        logger.error(f"General error during speedtest: {e}", exc_info=True)
+        return {"error": f"An error occurred: {type(e).__name__}"}
+
+async def speedtest_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    user = update.effective_user
+    if user.id != OWNER_ID
+        logger.warning(f"Unauthorized /speedtest attempt by user {user.id}.")
+        return
+
+    message = await update.message.reply_text("Meeeow! Starting speed test... this might take a moment 🐾💨")
+    
+    loop = asyncio.get_event_loop()
+    try:
+        results = await loop.run_in_executor(None, run_speed_test_blocking)
+
+        if results and "error" not in results:
+            ping = results.get("ping", "N/A")
+            download_mbps = results.get("download", 0) / 1024 / 1024
+            upload_mbps = results.get("upload", 0) / 1024 / 1024
+            server_info = results.get("server", {})
+            server_name = server_info.get("name", "N/A")
+            server_country = server_info.get("country", "N/A")
+            server_sponsor = server_info.get("sponsor", "N/A")
+
+            result_lines = [
+                "<b>Ookla Speedtest Results:</b> 💨\n",
+                f"<b>• Ping:</b> <code>{ping:.2f} ms</code>" if isinstance(ping, float) else f"<b>• Ping:</b> <code>{ping}</code>",
+                f"<b>• Download:</b> <code>{download_mbps:.2f} Mbps</code>",
+                f"<b>• Upload:</b> <code>{upload_mbps:.2f} Mbps</code>\n",
+                "<b>Test Server:</b>",
+                f"  <b>• Name:</b> <code>{html.escape(server_name)}</code>",
+                f"  <b>• Sponsor:</b> <code>{html.escape(server_sponsor)}</code>",
+                f"  <b>• Country:</b> <code>{html.escape(server_country)}</code>"
+            ]
+            result_message = "\n".join(result_lines)
+            await context.bot.edit_message_text(chat_id=message.chat_id, message_id=message.message_id, text=result_message, parse_mode=ParseMode.HTML)
+        elif results and "error" in results:
+            error_msg = results["error"]
+            await context.bot.edit_message_text(chat_id=message.chat_id, message_id=message.message_id, text=f"😿 Mrow! Speed test failed: {html.escape(error_msg)}")
+        else:
+            await context.bot.edit_message_text(chat_id=message.chat_id, message_id=message.message_id, text="😿 Mrow! Speed test failed to return results.")
+
+    except Exception as e:
+        logger.error(f"Error in speedtest_command: {e}", exc_info=True)
+        try:
+            await context.bot.edit_message_text(chat_id=message.chat_id, message_id=message.message_id, text=f"💥 An unexpected error occurred during the speed test: {html.escape(str(e))}")
+        except Exception:
+            pass
     
 async def leave_chat(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
