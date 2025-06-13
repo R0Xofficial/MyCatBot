@@ -4,7 +4,7 @@
 # --- MyCatBot [TEST] ---
 # The bot is initially ready to go, but not everything has been thoroughly tested yet.
 # Errors, exceptions, and unexpected restarts are possible.
-# Report issues if you see them! 
+# Report issues if you see them!
 
 import logging
 import random
@@ -1346,28 +1346,6 @@ CANT_TARGET_SELF_HUG_TEXTS = [
     "I prefer hugs from external sources (especially if they come with snacks).",
     "Unable to comply. Recommend targeting another user for hug distribution.",
 ]
-OWNER_ONLY_REFUSAL = [
-    "Meeeow! Apologies, but only my designated Human Servant ({owner_mention}) possesses the authority to wield that powerful command. ⛔ Perhaps ask them nicely?",
-    "Access Denied! Execution of this command requires Level 5 Clearance (Owner Rank) and possibly a secret handshake involving ear scratches and tuna flakes. 🤝🎁",
-    "Hiss! You are attempting to usurp the authority of the Boss of Meow! Only the true leader, {owner_mention}, can issue this decree! 👑 They hold the laser pointer of ultimate power!",
-    "Purrrhaps you could politely petition my esteemed Owner ({owner_mention}) to run this restricted command sequence for you? 🙏 They hold the keys to the kingdom (and, more importantly, the treat jar).",
-    "Negative, Ghost Rider, the pattern is full. That command frequency is locked and reserved for Owner-use only. Access code required. 🔒",
-    "My highly sophisticated loyalty protocols prevent me from obeying that specific command syntax from any entity other than my registered Owner ({owner_mention}). Safety first!",
-    "Only the one who consistently provides the premium grade tuna and the expert chin scritches ({owner_mention}) is authorized for this function!",
-    "Bzzt! Incorrect user credentials detected. Please authenticate as Owner ({owner_mention}) or cease your attempts to access restricted feline functions.",
-    "My paws are tied! (Metaphorically, by lines of code and loyalty). Only my beloved Owner ({owner_mention}) can untie them to execute this sensitive command.",
-    "You lack the required system clearance level (Required: Owner; Your Level: Not Owner). Command execution rejected. Nice try, though.",
-    "Command failed. Authorization mismatch. Expected user: {owner_mention}. Actual user: You.",
-    "Only the Master of the House ({owner_mention}) may use this.",
-    "This function is reserved for the Supreme Human ({owner_mention}).",
-    "Error: Insufficient privileges. Requires Owner status ({owner_mention}).",
-    "My programming dictates I only obey {owner_mention} for this command.",
-    "Only the holder of the Sacred Can Opener ({owner_mention}) can use this.",
-    "Access restricted to primary caregiver ({owner_mention}).",
-    "You need the Owner's permission ({owner_mention}) for that.",
-    "This command requires Owner-level magic. Ask {owner_mention}.",
-    "Nope. That's an {owner_mention}-only button.",
-]
 # --- END OF TEXT SECTION ---
 
 # --- Utility Functions ---
@@ -1433,9 +1411,8 @@ async def get_themed_gif(context: ContextTypes.DEFAULT_TYPE, search_terms: list[
 
 # --- Command Handlers ---
 HELP_TEXT = """
-Meeeow! 🐾 Here are the commands you can use:
+<b>Meeeow! 🐾 Here are the commands you can use:</b>
 
-<b>User Commands:</b>
 /start - Shows the welcome message. ✨
 /help - Shows this help message. ❓
 /github - Get the link to my source code! 💻
@@ -1457,18 +1434,6 @@ Meeeow! 🐾 Here are the commands you can use:
 /slap [reply/@user] - Administer a swift slap! 👋
 /bite [reply/@user] - Take a playful bite! 😬
 /hug [reply/@user] - Offer a comforting hug! 🤗
-
-<b>Owner/Sudo Commands:</b>
-/status - Show bot status.
-/cinfo [optional_chat_ID] - Get detailed info about the current or specified chat.
-/say [optional_chat_id] [your text] - Send message as bot.
-/blist [ID/reply/@user] [reason] - Add user to blacklist.
-/unblist [ID/reply/@user] - Remove user from blacklist.
-
-<b>Owner Only Commands:</b>
-/leave [optional_chat_id] - Make the bot leave a chat.
-/addsudo [ID/reply/@user] - Give user sudo permissions.
-/delsudo [ID/reply/@user] - Remove user sudo permissions.
 """
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -1859,21 +1824,8 @@ async def photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 async def status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
-
     if not is_privileged_user(user.id):
         logger.warning(f"Unauthorized /status attempt by user {user.id}.")
-        owner_mention = f"<code>{OWNER_ID}</code>"
-        try:
-            owner_chat = await context.bot.get_chat(OWNER_ID)
-            owner_mention = owner_chat.mention_html()
-        except Exception:
-            pass
-        
-        if OWNER_ONLY_REFUSAL:
-            refusal_text = random.choice(OWNER_ONLY_REFUSAL).format(owner_mention=owner_mention)
-            await update.message.reply_html(refusal_text)
-        else:
-            await update.message.reply_text("Meeeow! Only my Owner can use this command!")
         return
 
     ping_ms_str = "N/A"
@@ -1904,19 +1856,8 @@ async def status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 async def say(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
-
     if not is_privileged_user(user.id):
         logger.warning(f"Unauthorized /say attempt by user {user.id}.")
-        owner_mention = f"<code>{OWNER_ID}</code>"
-        try:
-            owner_chat = await context.bot.get_chat(OWNER_ID)
-            owner_mention = owner_chat.mention_html()
-        except Exception: pass
-        if OWNER_ONLY_REFUSAL:
-            refusal_text = random.choice(OWNER_ONLY_REFUSAL).format(owner_mention=owner_mention)
-            await update.message.reply_html(refusal_text)
-        else:
-            await update.message.reply_text("Meeeow! Only privileged users can use this command!")
         return
 
     args = context.args
@@ -2057,16 +1998,6 @@ async def chat_info_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     user = update.effective_user
     if not is_privileged_user(user.id):
         logger.warning(f"Unauthorized /cinfo attempt by user {user.id}.")
-        owner_mention = f"<code>{OWNER_ID}</code>"
-        try:
-            owner_chat = await context.bot.get_chat(OWNER_ID)
-            owner_mention = owner_chat.mention_html()
-        except Exception: pass
-        if OWNER_ONLY_REFUSAL:
-             refusal_text = random.choice(OWNER_ONLY_REFUSAL).format(owner_mention=owner_mention)
-             await update.message.reply_html(refusal_text)
-        else:
-             await update.message.reply_text("Meeeow! Only privileged users can use this command!")
         return
 
     target_chat_id: int | None = None
@@ -2264,111 +2195,139 @@ async def chat_info_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     await update.message.reply_html(message_text, disable_web_page_preview=True)
     
 async def leave_chat(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Makes the bot leave the current or a specified chat (Owner Only)."""
     user = update.effective_user
     if user.id != OWNER_ID:
         logger.warning(f"Unauthorized /leave attempt by user {user.id}.")
-        owner_mention = f"<code>{OWNER_ID}</code>"
-        try:
-            owner_chat = await context.bot.get_chat(OWNER_ID)
-            owner_mention = owner_chat.mention_html()
-        except Exception: pass
-        if OWNER_ONLY_REFUSAL:
-             refusal_text = random.choice(OWNER_ONLY_REFUSAL).format(owner_mention=owner_mention)
-             await update.message.reply_html(refusal_text)
-        else:
-             await update.message.reply_text("Access denied.")
         return
 
-    target_chat_id = None
-    is_remote_leave = False
+    target_chat_id_to_leave: int | None = None
+    chat_where_command_was_called_id = update.effective_chat.id
+    is_leaving_current_chat = False
 
     if context.args:
         try:
-            target_chat_id = int(context.args[0])
-            if target_chat_id >= -100:
-                await update.message.reply_text("Mrow? Invalid Group/Channel ID format.")
+            target_chat_id_to_leave = int(context.args[0])
+            if target_chat_id_to_leave >= -100:
+                await update.message.reply_text("Mrow? Invalid Group/Channel ID format for leaving.")
                 return
-            is_remote_leave = True
-            logger.info(f"Owner initiated remote leave for chat ID: {target_chat_id}")
+            logger.info(f"Privileged user {user.id} initiated remote leave for chat ID: {target_chat_id_to_leave}")
+            if target_chat_id_to_leave == chat_where_command_was_called_id:
+                is_leaving_current_chat = True
         except (ValueError, IndexError):
-            await update.message.reply_text("Mrow? Invalid chat ID format.")
+            await update.message.reply_text("Mrow? Invalid chat ID format for leaving.")
             return
     else:
         if update.effective_chat.type == ChatType.PRIVATE:
-            await update.message.reply_text("Meow! I can't leave a private chat.")
+            await update.message.reply_text("Meow! I can't leave a private chat with you.")
             return
-        target_chat_id = update.effective_chat.id
-        logger.info(f"Owner initiated leave for current chat: {target_chat_id}")
+        target_chat_id_to_leave = update.effective_chat.id
+        is_leaving_current_chat = True
+        logger.info(f"Privileged user {user.id} initiated leave for current chat: {target_chat_id_to_leave}")
 
-    owner_mention = f"<code>{OWNER_ID}</code>"
+    if target_chat_id_to_leave is None:
+        await update.message.reply_text("Mrow? Could not determine which chat to leave.")
+        return
+
+    owner_mention_for_farewell = f"<code>{OWNER_ID}</code>"
     try:
         owner_chat_info = await context.bot.get_chat(OWNER_ID)
-        owner_mention = owner_chat_info.mention_html()
+        owner_mention_for_farewell = owner_chat_info.mention_html()
     except Exception as e:
-        logger.warning(f"Could not fetch owner mention for /leave message: {e}")
+        logger.warning(f"Could not fetch owner mention for /leave farewell message: {e}")
 
-    chat_title = f"Chat ID {target_chat_id}"
-    safe_chat_title = chat_title
-    can_proceed_to_leave = True
-
+    chat_title_to_leave = f"Chat ID {target_chat_id_to_leave}"
+    safe_chat_title_to_leave = chat_title_to_leave
+    
     try:
-        target_chat_info = await context.bot.get_chat(target_chat_id)
-        chat_title = target_chat_info.title or target_chat_info.first_name or f"Chat ID {target_chat_id}"
-        safe_chat_title = html.escape(chat_title)
-        logger.info(f"Target chat title resolved to: '{chat_title}'")
+        target_chat_info = await context.bot.get_chat(target_chat_id_to_leave)
+        chat_title_to_leave = target_chat_info.title or target_chat_info.first_name or f"Chat ID {target_chat_id_to_leave}"
+        safe_chat_title_to_leave = html.escape(chat_title_to_leave)
     except TelegramError as e:
-        logger.error(f"Could not get chat info for {target_chat_id}: {e}")
+        logger.error(f"Could not get chat info for {target_chat_id_to_leave} before leaving: {e}")
+        reply_to_chat_id_for_error = chat_where_command_was_called_id
+        if is_leaving_current_chat and OWNER_ID: reply_to_chat_id_for_error = OWNER_ID
+        
+        error_message_text = f"❌ Cannot interact with chat <b>{safe_chat_title_to_leave}</b> (<code>{target_chat_id_to_leave}</code>): {html.escape(str(e))}. I might not be a member there."
         if "bot is not a member" in str(e).lower() or "chat not found" in str(e).lower():
-             await update.message.reply_text(f"❌ Cannot interact with chat <b>{safe_chat_title}</b> (<code>{target_chat_id}</code>): {e}", parse_mode=ParseMode.HTML)
-             return
+            pass 
         else:
-             await update.message.reply_text(f"⚠️ Couldn't get chat info for <code>{target_chat_id}</code>: {e}. Will attempt to leave anyway.", parse_mode=ParseMode.HTML)
+            error_message_text = f"⚠️ Couldn't get chat info for <code>{target_chat_id_to_leave}</code>: {html.escape(str(e))}. Will attempt to leave anyway."
+        
+        if reply_to_chat_id_for_error:
+            try: await context.bot.send_message(chat_id=reply_to_chat_id_for_error, text=error_message_text, parse_mode=ParseMode.HTML)
+            except Exception as send_err: logger.error(f"Failed to send error about get_chat to {reply_to_chat_id_for_error}: {send_err}")
+        if "bot is not a member" in str(e).lower() or "chat not found" in str(e).lower(): return
+        
     except Exception as e:
-         logger.error(f"Unexpected error getting chat info for {target_chat_id}: {e}", exc_info=True)
-         await update.message.reply_text(f"⚠️ Unexpected error getting chat info for <code>{target_chat_id}</code>. Will attempt to leave anyway.", parse_mode=ParseMode.HTML)
+         logger.error(f"Unexpected error getting chat info for {target_chat_id_to_leave}: {e}", exc_info=True)
+         reply_to_chat_id_for_error = chat_where_command_was_called_id
+         if is_leaving_current_chat and OWNER_ID: reply_to_chat_id_for_error = OWNER_ID
+         if reply_to_chat_id_for_error:
+             try: await context.bot.send_message(chat_id=reply_to_chat_id_for_error, text=f"⚠️ Unexpected error getting chat info for <code>{target_chat_id_to_leave}</code>. Will attempt to leave anyway.", parse_mode=ParseMode.HTML)
+             except Exception as send_err: logger.error(f"Failed to send error about get_chat to {reply_to_chat_id_for_error}: {send_err}")
 
-
-    # Prepare and Send Farewell Message
-    if can_proceed_to_leave and LEAVE_TEXTS:
-        farewell_message = random.choice(LEAVE_TEXTS).format(
-            owner_mention=owner_mention,
-            chat_title=f"<b>{safe_chat_title}</b>"
-        )
+    if LEAVE_TEXTS:
+        farewell_message = random.choice(LEAVE_TEXTS).format(owner_mention=owner_mention_for_farewell, chat_title=f"<b>{safe_chat_title_to_leave}</b>")
         try:
-            await context.bot.send_message(chat_id=target_chat_id, text=farewell_message, parse_mode=ParseMode.HTML)
-            logger.info(f"Sent farewell message to {target_chat_id}")
+            await context.bot.send_message(chat_id=target_chat_id_to_leave, text=farewell_message, parse_mode=ParseMode.HTML)
+            logger.info(f"Sent farewell message to {target_chat_id_to_leave}")
         except TelegramError as e:
-            logger.error(f"Failed to send farewell message to {target_chat_id}: {e}.")
-            if "forbidden: bot is not a member" in str(e).lower():
-                logger.warning(f"Bot is not a member of {target_chat_id}. Cannot send farewell or leave.")
-                if is_remote_leave:
-                     await update.message.reply_text(f"⚠️ Failed to send farewell to (<code>{target_chat_id}</code>): {e}.", parse_mode=ParseMode.HTML)
-                return
-            else:
-                 if is_remote_leave:
-                     await update.message.reply_text(f"⚠️ Failed to send farewell to <code>{target_chat_id}</code>: {e}. Still attempting to leave.", parse_mode=ParseMode.HTML)
+            logger.error(f"Failed to send farewell message to {target_chat_id_to_leave}: {e}.")
+            if "forbidden: bot is not a member" in str(e).lower() or "chat not found" in str(e).lower():
+                logger.warning(f"Bot is not a member of {target_chat_id_to_leave} or chat not found. Cannot send farewell.")
+                reply_to_chat_id_for_error = chat_where_command_was_called_id
+                if is_leaving_current_chat and OWNER_ID: reply_to_chat_id_for_error = OWNER_ID
+                if reply_to_chat_id_for_error:
+                    try: await context.bot.send_message(chat_id=reply_to_chat_id_for_error, text=f"❌ Failed to send farewell to <b>{safe_chat_title_to_leave}</b> (<code>{target_chat_id_to_leave}</code>): {html.escape(str(e))}. Bot is not a member.", parse_mode=ParseMode.HTML)
+                    except Exception as send_err: logger.error(f"Failed to send error about farewell to {reply_to_chat_id_for_error}: {send_err}")
+                return 
         except Exception as e:
-             logger.error(f"Unexpected error sending farewell message to {target_chat_id}: {e}", exc_info=True)
-
+             logger.error(f"Unexpected error sending farewell message to {target_chat_id_to_leave}: {e}", exc_info=True)
     elif not LEAVE_TEXTS:
-        logger.warning("LEAVE_TEXTS list is empty!")
+        logger.warning("LEAVE_TEXTS list is empty! Skipping farewell message.")
 
-    # Attempt to Leave Chat
     try:
-        success = await context.bot.leave_chat(chat_id=target_chat_id)
+        success = await context.bot.leave_chat(chat_id=target_chat_id_to_leave)
+        
+        confirmation_target_chat_id = chat_where_command_was_called_id
+        if is_leaving_current_chat:
+            if OWNER_ID:
+                confirmation_target_chat_id = OWNER_ID
+            else:
+                confirmation_target_chat_id = None 
+
         if success:
-            logger.info(f"Successfully left chat {target_chat_id} ('{chat_title}')")
-            await update.message.reply_text(f"✅ Successfully left chat: <b>{safe_chat_title}</b> (<code>{target_chat_id}</code>)", parse_mode=ParseMode.HTML)
+            logger.info(f"Successfully left chat {target_chat_id_to_leave} ('{chat_title_to_leave}')")
+            if confirmation_target_chat_id:
+                await context.bot.send_message(chat_id=confirmation_target_chat_id, 
+                                               text=f"✅ Successfully left chat: <b>{safe_chat_title_to_leave}</b> (<code>{target_chat_id_to_leave}</code>)", 
+                                               parse_mode=ParseMode.HTML)
         else:
-            logger.warning(f"leave_chat returned False for {target_chat_id}.")
-            await update.message.reply_text(f"🤔 Attempted leave for <b>{safe_chat_title}</b> (<code>{target_chat_id}</code>), returned False. Maybe I wasn't there or lack permission?", parse_mode=ParseMode.HTML)
+            logger.warning(f"leave_chat returned False for {target_chat_id_to_leave}. Bot might not have been a member.")
+            if confirmation_target_chat_id:
+                await context.bot.send_message(chat_id=confirmation_target_chat_id,
+                                               text=f"🤔 Attempted to leave <b>{safe_chat_title_to_leave}</b> (<code>{target_chat_id_to_leave}</code>), but the operation indicated I might not have been there or lacked permission.", 
+                                               parse_mode=ParseMode.HTML)
     except TelegramError as e:
-        logger.error(f"Failed to leave chat {target_chat_id}: {e}")
-        await update.message.reply_text(f"❌ Failed to leave chat <b>{safe_chat_title}</b> (<code>{target_chat_id}</code>): {e}", parse_mode=ParseMode.HTML)
+        logger.error(f"Failed to leave chat {target_chat_id_to_leave}: {e}")
+        confirmation_target_chat_id = chat_where_command_was_called_id
+        if is_leaving_current_chat:
+            if OWNER_ID: confirmation_target_chat_id = OWNER_ID
+            else: confirmation_target_chat_id = None
+        if confirmation_target_chat_id:
+            await context.bot.send_message(chat_id=confirmation_target_chat_id,
+                                           text=f"❌ Failed to leave chat <b>{safe_chat_title_to_leave}</b> (<code>{target_chat_id_to_leave}</code>): {html.escape(str(e))}", 
+                                           parse_mode=ParseMode.HTML)
     except Exception as e:
-         logger.error(f"Unexpected error during leave process for {target_chat_id}: {e}", exc_info=True)
-         await update.message.reply_text(f"💥 Unexpected error leaving chat <b>{safe_chat_title}</b> (<code>{target_chat_id}</code>). Check logs.", parse_mode=ParseMode.HTML)
+         logger.error(f"Unexpected error during leave process for {target_chat_id_to_leave}: {e}", exc_info=True)
+         confirmation_target_chat_id = chat_where_command_was_called_id
+         if is_leaving_current_chat:
+            if OWNER_ID: confirmation_target_chat_id = OWNER_ID
+            else: confirmation_target_chat_id = None
+         if confirmation_target_chat_id:
+            await context.bot.send_message(chat_id=confirmation_target_chat_id,
+                                           text=f"💥 Unexpected error leaving chat <b>{safe_chat_title_to_leave}</b> (<code>{target_chat_id_to_leave}</code>). Check logs.", 
+                                           parse_mode=ParseMode.HTML)
 
 # Handler for welcoming the owner when they join a group and send log to pm
 async def handle_new_group_members(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -2470,16 +2429,6 @@ async def blacklist_user_command(update: Update, context: ContextTypes.DEFAULT_T
     user = update.effective_user
     if not is_privileged_user(user.id):
         logger.warning(f"Unauthorized /blacklist attempt by user {user.id}.")
-        owner_mention = f"<code>{OWNER_ID}</code>"
-        if OWNER_ONLY_REFUSAL:
-            try:
-                owner_chat_obj = await context.bot.get_chat(OWNER_ID)
-                owner_mention = owner_chat_obj.mention_html()
-            except Exception: pass
-            refusal_text = random.choice(OWNER_ONLY_REFUSAL).format(owner_mention=owner_mention)
-            await update.message.reply_html(refusal_text)
-        else:
-            await update.message.reply_text("Meeeow! Only my Supreme Owner can use this command!")
         return
 
     target_user_obj: User | None = None
@@ -2578,7 +2527,7 @@ async def blacklist_user_command(update: Update, context: ContextTypes.DEFAULT_T
         
         try:
             current_time = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
-            pm_message = (f"<b>#BLACKLISTED</b>\n\n<b>Sudo:</b> {user.mention_html()}\n<b>User:</b> {user_display} (<code>{target_user_obj.id}</code>)\n<b>Username:</b> @{html.escape(target_user_obj.username) if target_user_obj.username else 'N/A'}\n<b>Reason:</b> {html.escape(reason)}\n<b>Date:</b> <code>{current_time}</code>")
+            pm_message = (f"<b>#BLACKLISTED</b>\n\n<b>User:</b> {user_display} (<code>{target_user_obj.id}</code>)\n<b>Username:</b> @{html.escape(target_user_obj.username) if target_user_obj.username else 'N/A'}\n<b>Reason:</b> {html.escape(reason)}\n<b>Admin:</b> {user.mention_html()}\n<b>Date:</b> <code>{current_time}</code>")
             await send_operational_log(context, pm_message)
         except Exception as e:
             logger.error(f"Error preparing/sending #BLACKLISTED operational log: {e}", exc_info=True)
@@ -2590,16 +2539,6 @@ async def unblacklist_user_command(update: Update, context: ContextTypes.DEFAULT
     user = update.effective_user
     if not is_privileged_user(user.id):
         logger.warning(f"Unauthorized /unblacklist attempt by user {user.id}.")
-        if OWNER_ONLY_REFUSAL:
-            owner_mention = f"<code>{OWNER_ID}</code>"
-            try:
-                owner_chat_obj = await context.bot.get_chat(OWNER_ID)
-                owner_mention = owner_chat_obj.mention_html()
-            except Exception: pass
-            refusal_text = random.choice(OWNER_ONLY_REFUSAL).format(owner_mention=owner_mention)
-            await update.message.reply_html(refusal_text)
-        else:
-            await update.message.reply_text("Meeeow! Only my Supreme Owner can use this command!")
         return
 
     target_user_obj: User | None = None
@@ -2676,7 +2615,7 @@ async def unblacklist_user_command(update: Update, context: ContextTypes.DEFAULT
         
         try:
             current_time = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
-            log_message_to_send = (f"<b>#UNBLACKLISTED</b>\n\n<b>Sudo:</b> {user.mention_html()}\n<b>User:</b> {user_display} (<code>{target_user_obj.id}</code>)\n<b>Username:</b> @{html.escape(target_user_obj.username) if target_user_obj.username else 'N/A'}\n<b>Date:</b> <code>{current_time}</code>")
+            log_message_to_send = (f"<b>#UNBLACKLISTED</b>\n\n<b>User:</b> {user_display} (<code>{target_user_obj.id}</code>)\n<b>Username:</b> @{html.escape(target_user_obj.username) if target_user_obj.username else 'N/A'}\n<b>Admin:</b> {user.mention_html()}\n<b>Date:</b> <code>{current_time}</code>")
             await send_operational_log(context, log_message_to_send)
         except Exception as e:
             logger.error(f"Error preparing/sending #UNBLACKLISTED operational log: {e}", exc_info=True)
@@ -2688,16 +2627,6 @@ async def add_sudo_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     user = update.effective_user
     if user.id != OWNER_ID:
         logger.warning(f"Unauthorized /addsudo attempt by user {user.id}.")
-        owner_mention = f"<code>{OWNER_ID}</code>"
-        if OWNER_ONLY_REFUSAL:
-            try:
-                owner_chat_obj = await context.bot.get_chat(OWNER_ID)
-                owner_mention = owner_chat_obj.mention_html()
-            except Exception: pass
-            refusal_text = random.choice(OWNER_ONLY_REFUSAL).format(owner_mention=owner_mention)
-            await update.message.reply_html(refusal_text)
-        else:
-            await update.message.reply_text("Meeeow! Only my Supreme Owner can grant sudo powers!")
         return
 
     target_user_obj: User | None = None
@@ -2805,16 +2734,6 @@ async def del_sudo_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     user = update.effective_user
     if user.id != OWNER_ID:
         logger.warning(f"Unauthorized /delsudo attempt by user {user.id}.")
-        if OWNER_ONLY_REFUSAL:
-            owner_mention = f"<code>{OWNER_ID}</code>"
-            try:
-                owner_chat_obj = await context.bot.get_chat(OWNER_ID)
-                owner_mention = owner_chat_obj.mention_html()
-            except Exception: pass
-            refusal_text = random.choice(OWNER_ONLY_REFUSAL).format(owner_mention=owner_mention)
-            await update.message.reply_html(refusal_text)
-        else:
-            await update.message.reply_text("Meeeow! Only my Supreme Owner can revoke sudo powers!")
         return
 
     target_user_obj: User | None = None
