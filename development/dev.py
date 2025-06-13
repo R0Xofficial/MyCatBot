@@ -13,6 +13,7 @@ import os
 import requests
 import html
 import sqlite3
+import psutil
 from typing import List, Tuple
 from telegram import Update, User, Chat, constants
 from telegram.constants import ChatType, ParseMode, ChatMemberStatus
@@ -1823,6 +1824,32 @@ async def photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         logger.error(f"Unexpected error processing photo from thecatapi: {e}", exc_info=True)
         await update.message.reply_text("Mrow! Something weird happened while getting the photo. 😵‍💫")
 
+def create_progress_bar(percentage: float, length: int = 15) -> str:
+    if not 0 <= percentage <= 100:
+        clamped_percentage = max(0, min(100, percentage))
+    else:
+        clamped_percentage = percentage
+
+    filled_blocks = int(length * clamped_percentage / 100)
+
+    partial_fill_ratio = (length * clamped_percentage / 100) - filled_blocks
+
+    bar = ""
+    bar += "■" * filled_blocks
+
+    if filled_blocks < length:
+        if partial_fill_ratio >= 0.66:
+            bar += "■"
+        elif partial_fill_ratio >= 0.33:
+            bar += "▦"
+        else:
+            bar += "□" 
+
+    current_bar_length = len(bar)
+    bar += "□" * (length - current_bar_length)
+        
+    return f"[{bar}] {percentage:.1f}%"
+
 async def status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
     if not is_privileged_user(user.id):
@@ -1836,23 +1863,53 @@ async def status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             msg_utc = update.message.date.astimezone(timezone.utc)
             delta_ping = now_utc - msg_utc
             ping_ms = int(delta_ping.total_seconds() * 1000)
-            if 0 <= ping_ms < 60000:
-                ping_ms_str = f"{ping_ms} ms"
-            else:
-                ping_ms_str = f"~{ping_ms} ms (?)"
+            if 0 <= ping_ms < 60000: ping_ms_str = f"{ping_ms} ms"
+            else: ping_ms_str = f"~{ping_ms} ms (?)"
         except Exception as e:
             logger.error(f"Error calculating ping: {e}")
             ping_ms_str = "Error"
     
     uptime_delta = datetime.now() - BOT_START_TIME 
     readable_uptime = get_readable_time_delta(uptime_delta)
-    status_msg = (
-        f"<b>Purrrr! Bot Status:</b> ✨\n"
-        f"<b>• Uptime:</b> {readable_uptime} 🕰️\n"
-        f"<b>• Ping:</b> {ping_ms_str} 📶\n"
-        f"<b>• Owner ID:</b> <code>{OWNER_ID}</code> 👑\n"
-        f"<b>• Status:</b> Ready & Purring! 🐾"
-    )
+
+    cpu_usage = psutil.cpu_percent(interval=0.1)
+    cpu_bar = create_progress_bar(cpu_usage)
+
+    ram = psutil.virtual_memory()
+    ram_usage = ram.percent
+    ram_bar = create_progress_bar(ram_usage)
+    ram_total_gb = ram.total / (1024**3)
+    ram_used_gb = ram.used / (1024**3)
+
+    try:
+        disk = psutil.disk_usage('/')
+        disk_usage = disk.percent
+        disk_bar = create_progress_bar(disk_usage)
+        disk_total_gb = disk.total / (1024**3)
+        disk_used_gb = disk.used / (1024**3)
+    except Exception as e:
+        logger.error(f"Could not get disk usage: {e}")
+        disk_usage = "N/A"
+        disk_bar = "[Error fetching]"
+        disk_total_gb = "N/A"
+        disk_used_gb = "N/A"
+
+    status_lines = [
+        "<b>Purrrr! Bot & System Status:</b> ✨",
+        f"<b>• Uptime:</b> {readable_uptime} 🕰️",
+        f"<b>• Ping:</b> {ping_ms_str} 📶",
+        f"<b>• Owner ID:</b> <code>{OWNER_ID}</code> 👑",
+        f"<b>• Bot Status:</b> Ready & Purring! 🐾\n",
+        f"<b>• System Resources:</b>",
+        f"<b>CPU Usage:</b> {cpu_bar}",
+        f"<b>RAM Usage:</b> {ram_bar} ({ram_used_gb:.2f}GB / {ram_total_gb:.2f}GB)",
+    ]
+    if disk_usage != "N/A":
+        status_lines.append(f"<b>Disk Usage (/):</b> {disk_bar} ({disk_used_gb:.2f}GB / {disk_total_gb:.2f}GB)")
+    else:
+        status_lines.append(f"<b>Disk Usage (/):</b> {disk_bar}")
+
+    status_msg = "\n".join(status_lines)
     await update.message.reply_html(status_msg)
 
 async def say(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
