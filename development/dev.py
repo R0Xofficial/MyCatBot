@@ -13,9 +13,6 @@ import os
 import requests
 import html
 import sqlite3
-import platform
-import subprocess
-import json
 from typing import List, Tuple
 from telegram import Update, User, Chat, constants
 from telegram.constants import ChatType, ParseMode, ChatMemberStatus
@@ -64,13 +61,6 @@ if log_chat_id_str:
         LOG_CHAT_ID = None
 else:
     logger.info("LOG_CHAT_ID not set. Operational logs (blacklist/sudo) will be sent to OWNER_ID if available.")
-
-try:
-    import psutil
-    PSUTIL_AVAILABLE = True
-except ImportError:
-    PSUTIL_AVAILABLE = False
-    logger.warning("psutil library not found. CPU/RAM/Disk usage will be limited or unavailable.")
 
 # --- Database Initialization ---
 def init_db():
@@ -1833,51 +1823,6 @@ async def photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         logger.error(f"Unexpected error processing photo from thecatapi: {e}", exc_info=True)
         await update.message.reply_text("Mrow! Something weird happened while getting the photo. 😵‍💫")
 
-def get_cpu_usage_alternative() -> float | str:
-    try:
-        process = subprocess.run(['termux-battery-status'], capture_output=True, text=True, timeout=2, check=False)
-        if process.returncode == 0:
-            data = json.loads(process.stdout)
-            if 'cpu_usage' in data:
-                return float(data['cpu_usage']) 
-            elif 'cpu' in data and isinstance(data['cpu'], dict) and 'usage' in data['cpu']:
-                 return float(data['cpu']['usage'])
-            logger.info("termux-battery-status available, but no direct CPU usage field found.")
-        else:
-            logger.warning(f"termux-battery-status command failed or not found. Return code: {process.returncode}")
-    except FileNotFoundError:
-        logger.warning("termux-api (termux-battery-status) not found.")
-    except (json.JSONDecodeError, ValueError, TypeError, subprocess.TimeoutExpired, subprocess.SubprocessError) as e:
-        logger.error(f"Error processing termux-battery-status: {e}")
-    except Exception as e:
-        logger.error(f"Unexpected error with termux-battery-status: {e}", exc_info=True)
-
-def create_progress_bar(percentage: float, length: int = 15) -> str:
-    if not 0 <= percentage <= 100:
-        clamped_percentage = max(0, min(100, percentage))
-    else:
-        clamped_percentage = percentage
-
-    filled_blocks = int(length * clamped_percentage / 100)
-
-    partial_fill_ratio = (length * clamped_percentage / 100) - filled_blocks
-
-    bar = ""
-    bar += "■" * filled_blocks
-
-    if filled_blocks < length:
-        if partial_fill_ratio >= 0.66:
-            bar += "■"
-        elif partial_fill_ratio >= 0.33:
-            bar += "▦"
-        else:
-            bar += "□" 
-
-    current_bar_length = len(bar)
-    bar += "□" * (length - current_bar_length)
-        
-    return f"[{bar}] {percentage:.1f}%"
-
 async def status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
     if not is_privileged_user(user.id):
@@ -1891,96 +1836,25 @@ async def status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             msg_utc = update.message.date.astimezone(timezone.utc)
             delta_ping = now_utc - msg_utc
             ping_ms = int(delta_ping.total_seconds() * 1000)
-            if 0 <= ping_ms < 60000: ping_ms_str = f"{ping_ms} ms"
-            else: ping_ms_str = f"~{ping_ms} ms (?)"
+            if 0 <= ping_ms < 60000:
+                ping_ms_str = f"{ping_ms} ms"
+            else:
+                ping_ms_str = f"~{ping_ms} ms (?)"
         except Exception as e:
             logger.error(f"Error calculating ping: {e}")
             ping_ms_str = "Error"
     
     uptime_delta = datetime.now() - BOT_START_TIME 
     readable_uptime = get_readable_time_delta(uptime_delta)
-
-    cpu_bar_str = "[N/A]"
-    ram_bar_str = "[N/A]"
-    ram_info_str = ""
-    disk_bar_str = "[N/A]"
-    disk_info_str = ""
-    
-    psutil_cpu_failed = False
-
-    if PSUTIL_AVAILABLE:
-        try:
-            cpu_usage_percent = psutil.cpu_percent(interval=0.1)
-            if isinstance(cpu_usage_percent, (int, float)):
-                cpu_bar_str = create_progress_bar(cpu_usage_percent)
-            else:
-                logger.warning(f"psutil.cpu_percent returned non-numeric: {cpu_usage_percent}")
-                cpu_bar_str = "[Invalid data]"
-                psutil_cpu_failed = True
-        except (psutil.Error, PermissionError) as e:
-            logger.warning(f"Failed to get CPU usage via psutil (Error: {type(e).__name__} - {e}). Will try alternative.")
-            psutil_cpu_failed = True
-        except Exception as e:
-            logger.error(f"Unexpected error getting CPU via psutil: {e}", exc_info=True)
-            psutil_cpu_failed = True
-
-        if psutil_cpu_failed:
-            alt_cpu = get_cpu_usage_alternative()
-            if isinstance(alt_cpu, (int, float)):
-                cpu_bar_str = create_progress_bar(alt_cpu)
-            else:
-                cpu_bar_str = f"[{html.escape(str(alt_cpu))}]"
-
-        try:
-            ram = psutil.virtual_memory()
-            ram_usage = ram.percent
-            ram_bar_str = create_progress_bar(ram_usage)
-            ram_total_gb = ram.total / (1024**3)
-            ram_used_gb = ram.used / (1024**3)
-            ram_info_str = f"({ram_used_gb:.2f}GB / {ram_total_gb:.2f}GB)"
-        except (psutil.Error, PermissionError) as e:
-            logger.warning(f"Failed to get RAM usage via psutil: {e}")
-            ram_bar_str = "[Access Denied/Error]"
-        except Exception as e:
-            logger.error(f"Unexpected error getting RAM via psutil: {e}", exc_info=True)
-            ram_bar_str = "[Error]"
-        
-        try:
-            disk = psutil.disk_usage('/') 
-            disk_usage = disk.percent
-            disk_bar_str = create_progress_bar(disk_usage)
-            disk_total_gb = disk.total / (1024**3)
-            disk_used_gb = disk.used / (1024**3)
-            disk_info_str = f"({disk_used_gb:.2f}GB / {disk_total_gb:.2f}GB)"
-        except (psutil.Error, PermissionError) as e:
-            logger.warning(f"Failed to get Disk usage via psutil: {e}")
-            disk_bar_str = "[Access Denied/Error]"
-        except Exception as e:
-            logger.error(f"Could not get disk usage via psutil: {e}", exc_info=True)
-            disk_bar_str = "[Error]"
-            
-    else:
-        logger.info("psutil not available, trying alternative for CPU only.")
-        alt_cpu = get_cpu_usage_alternative()
-        if isinstance(alt_cpu, (int, float)):
-            cpu_bar_str = create_progress_bar(alt_cpu)
-        else:
-            cpu_bar_str = f"[{html.escape(str(alt_cpu))}]"
-
-    status_lines = [
-        "<b>Purrrr! Bot & System Status:</b> ✨",
-        f"<b>• Uptime:</b> {readable_uptime} 🕰️",
-        f"<b>• Ping:</b> {ping_ms_str} 📶",
-        f"<b>• Owner ID:</b> <code>{OWNER_ID}</code> 👑",
-        f"<b>• Bot Status:</b> Ready & Purring! 🐾\n",
-        f"<b>• System Resources:</b>",
-        f"<b>CPU Usage:</b> {cpu_bar_str}",
-        f"<b>RAM Usage:</b> {ram_bar_str} {ram_info_str}",
-        f"<b>Disk Usage:</b> {disk_bar_str} {disk_info_str}",
-    ]
-
-    status_msg = "\n".join(status_lines)
+    status_msg = (
+        f"<b>Purrrr! Bot Status:</b> ✨\n"
+        f"<b>• Uptime:</b> {readable_uptime} 🕰️\n"
+        f"<b>• Ping:</b> {ping_ms_str} 📶\n"
+        f"<b>• Owner ID:</b> <code>{OWNER_ID}</code> 👑\n"
+        f"<b>• Status:</b> Ready & Purring! 🐾"
+    )
     await update.message.reply_html(status_msg)
+
 async def say(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
     if not is_privileged_user(user.id):
