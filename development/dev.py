@@ -2201,6 +2201,7 @@ def run_speed_test_blocking():
     try:
         logger.info("Starting blocking speed test...")
         s = speedtest.Speedtest()
+        s.get_best_server()
         logger.info("Getting download speed...")
         s.download()
         logger.info("Getting upload speed...")
@@ -2231,37 +2232,56 @@ async def speedtest_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         results = await loop.run_in_executor(None, run_speed_test_blocking)
 
         if results and "error" not in results:
-            ping = results.get("ping", "N/A")
-            download_mbps = results.get("download", 0) / 1000 / 1000
-            upload_mbps = results.get("upload", 0) / 1000 / 1000
-            server_info = results.get("server", {})
-            server_name = server_info.get("name", "N/A")
-            server_country = server_info.get("country", "N/A")
-            server_sponsor = server_info.get("sponsor", "N/A")
+            ping_val = results.get("ping", 0.0)
+            download_bps = results.get("download", 0)
+            upload_bps = results.get("upload", 0)
             
-            timestamp_str = results.get("timestamp", "N/A")
-            formatted_timestamp = ""
-            if timestamp_str != "N/A":
+            download_mbps_val = download_bps / 1000 / 1000
+            upload_mbps_val = upload_bps / 1000 / 1000
+
+            bytes_sent_val = results.get("bytes_sent", 0)
+            bytes_received_val = results.get("bytes_received", 0)
+            data_sent_mb_val = bytes_sent_val / 1024 / 1024
+            data_received_mb_val = bytes_received_val / 1024 / 1024
+            
+            timestamp_str_val = results.get("timestamp", "N/A")
+            formatted_time_val = "N/A"
+            if timestamp_str_val != "N/A":
                 try:
-                    dt_obj = datetime.fromisoformat(timestamp_str.replace("Z", "+00:00"))
-                    formatted_timestamp = f"\n<b>• Timestamp:</b> <code>{dt_obj.strftime('%Y-%m-%d %H:%M:%S %Z')}</code>"
+                    dt_obj = datetime.fromisoformat(timestamp_str_val.replace("Z", "+00:00"))
+                    formatted_time_val = dt_obj.strftime('%Y-%m-%d %H:%M:%S %Z') 
                 except ValueError:
-                    logger.warning(f"Could not parse speedtest timestamp: {timestamp_str}")
-                    formatted_timestamp = f"\n<b>• Timestamp:</b> <code>{html.escape(timestamp_str)}</code>"
+                    formatted_time_val = html.escape(timestamp_str_val)
 
+            server_info_dict = results.get("server", {})
+            server_name_val = server_info_dict.get("name", "N/A")
+            server_country_val = server_info_dict.get("country", "N/A")
+            server_cc_val = server_info_dict.get("cc", "N/A")
+            server_sponsor_val = server_info_dict.get("sponsor", "N/A")
+            server_latency_val = server_info_dict.get("latency", ping_val)
+            server_lat_val = server_info_dict.get("lat", "N/A")
+            server_lon_val = server_info_dict.get("lon", "N/A")
 
-            result_lines = [
-                "<b>Ookla Speedtest Results:</b> 💨\n",
-                f"<b>• Ping:</b> <code>{ping:.2f} ms</code>" if isinstance(ping, float) else f"<b>• Ping:</b> <code>{ping}</code>",
-                f"<b>• Download:</b> <code>{download_mbps:.2f} Mbps</code>",
-                f"<b>• Upload:</b> <code>{upload_mbps:.2f} Mbps</code>{formatted_timestamp}\n",
-                "<b>Test Server:</b>",
-                f"  <b>• Name:</b> <code>{html.escape(server_name)}</code>",
-                f"  <b>• Sponsor:</b> <code>{html.escape(server_sponsor)}</code>",
-                f"  <b>• Country:</b> <code>{html.escape(server_country)}</code>"
+            info_lines = [
+                "<b>SPEEDTEST INFO:</b>",
+                f"  <b>• Upload:</b> <code>{upload_mbps_val:.2f} Mbps</code>",
+                f"  <b>• Download:</b> <code>{download_mbps_val:.2f} Mbps</code>",
+                f"  <b>• Ping:</b> <code>{ping_val:.2f} ms</code>",
+                f"  <b>• Time:</b> <code>{formatted_time_val}</code>",
+                f"  <b>• Data Sent:</b> <code>{data_sent_mb_val:.2f} MB</code>",
+                f"  <b>• Data Received:</b> <code>{data_received_mb_val:.2f} MB</code>\n",
+                "<b>SPEEDTEST SERVER:</b>",
+                f"  <b>• Name:</b> <code>{html.escape(server_name_val)}</code>",
+                f"  <b>• Country:</b> <code>{html.escape(server_country_val)} ({html.escape(server_cc_val)})</code>",
+                f"  <b>• Sponsor:</b> <code>{html.escape(server_sponsor_val)}</code>",
+                f"  <b>• Latency:</b> <code>{server_latency_val:.2f} ms</code>" if isinstance(server_latency_val, float) else f"  <b>• Latency:</b> <code>{server_latency_val}</code>",
+                f"  <b>• Latitude:</b> <code>{server_lat_val}</code>",
+                f"  <b>• Longitude:</b> <code>{server_lon_val}</code>"
             ]
-            result_message = "\n".join(result_lines)
+            
+            result_message = "\n".join(info_lines)
             await context.bot.edit_message_text(chat_id=message.chat_id, message_id=message.message_id, text=result_message, parse_mode=ParseMode.HTML)
+        
         elif results and "error" in results:
             error_msg = results["error"]
             await context.bot.edit_message_text(chat_id=message.chat_id, message_id=message.message_id, text=f"😿 Mrow! Speed test failed: {html.escape(error_msg)}")
