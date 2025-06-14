@@ -1545,6 +1545,9 @@ HELP_TEXT = """
 <b>Management Commands:</b>
 /info [ID/reply/@user] - Get info about a user. 👤
 /chatstat - Get basic stats about the current chat. 📈
+/ban [Optional Time] [ID/reply/@user] - Ban user in chat. ⛔️
+/mute [Optional Time] [ID/reply/@user] - Mute user in chat. 🚫
+/kick [ID/reply/@user] - Kick user from chat. ⚠️
 
 <b>4FUN Commands:</b>
 /gif - Get a random cat GIF! 🖼️
