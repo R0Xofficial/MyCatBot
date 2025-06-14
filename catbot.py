@@ -3004,7 +3004,6 @@ def main() -> None:
     application.add_handler(CommandHandler("unblist", unblacklist_user_command))
     application.add_handler(CommandHandler("addsudo", add_sudo_command))
     application.add_handler(CommandHandler("delsudo", del_sudo_command))
-    application.add_handler(CommandHandler("update", update_bot_command))
 
     logger.info("Registering message handlers for group joins...")
     application.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS & filters.ChatType.GROUPS, handle_new_group_members))
