@@ -2318,7 +2318,7 @@ async def kickme_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
     try:
         bot_member = await context.bot.get_chat_member(chat.id, context.bot.id)
-        if not (bot_member.status == ChatMemberStatus.ADMINISTRATOR and getattr(bot_member, 'can_restrict_members', False)):
+        if not (bot_member.status == "administrator" and getattr(bot_member, 'can_restrict_members', False)): # Porównanie ze stringiem
             await update.message.reply_text("Meeeow! I can't kick users here because I'm not an admin with ban/kick permissions. 😿")
             return
     except TelegramError as e:
@@ -2329,10 +2329,10 @@ async def kickme_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     try:
         user_chat_member = await context.bot.get_chat_member(chat.id, user_to_kick.id)
         
-        if user_chat_member.status == ChatMemberStatus.CREATOR:
+        if user_chat_member.status == "creator":
             await update.message.reply_text("Meeeow! As the chat Creator, you have ultimate power here! If you wish to leave, you might need to use Telegram's native 'Leave group' option or transfer ownership. This command is for regular members. 😉")
             return
-        if user_chat_member.status == ChatMemberStatus.ADMINISTRATOR:
+        if user_chat_member.status == "administrator":
             await update.message.reply_text("Meeeow! As a chat Administrator, you can't use /kickme. If you wish to leave, please use Telegram's 'Leave group' option or have another admin remove you. This helps prevent accidental self-removal by admins! 🛡️")
             return
             
@@ -2345,10 +2345,6 @@ async def kickme_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             logger.error(f"Error checking your status in this chat for /kickme: {e}")
             await update.message.reply_text("Mrow? Couldn't verify your status in this chat to perform /kickme.")
             return
-    
-    if is_privileged_user(user_to_kick.id):
-        await update.message.reply_text("Meeeow! Privileged bot users (Owner/Sudo) should use Telegram's native 'Leave group' option to avoid accidental self-removal. This command is more for regular members. If you are a regular member and see this, there might be a mix-up! 🐾")
-        return
 
     try:
         user_display_name = user_to_kick.mention_html() if user_to_kick.username else html.escape(user_to_kick.first_name or str(user_to_kick.id))
