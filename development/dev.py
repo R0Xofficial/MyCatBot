@@ -117,8 +117,9 @@ def init_db():
                 PRIMARY KEY (chat_id, user_id, restriction_type) 
              )
          """)
-conn.commit()
-logger.info("Table 'active_restrictions' ensured in database.")
+        
+        conn.commit()
+        logger.info("Table 'active_restrictions' ensured in database.")
     except sqlite3.Error as e:
         logger.error(f"SQLite error during DB initialization: {e}", exc_info=True)
     finally:
