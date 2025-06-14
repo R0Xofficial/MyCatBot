@@ -1874,10 +1874,10 @@ async def status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     status_lines = [
         "<b>Purrrr! Bot Status:</b> ✨\n",
-        f"<b>• Current State:</b> Ready & Purring! 🐾",
-        f"<b>• I haven't napped since:</b> <code>{readable_uptime}</code> ago 😴\n",
+        f"<b>• State:</b> Ready & Purring! 🐾",
+        f"<b>• Last Nap:</b> <code>{readable_uptime}</code> ago 😴\n",
         "<b>Database Stats:</b>",
-        f"  <b>• Known Users:</b> <code>{known_users_count}</code> 🧑‍🤝‍🧑",
+        f"  <b>• Known Users:</b> <code>{known_users_count}</code> 👀",
         f"  <b>• Sudo Users:</b> <code>{sudo_users_count}</code> 🛡️",
         f"  <b>• Blacklisted Users:</b> <code>{blacklisted_count}</code> 🚫"
     ]
