@@ -2967,8 +2967,8 @@ def main() -> None:
     application = Application.builder().token(BOT_TOKEN).build()
 
     connect_timeout_val = 10.0
-    read_timeout_val = 60.0
-    write_timeout_val = 60.0
+    read_timeout_val = 80.0
+    write_timeout_val = 80.0
     pool_timeout_val = 10.0
 
     custom_request_settings = HTTPXRequest(
