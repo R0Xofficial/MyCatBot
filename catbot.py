@@ -16,6 +16,7 @@ from telegram import Update, User, Chat, constants
 from telegram.constants import ChatType, ParseMode, ChatMemberStatus
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, ApplicationHandlerStop
 from telegram.error import TelegramError
+from telegram.request import HTTPXRequest
 from datetime import datetime, timezone, timedelta
 
 # --- Logging Configuration ---
@@ -2259,6 +2260,7 @@ async def speedtest_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     loop = asyncio.get_event_loop()
     try:
         results = await loop.run_in_executor(None, run_speed_test_blocking)
+        await asyncio.sleep(4)
 
         if results and "error" not in results:
             ping_val = results.get("ping", 0.0)
@@ -2960,6 +2962,22 @@ def main() -> None:
     logger.info("Initializing bot application...")
     application = Application.builder().token(BOT_TOKEN).build()
 
+    connect_timeout_val = 10.0
+    read_timeout_val = 60.0
+    write_timeout_val = 60.0
+    pool_timeout_val = 10.0
+
+    custom_request_settings = HTTPXRequest(
+        connect_timeout=connect_timeout_val,
+        read_timeout=read_timeout_val,
+        write_timeout=write_timeout_val,
+        pool_timeout=pool_timeout_val
+    )
+    application = Application.builder().token(BOT_TOKEN).request(custom_request_settings).build()
+    logger.info(f"Custom request timeouts set for HTTPXRequest: "
+                f"Connect={connect_timeout_val}, Read={read_timeout_val}, "
+                f"Write={write_timeout_val}, Pool={pool_timeout_val}")
+    
     logger.info("Registering blacklist check handler...")
     application.add_handler(MessageHandler(filters.COMMAND, check_blacklist_handler), group=-1)
 
