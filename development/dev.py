@@ -2219,7 +2219,7 @@ async def kick_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     try:
         bot_member = await context.bot.get_chat_member(chat.id, context.bot.id)
         if not (bot_member.status == ChatMemberStatus.ADMINISTRATOR and getattr(bot_member, 'can_restrict_members', False)):
-            await update.message.reply_text("Meeeow! I need to be an admin with rights to ban/kick users in this chat. 😿")
+            await update.message.reply_text("Meeeow! I need to be an admin with rights to kick users in this chat. 😿")
             return
     except TelegramError as e:
         logger.error(f"Error checking bot's own permissions in /kick for chat {chat.id}: {e}")
@@ -2232,7 +2232,7 @@ async def kick_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             actor_chat_member = await context.bot.get_chat_member(chat.id, user_who_kicks.id)
             if not (actor_chat_member.status in ["administrator", "creator"] and \
                     getattr(actor_chat_member, 'can_restrict_members', False)):
-                await update.message.reply_text("Meeeow! You need to be an admin with rights to ban/kick users in this chat.")
+                await update.message.reply_text("Meeeow! You need to be an admin with rights to kick users in this chat.")
                 return
         except TelegramError as e:
             logger.warning(f"Could not get chat member info for kick executor {user_who_kicks.id} in {chat.id}: {e}")
