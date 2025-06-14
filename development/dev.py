@@ -1543,12 +1543,16 @@ HELP_TEXT = """
 /github - Get the link to my source code! 💻
 /owner - Info about my designated human! ❤️
 
-<b>Management Commands:</b>
+<b>User Commands:</b>
 /info [ID/reply/@user] - Get info about a user. 👤
 /chatstat - Get basic stats about the current chat. 📈
-/ban [Optional Time] [ID/reply/@user] - Ban user in chat. ⛔️
-/mute [Optional Time] [ID/reply/@user] - Mute user in chat. 🚫
-/kick [ID/reply/@user] - Kick user from chat. ⚠️
+/kickme - Kick yourself from chat. 👋
+
+<b>Management Commands:</b>
+/ban [ID/reply/@user] [Time] [Reason] - Ban user in chat. ⛔️
+/mute [ID/reply/@user] [Time] [Reason] - Mute user in chat. 🚫
+<i>Note: [Time] is optional</i>
+/kick [ID/reply/@user] [Reason] - Kick user from chat. ⚠️
 
 <b>4FUN Commands:</b>
 /gif - Get a random cat GIF! 🖼️
@@ -2300,6 +2304,68 @@ async def kick_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         await update.message.reply_html("\n".join(response_lines))
     except TelegramError as e: await update.message.reply_text(f"Failed to kick user: {html.escape(str(e))}")
     except Exception as e: logger.error(f"Unexpected error in /kick: {e}", exc_info=True); await update.message.reply_text("An unexpected error occurred.")
+
+async def kickme_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    chat = update.effective_chat
+    user_to_kick = update.effective_user
+
+    if not user_to_kick:
+        return
+
+    if chat.type == ChatType.PRIVATE:
+        await update.message.reply_text("Meeeow! You can't kick yourself from a private chat with me! Silly human. 😹")
+        return
+
+    try:
+        bot_member = await context.bot.get_chat_member(chat.id, context.bot.id)
+        if not (bot_member.status == ChatMemberStatus.ADMINISTRATOR and getattr(bot_member, 'can_restrict_members', False)):
+            await update.message.reply_text("Meeeow! I can't kick users here because I'm not an admin with ban/kick permissions. 😿")
+            return
+    except TelegramError as e:
+        logger.error(f"Error checking bot's own permissions in /kickme for chat {chat.id}: {e}")
+        await update.message.reply_text("Mrow? Couldn't verify my own permissions to perform this action.")
+        return
+
+    try:
+        user_chat_member = await context.bot.get_chat_member(chat.id, user_to_kick.id)
+        
+        if user_chat_member.status == ChatMemberStatus.CREATOR:
+            await update.message.reply_text("Meeeow! As the chat Creator, you have ultimate power here! If you wish to leave, you might need to use Telegram's native 'Leave group' option or transfer ownership. This command is for regular members. 😉")
+            return
+        if user_chat_member.status == ChatMemberStatus.ADMINISTRATOR:
+            await update.message.reply_text("Meeeow! As a chat Administrator, you can't use /kickme. If you wish to leave, please use Telegram's 'Leave group' option or have another admin remove you. This helps prevent accidental self-removal by admins! 🛡️")
+            return
+            
+    except TelegramError as e:
+        if "user not found" in str(e).lower():
+            logger.warning(f"User {user_to_kick.id} not found in chat {chat.id} for /kickme, though they sent the command.")
+            await update.message.reply_text("Mrow? It seems you're not in this chat anymore.")
+            return
+        else:
+            logger.error(f"Error checking your status in this chat for /kickme: {e}")
+            await update.message.reply_text("Mrow? Couldn't verify your status in this chat to perform /kickme.")
+            return
+    
+    if is_privileged_user(user_to_kick.id):
+        await update.message.reply_text("Meeeow! Privileged bot users (Owner/Sudo) should use Telegram's native 'Leave group' option to avoid accidental self-removal. This command is more for regular members. If you are a regular member and see this, there might be a mix-up! 🐾")
+        return
+
+    try:
+        user_display_name = user_to_kick.mention_html() if user_to_kick.username else html.escape(user_to_kick.first_name or str(user_to_kick.id))
+        
+        await update.message.reply_text(f"Meeeow! Okay, {user_display_name}, as you wish! Initiating self-kick sequence... Bye bye! 👋", parse_mode=ParseMode.HTML)
+        
+        await context.bot.ban_chat_member(chat_id=chat.id, user_id=user_to_kick.id)
+        await context.bot.unban_chat_member(chat_id=chat.id, user_id=user_to_kick.id, only_if_banned=True)
+        
+        logger.info(f"User {user_to_kick.id} ({user_display_name}) self-kicked from chat {chat.id} ('{chat.title}')")
+        
+    except TelegramError as e:
+        logger.error(f"Failed to self-kick user {user_to_kick.id} from chat {chat.id}: {e}")
+        await update.message.reply_text(f"Mrow? I tried to help you leave, but something went wrong: {html.escape(str(e))}")
+    except Exception as e:
+        logger.error(f"Unexpected error in /kickme for user {user_to_kick.id}: {e}", exc_info=True)
+        await update.message.reply_text("Mrow? An unexpected error occurred while trying to process your /kickme request.")
         
 # --- Simple Text Command Definitions ---
 async def send_random_text(update: Update, context: ContextTypes.DEFAULT_TYPE, text_list: list[str], list_name: str) -> None:
@@ -3658,6 +3724,7 @@ def main() -> None:
     application.add_handler(CommandHandler("mute", mute_command))
     application.add_handler(CommandHandler("unmute", unmute_command))
     application.add_handler(CommandHandler("kick", kick_command))
+    application.add_handler(CommandHandler("kickme", kickme_command))
     application.add_handler(CommandHandler("gif", gif))
     application.add_handler(CommandHandler("photo", photo))
     application.add_handler(CommandHandler("meow", meow))
