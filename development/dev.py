@@ -1847,8 +1847,8 @@ async def ban_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     if not is_caller_privileged_for_bot:
         try:
             actor_chat_member = await context.bot.get_chat_member(chat.id, user_who_bans.id)
-            if not (actor_chat_member.status in [ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.CREATOR] and \
-                    getattr(actor_chat_member, 'can_restrict_members', False)): # Bezpieczne getattr
+            if not (actor_chat_member.status in ["administrator", "creator"] and \
+                    getattr(actor_chat_member, 'can_restrict_members', False)):
                 await update.message.reply_text("Meeeow! You need to be an admin with rights to ban users in this chat, or a bot sudo user.")
                 return
         except TelegramError as e:
@@ -1967,7 +1967,7 @@ async def unban_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     if not is_caller_privileged_for_bot:
         try:
             actor_chat_member = await context.bot.get_chat_member(chat.id, user_who_unbans.id)
-            if not (actor_chat_member.status in [ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.CREATOR] and \
+            if not (actor_chat_member.status in ["administrator", "creator"] and \
                     getattr(actor_chat_member, 'can_restrict_members', False)):
                 await update.message.reply_text("Meeeow! You need to be an admin with rights to unban users in this chat, or a bot sudo user.")
                 return
@@ -2038,7 +2038,7 @@ async def mute_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     if not is_caller_privileged_for_bot:
         try:
             actor_chat_member = await context.bot.get_chat_member(chat.id, user_who_mutes.id)
-            if not (actor_chat_member.status in [ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.CREATOR] and \
+            if not (actor_chat_member.status in ["administrator", "creator"] and \
                     getattr(actor_chat_member, 'can_restrict_members', False)):
                 await update.message.reply_text("Meeeow! You need to be an admin with rights to restrict users in this chat, or a bot sudo user.")
                 return
@@ -2174,7 +2174,7 @@ async def unmute_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     if not is_caller_privileged_for_bot:
         try:
             actor_chat_member = await context.bot.get_chat_member(chat.id, user_who_unmutes.id)
-            if not (actor_chat_member.status in [ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.CREATOR] and \
+            if not (actor_chat_member.status in ["administrator", "creator"] and \
                     getattr(actor_chat_member, 'can_restrict_members', False)):
                 await update.message.reply_text("Meeeow! You need to be an admin with rights to change user permissions in this chat, or a bot sudo user.")
                 return
@@ -2254,7 +2254,7 @@ async def kick_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     if not is_caller_privileged_for_bot:
         try:
             actor_chat_member = await context.bot.get_chat_member(chat.id, user_who_kicks.id)
-            if not (actor_chat_member.status in [ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.CREATOR] and \
+            if not (actor_chat_member.status in ["administrator", "creator"] and \
                     getattr(actor_chat_member, 'can_restrict_members', False)):
                 await update.message.reply_text("Meeeow! You need to be an admin with rights to ban users in this chat (for kicking), or a bot sudo user.")
                 return
