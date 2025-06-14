@@ -1910,7 +1910,9 @@ async def ban_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         target_member_status = target_member.status
     except: pass # Ignore if user not in chat, ban will still work
 
-    if target_member_status in [ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.CREATOR] and user_who_bans.id != OWNER_ID and (not actor_chat_member.status == ChatMemberStatus.CREATOR):
+    if target_member_status in ["administrator", "creator"] and \
+       user_who_bans.id != OWNER_ID and \
+       (actor_chat_member and not actor_chat_member.status == "creator"):
          await update.message.reply_text("Meeeow! You cannot ban another administrator or the chat creator unless you are the creator.")
          return
 
@@ -2099,7 +2101,9 @@ async def mute_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         target_member_status = target_member.status
     except: pass
 
-    if target_member_status in [ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.CREATOR] and user_who_mutes.id != OWNER_ID and (not actor_chat_member.status == ChatMemberStatus.CREATOR):
+    if target_member_status in ["administrator", "creator"] and \
+       user_who_mutes.id != OWNER_ID and \
+       (actor_chat_member and not actor_chat_member.status == "creator"):
          await update.message.reply_text("Meeeow! You cannot mute another administrator or the chat creator unless you are the creator.")
          return
 
@@ -2284,7 +2288,9 @@ async def kick_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         target_member_status = target_member.status
     except: pass
 
-    if target_member_status in [ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.CREATOR] and user_who_kicks.id != OWNER_ID and (not actor_chat_member.status == ChatMemberStatus.CREATOR):
+    if target_member_status in ["administrator", "creator"] and \
+       user_who_kicks.id != OWNER_ID and \
+       (actor_chat_member and not actor_chat_member.status == "creator"):
          await update.message.reply_text("Meeeow! You cannot kick another administrator or the chat creator unless you are the creator.")
          return
 
