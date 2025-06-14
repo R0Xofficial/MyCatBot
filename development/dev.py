@@ -1853,7 +1853,7 @@ async def ban_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             actor_chat_member = await context.bot.get_chat_member(chat.id, user_who_bans.id)
             if not (actor_chat_member.status in ["administrator", "creator"] and \
                     getattr(actor_chat_member, 'can_restrict_members', False)):
-                await update.message.reply_text("Meeeow! You need to be an admin with rights to ban users in this chat, or a bot privileged user.")
+                await update.message.reply_text("Meeeow! You need to be an admin with rights to ban users in this chat.")
                 return
         except TelegramError as e:
             logger.warning(f"Could not get chat member info for ban executor {user_who_bans.id} in {chat.id}: {e}")
@@ -1966,7 +1966,7 @@ async def unban_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             actor_chat_member = await context.bot.get_chat_member(chat.id, user_who_unbans.id)
             if not (actor_chat_member.status in ["administrator", "creator"] and \
                     getattr(actor_chat_member, 'can_restrict_members', False)):
-                await update.message.reply_text("Meeeow! You need to be an admin with rights to unban users in this chat, or a bot privileged user.")
+                await update.message.reply_text("Meeeow! You need to be an admin with rights to unban users in this chat.")
                 return
         except TelegramError as e:
             logger.warning(f"Could not get chat member info for unban executor {user_who_unbans.id} in {chat.id}: {e}")
@@ -2037,7 +2037,7 @@ async def mute_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             actor_chat_member = await context.bot.get_chat_member(chat.id, user_who_mutes.id)
             if not (actor_chat_member.status in ["administrator", "creator"] and \
                     getattr(actor_chat_member, 'can_restrict_members', False)):
-                await update.message.reply_text("Meeeow! You need to be an admin with rights to restrict users in this chat, or a bot sudo user.")
+                await update.message.reply_text("Meeeow! You need to be an admin with rights to restrict users in this chat.")
                 return
         except TelegramError as e:
             logger.warning(f"Could not get chat member info for mute executor {user_who_mutes.id} in {chat.id}: {e}")
@@ -2153,7 +2153,7 @@ async def unmute_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             actor_chat_member = await context.bot.get_chat_member(chat.id, user_who_unmutes.id)
             if not (actor_chat_member.status in ["administrator", "creator"] and \
                     getattr(actor_chat_member, 'can_restrict_members', False)):
-                await update.message.reply_text("Meeeow! You need to be an admin with rights to change user permissions in this chat, or a bot sudo user.")
+                await update.message.reply_text("Meeeow! You need to be an admin with rights to change user permissions in this chat.")
                 return
         except TelegramError as e:
             logger.warning(f"Could not get chat member info for unmute executor {user_who_unmutes.id} in {chat.id}: {e}")
@@ -2232,7 +2232,7 @@ async def kick_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             actor_chat_member = await context.bot.get_chat_member(chat.id, user_who_kicks.id)
             if not (actor_chat_member.status in ["administrator", "creator"] and \
                     getattr(actor_chat_member, 'can_restrict_members', False)):
-                await update.message.reply_text("Meeeow! You need to be an admin with rights to ban/kick users in this chat, or a bot privileged user.")
+                await update.message.reply_text("Meeeow! You need to be an admin with rights to ban/kick users in this chat.")
                 return
         except TelegramError as e:
             logger.warning(f"Could not get chat member info for kick executor {user_who_kicks.id} in {chat.id}: {e}")
