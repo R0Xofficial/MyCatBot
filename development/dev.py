@@ -4037,6 +4037,7 @@ def main() -> None:
     application.add_handler(CommandHandler("kickme", kickme_command))
     application.add_handler(CommandHandler("promote", promote_command))
     application.add_handler(CommandHandler("demote", demote_command))
+    application.add_handler(CommandHandler("pin", pin_message_command))
     application.add_handler(CommandHandler("gif", gif))
     application.add_handler(CommandHandler("photo", photo))
     application.add_handler(CommandHandler("meow", meow))
