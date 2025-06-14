@@ -301,6 +301,23 @@ async def log_user_from_interaction(update: Update, context: ContextTypes.DEFAUL
     if update.message and update.message.reply_to_message and update.message.reply_to_message.from_user:
         update_user_in_db(update.message.reply_to_message.from_user)
 
+def get_all_sudo_users_from_db() -> List[Tuple[int, str]]:
+    conn = None
+    sudo_list = []
+    try:
+        conn = sqlite3.connect(DB_NAME)
+        cursor = conn.cursor()
+        cursor.execute("SELECT user_id, timestamp FROM sudo_users ORDER BY timestamp DESC")
+        rows = cursor.fetchall()
+        for row in rows:
+            sudo_list.append((row[0], row[1]))
+    except sqlite3.Error as e:
+        logger.error(f"SQLite error fetching all sudo users: {e}", exc_info=True)
+    finally:
+        if conn:
+            conn.close()
+    return sudo_list
+
 # --- CAT TEXTS SECTION ---
 # /meow texts - General cat noises and behaviors
 MEOW_TEXTS = [
@@ -1879,9 +1896,9 @@ async def status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         f"<b>• State:</b> Ready & Purring! 🐾",
         f"<b>• Last Nap:</b> <code>{readable_uptime}</code> ago 😴\n",
         "<b>📊 Database Stats:</b>",
-        f"  <b>• 👀 Known Users:</b> <code>{known_users_count}</code>",
-        f"  <b>• 🛡 Sudo Users:</b> <code>{sudo_users_count}</code>",
-        f"  <b>• 🚫 Blacklisted Users:</b> <code>{blacklisted_count}</code>"
+        f" <b>• 👀 Known Users:</b> <code>{known_users_count}</code>",
+        f" <b>• 🛡 Sudo Users:</b> <code>{sudo_users_count}</code>",
+        f" <b>• 🚫 Blacklisted Users:</b> <code>{blacklisted_count}</code>"
     ]
 
     status_msg = "\n".join(status_lines)
@@ -2295,18 +2312,18 @@ async def speedtest_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             info_lines = [
                 "<b>🌐 Ookla SPEEDTEST:</b>\n",
                 "<b>📊 RESULTS:</b>",
-                f"  <b>• 📤 Upload:</b> <code>{upload_mbps_val:.2f} Mbps</code>",
-                f"  <b>• 📥 Download:</b> <code>{download_mbps_val:.2f} Mbps</code>",
-                f"  <b>• ⏳️ Ping:</b> <code>{ping_val:.2f} ms</code>",
-                f"  <b>• 🕒 Time:</b> <code>{formatted_time_val}</code>",
-                f"  <b>• 📨 Data Sent:</b> <code>{data_sent_mb_val:.2f} MB</code>",
-                f"  <b>• 📩 Data Received:</b> <code>{data_received_mb_val:.2f} MB</code>\n",
+                f" <b>• 📤 Upload:</b> <code>{upload_mbps_val:.2f} Mbps</code>",
+                f" <b>• 📥 Download:</b> <code>{download_mbps_val:.2f} Mbps</code>",
+                f" <b>• ⏳️ Ping:</b> <code>{ping_val:.2f} ms</code>",
+                f" <b>• 🕒 Time:</b> <code>{formatted_time_val}</code>",
+                f" <b>• 📨 Data Sent:</b> <code>{data_sent_mb_val:.2f} MB</code>",
+                f" <b>• 📩 Data Received:</b> <code>{data_received_mb_val:.2f} MB</code>\n",
                 "<b>🖥 SERVER INFO:</b>",
-                f"  <b>• 🪪 Name:</b> <code>{html.escape(server_name_val)}</code>",
-                f"  <b>• 🌍 Country:</b> <code>{html.escape(server_country_val)} ({html.escape(server_cc_val)})</code>",
-                f"  <b>• 🛠 Sponsor:</b> <code>{html.escape(server_sponsor_val)}</code>",
-                f"  <b>• 🧭 Latitude:</b> <code>{server_lat_val}</code>",
-                f"  <b>• 🧭 Longitude:</b> <code>{server_lon_val}</code>"
+                f" <b>• 🪪 Name:</b> <code>{html.escape(server_name_val)}</code>",
+                f" <b>• 🌍 Country:</b> <code>{html.escape(server_country_val)} ({html.escape(server_cc_val)})</code>",
+                f" <b>• 🛠 Sponsor:</b> <code>{html.escape(server_sponsor_val)}</code>",
+                f" <b>• 🧭 Latitude:</b> <code>{server_lat_val}</code>",
+                f" <b>• 🧭 Longitude:</b> <code>{server_lon_val}</code>"
             ]
             
             result_message = "\n".join(info_lines)
@@ -2955,6 +2972,65 @@ async def del_sudo_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             logger.error(f"Error preparing/sending #SUDO_REMOVED operational log: {e}", exc_info=True)
     else:
         await update.message.reply_text("Mrow? Failed to remove user from sudo list. Check logs.")
+        
+async def list_sudo_users_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    user = update.effective_user
+    if user.id != OWNER_ID:
+        logger.warning(f"Unauthorized /listsudo attempt by user {user.id}.")
+        return
+
+    sudo_user_tuples = get_all_sudo_users_from_db()
+
+    if not sudo_user_tuples:
+        await update.message.reply_text("Meeeow! There are currently no users with sudo privileges. 😼")
+        return
+
+    response_lines = ["<b>🛡️ Sudo Users List:</b>\n"]
+    
+    for user_id, timestamp_str in sudo_user_tuples:
+        user_display_name = f"<code>{user_id}</code>"
+        user_obj_from_db = get_user_from_db_by_username(str(user_id))
+
+        if user_obj_from_db:
+            display_name_parts = []
+            if user_obj_from_db.first_name: display_name_parts.append(html.escape(user_obj_from_db.first_name))
+            if user_obj_from_db.last_name: display_name_parts.append(html.escape(user_obj_from_db.last_name))
+            if user_obj_from_db.username: display_name_parts.append(f"(@{html.escape(user_obj_from_db.username)})")
+            
+            if display_name_parts:
+                user_display_name = " ".join(display_name_parts) + f" (<code>{user_id}</code>)"
+            else:
+                user_display_name = f"User (<code>{user_id}</code>)"
+        else:
+            try:
+                chat_info = await context.bot.get_chat(user_id)
+                name_parts = []
+                if chat_info.first_name: name_parts.append(html.escape(chat_info.first_name))
+                if chat_info.last_name: name_parts.append(html.escape(chat_info.last_name))
+                if chat_info.username: name_parts.append(f"(@{html.escape(chat_info.username)})")
+                
+                if name_parts:
+                    user_display_name = " ".join(name_parts) + f" (<code>{user_id}</code>)"
+            except Exception:
+                pass
+
+        formatted_added_time = timestamp_str
+        try:
+            dt_obj = datetime.fromisoformat(timestamp_str.replace("Z", "+00:00"))
+            formatted_added_time = dt_obj.strftime('%Y-%m-%d %H:%M')
+        except ValueError:
+            logger.warning(f"Could not parse timestamp '{timestamp_str}' for sudo user {user_id}")
+            pass
+
+        response_lines.append(f"• {user_display_name} - Added: <code>{formatted_added_time}</code>")
+
+    message_text = "\n".join(response_lines)
+    if len(message_text) > 4000:
+        message_text = "\n".join(response_lines[:15])
+        message_text += f"\n\n...and {len(sudo_user_tuples) - 15} more (list too long to display fully)."
+        logger.info(f"Sudo list too long, truncated for display. Total: {len(sudo_user_tuples)}")
+
+    await update.message.reply_html(message_text)
 
 # --- Main Function ---
 def main() -> None:
@@ -3016,6 +3092,7 @@ def main() -> None:
     application.add_handler(CommandHandler("speedtest", speedtest_command))
     application.add_handler(CommandHandler("blist", blacklist_user_command))
     application.add_handler(CommandHandler("unblist", unblacklist_user_command))
+    application.add_handler(CommandHandler("listsudo", list_sudo_users_command))
     application.add_handler(CommandHandler("addsudo", add_sudo_command))
     application.add_handler(CommandHandler("delsudo", del_sudo_command))
 
