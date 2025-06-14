@@ -20,9 +20,6 @@ export TELEGRAM_OWNER_ID="PASTE_HERE"
 # However, if you want to use this, remember to delete the hastag before the command below.
 # export TENOR_API_KEY="PASTE_HERE"
 
-chmod +x ~/scripts/update.sh
-chmod +x ~/scripts/update_test.sh
-
 echo "done"
 
 # Use this command to start bot:
