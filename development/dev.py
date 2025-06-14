@@ -2290,7 +2290,7 @@ async def speedtest_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             server_lon_val = server_info_dict.get("lon", "N/A")
 
             info_lines = [
-                "<b>💨 Ookla SPEEDTEST: 💨</b>\n",
+                "<b>🌐 Ookla SPEEDTEST:</b>\n",
                 "<b>📊 RESULTS:</b>",
                 f"  <b>• 📤 Upload:</b> <code>{upload_mbps_val:.2f} Mbps</code>",
                 f"  <b>• 📥 Download:</b> <code>{download_mbps_val:.2f} Mbps</code>",
