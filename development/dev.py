@@ -2616,7 +2616,6 @@ async def pin_message_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         await update.message.reply_text("Meeeow! Please use this command by replying to the message you want to pin. 📌")
         return
 
-    bot_member = None
     try:
         bot_member = await context.bot.get_chat_member(chat.id, context.bot.id)
         if not (bot_member.status == ChatMemberStatus.ADMINISTRATOR and getattr(bot_member, 'can_pin_messages', False)):
@@ -2664,12 +2663,6 @@ async def pin_message_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         
         success_message_text = f"📌 Meow! Message pinned {pin_mode_text}!"
         await update.message.reply_text(success_message_text, quote=False)
-        
-        if bot_member and getattr(bot_member, 'can_delete_messages', False):
-            try:
-                await update.message.delete()
-            except Exception as e_del:
-                logger.warning(f"Could not delete /pin command message: {e_del}")
 
     except TelegramError as e:
         logger.error(f"Failed to pin message in chat {chat.id}: {e}")
