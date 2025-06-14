@@ -2960,15 +2960,22 @@ def main() -> None:
     logger.info("Initializing bot application...")
     application = Application.builder().token(BOT_TOKEN).build()
 
+    connect_timeout_val = 10.0
+    read_timeout_val = 60.0
+    write_timeout_val = 60.0
+    pool_timeout_val = 10.0
+
     custom_request_settings = HTTPXRequest(
-        connect_timeout=10.0,
-        read_timeout=60.0,
-        write_timeout=60.0,
-        pool_timeout=10.0
+        connect_timeout=connect_timeout_val,
+        read_timeout=read_timeout_val,
+        write_timeout=write_timeout_val,
+        pool_timeout=pool_timeout_val
     )
     application = Application.builder().token(BOT_TOKEN).request(custom_request_settings).build()
-    logger.info(f"Custom request timeouts set: read={custom_request_settings.read_timeout}, write={custom_request_settings.write_timeout}")
-
+    logger.info(f"Custom request timeouts set for HTTPXRequest: "
+                f"Connect={connect_timeout_val}, Read={read_timeout_val}, "
+                f"Write={write_timeout_val}, Pool={pool_timeout_val}")
+    
     logger.info("Registering blacklist check handler...")
     application.add_handler(MessageHandler(filters.COMMAND, check_blacklist_handler), group=-1)
 
