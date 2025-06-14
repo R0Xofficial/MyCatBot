@@ -305,6 +305,23 @@ async def log_user_from_interaction(update: Update, context: ContextTypes.DEFAUL
     if update.message and update.message.reply_to_message and update.message.reply_to_message.from_user:
         update_user_in_db(update.message.reply_to_message.from_user)
 
+def get_all_sudo_users_from_db() -> List[Tuple[int, str]]:
+    conn = None
+    sudo_list = []
+    try:
+        conn = sqlite3.connect(DB_NAME)
+        cursor = conn.cursor()
+        cursor.execute("SELECT user_id, timestamp FROM sudo_users ORDER BY timestamp DESC")
+        rows = cursor.fetchall()
+        for row in rows:
+            sudo_list.append((row[0], row[1]))
+    except sqlite3.Error as e:
+        logger.error(f"SQLite error fetching all sudo users: {e}", exc_info=True)
+    finally:
+        if conn:
+            conn.close()
+    return sudo_list
+
 # --- CAT TEXTS SECTION ---
 # /meow texts - General cat noises and behaviors
 MEOW_TEXTS = [
