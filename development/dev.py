@@ -2616,6 +2616,7 @@ async def pin_message_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         await update.message.reply_text("Meeeow! Please use this command by replying to the message you want to pin. 📌")
         return
 
+    bot_member = None
     try:
         bot_member = await context.bot.get_chat_member(chat.id, context.bot.id)
         if not (bot_member.status == ChatMemberStatus.ADMINISTRATOR and getattr(bot_member, 'can_pin_messages', False)):
@@ -2643,11 +2644,14 @@ async def pin_message_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         return
 
     disable_notification = False
+    pin_mode_text = "with notification"
     if context.args and context.args[0].lower() == "silent":
         disable_notification = True
+        pin_mode_text = "silently"
         logger.info(f"User {user_who_pins.id} requested silent pin in chat {chat.id}")
     elif context.args and context.args[0].lower() == "notify":
         disable_notification = False
+        pin_mode_text = "with notification"
         logger.info(f"User {user_who_pins.id} requested pin with notification in chat {chat.id}")
 
     try:
@@ -2658,7 +2662,10 @@ async def pin_message_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         )
         logger.info(f"User {user_who_pins.id} pinned message {message_to_pin.message_id} in chat {chat.id}. Notification: {'Disabled' if disable_notification else 'Enabled'}")
         
-        if getattr(bot_member, 'can_delete_messages', False):
+        success_message_text = f"📌 Meow! Message pinned {pin_mode_text}!"
+        await update.message.reply_text(success_message_text, quote=False)
+        
+        if bot_member and getattr(bot_member, 'can_delete_messages', False):
             try:
                 await update.message.delete()
             except Exception as e_del:
@@ -2670,7 +2677,7 @@ async def pin_message_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         if "message to pin not found" in error_message.lower():
             await update.message.reply_text("Mrow? I can't find the message you replied to. Maybe it was deleted?")
         elif "not enough rights" in error_message.lower() or "not admin" in error_message.lower():
-             await update.message.reply_text("Meeeow! It seems I don't have enough rights to pin messages, or the target message cannot be pinned by me (e.g., message from another bot, or I can't pin messages from this specific user).")
+             await update.message.reply_text("Meeeow! It seems I don't have enough rights to pin messages, or the target message cannot be pinned by me.")
         else:
             await update.message.reply_text(f"Failed to pin message: {html.escape(error_message)}")
     except Exception as e:
