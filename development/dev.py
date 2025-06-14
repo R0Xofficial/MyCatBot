@@ -14,6 +14,7 @@ import requests
 import html
 import sqlite3
 import speedtest
+import subprocess
 import asyncio
 from typing import List, Tuple
 from telegram import Update, User, Chat, constants
@@ -2953,6 +2954,40 @@ async def del_sudo_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     else:
         await update.message.reply_text("Mrow? Failed to remove user from sudo list. Check logs.")
 
+async def update_bot_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    user = update.effective_user
+    if user.id != OWNER_ID:
+        logger.warning(f"Unauthorized /update attempt by user {user.id}.")
+        return
+
+        script_path = os.path.expanduser("~/catbot/scripts/update.sh")
+
+    if not os.path.isfile(script_path):
+        logger.error(f"Update script not found at: {script_path}")
+        await update.message.reply_text(f"😿 Mrow! Update script not found at the configured path: <code>{html.escape(script_path)}</code>", parse_mode=ParseMode.HTML)
+        return
+        
+    if not os.access(script_path, os.X_OK):
+        logger.error(f"Update script at {script_path} is not executable.")
+        await update.message.reply_text(f"😿 Mrow! Update script at <code>{html.escape(script_path)}</code> is not executable (chmod +x needed).", parse_mode=ParseMode.HTML)
+        return
+
+    try:
+        await update.message.reply_text("Meeeow! Initiating bot update sequence... I'll be back soon (hopefully)! 😼⚙️ This message will self-destruct after a moment.")
+        logger.info(f"Owner {user.id} initiated update using script: {script_path}")
+        
+        subprocess.Popen([script_path])
+        logger.info(f"Update script {script_path} launched via Popen. Bot process should be terminated by the script shortly.")
+        
+        await asyncio.sleep(2)
+        
+    except Exception as e:
+        logger.error(f"Failed to launch update script {script_path}: {e}", exc_info=True)
+        try:
+            await update.message.reply_text(f"😿 Mrow! Failed to start the update script: {html.escape(str(e))}")
+        except Exception:
+            pass 
+
 # --- Main Function ---
 def main() -> None:
     init_db()
@@ -2999,9 +3034,37 @@ def main() -> None:
     application.add_handler(CommandHandler("unblist", unblacklist_user_command))
     application.add_handler(CommandHandler("addsudo", add_sudo_command))
     application.add_handler(CommandHandler("delsudo", del_sudo_command))
+    application.add_handler(CommandHandler("update", update_bot_command))
 
     logger.info("Registering message handlers for group joins...")
     application.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS & filters.ChatType.GROUPS, handle_new_group_members))
+
+    async def send_simple_startup_message(app: Application) -> None:
+        startup_message_text = "<i>Bot Started...</i>"
+        
+        target_id_for_log = LOG_CHAT_ID
+        if not target_id_for_log and OWNER_ID:
+            target_id_for_log = OWNER_ID
+        
+        if target_id_for_log:
+            try:
+                await app.bot.send_message(chat_id=target_id_for_log, text=startup_message_text, parse_mode=ParseMode.HTML)
+                logger.info(f"Sent simple startup notification to {target_id_for_log}.")
+            except TelegramError as e:
+                logger.error(f"Failed to send simple startup message to {target_id_for_log}: {e}")
+                if LOG_CHAT_ID and target_id_for_log == LOG_CHAT_ID and OWNER_ID and LOG_CHAT_ID != OWNER_ID:
+                    logger.info("Falling back to send simple startup message to OWNER_ID.")
+                    try:
+                        await app.bot.send_message(chat_id=OWNER_ID, text=f"[Fallback] {startup_message_text}", parse_mode=ParseMode.HTML)
+                    except Exception as e_owner:
+                         logger.error(f"Failed to send simple startup message to OWNER_ID as fallback: {e_owner}")
+            except Exception as e_other:
+                logger.error(f"Unexpected error sending simple startup message to {target_id_for_log}: {e_other}", exc_info=True)
+
+        else:
+            logger.warning("No target (LOG_CHAT_ID or OWNER_ID) to send simple startup message.")
+
+    application.post_init = send_simple_startup_message
 
     logger.info(f"Bot starting polling... Owner ID configured: {OWNER_ID}")
     print(f"Bot starting polling... Owner ID: {OWNER_ID}")
