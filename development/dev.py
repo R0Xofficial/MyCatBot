@@ -1566,6 +1566,10 @@ HELP_TEXT = """
 /mute [ID/reply/@user] [Time] [Reason] - Mute user in chat. 🚫
 <i>Note: [Time] is optional</i>
 /kick [ID/reply/@user] [Reason] - Kick user from chat. ⚠️
+/promote [ID/reply/@user] [admin_title] - Promote a user to administrator.
+<i>Note: [admin_title] is optional</i>
+/demote [ID/reply/@user] - Demote an administrator to a regular member.
+/pin [silent/notify] - Pin the replied message (default: with notification).
 
 <b>4FUN Commands:</b>
 /gif - Get a random cat GIF! 🖼️
@@ -2598,6 +2602,80 @@ async def demote_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     except Exception as e:
         logger.error(f"Unexpected error in /demote: {e}", exc_info=True)
         await update.message.reply_text("An unexpected error occurred.")
+
+async def pin_message_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    chat = update.effective_chat
+    user_who_pins = update.effective_user
+    message_to_pin = update.message.reply_to_message
+
+    if chat.type not in [ChatType.GROUP, ChatType.SUPERGROUP, ChatType.CHANNEL]:
+        await update.message.reply_text("Mrow? Messages can only be pinned in groups, supergroups, or channels.")
+        return
+
+    if not message_to_pin:
+        await update.message.reply_text("Meeeow! Please use this command by replying to the message you want to pin. 📌")
+        return
+
+    try:
+        bot_member = await context.bot.get_chat_member(chat.id, context.bot.id)
+        if not (bot_member.status == ChatMemberStatus.ADMINISTRATOR and getattr(bot_member, 'can_pin_messages', False)):
+            await update.message.reply_text("Meeeow! I need to be an admin with the 'Pin Messages' permission in this chat to do that. 😿")
+            return
+    except TelegramError as e:
+        logger.error(f"Error checking bot's own permissions in /pin for chat {chat.id}: {e}")
+        await update.message.reply_text("Mrow? Couldn't verify my own permissions in this chat.")
+        return
+        
+    caller_has_permission = False
+    if is_privileged_user(user_who_pins.id):
+        caller_has_permission = True
+    else:
+        try:
+            actor_chat_member = await context.bot.get_chat_member(chat.id, user_who_pins.id)
+            if actor_chat_member.status in ["administrator", "creator"] and \
+               getattr(actor_chat_member, 'can_pin_messages', False):
+                caller_has_permission = True
+        except TelegramError as e:
+            logger.warning(f"Could not get chat member info for pin executor {user_who_pins.id} in {chat.id}: {e}")
+    
+    if not caller_has_permission:
+        await update.message.reply_text("Meeeow! You need to be an admin with 'Pin Messages' permission in this chat, or a privileged bot user, to use this command.")
+        return
+
+    disable_notification = False
+    if context.args and context.args[0].lower() == "silent":
+        disable_notification = True
+        logger.info(f"User {user_who_pins.id} requested silent pin in chat {chat.id}")
+    elif context.args and context.args[0].lower() == "notify":
+        disable_notification = False
+        logger.info(f"User {user_who_pins.id} requested pin with notification in chat {chat.id}")
+
+    try:
+        await context.bot.pin_chat_message(
+            chat_id=chat.id,
+            message_id=message_to_pin.message_id,
+            disable_notification=disable_notification
+        )
+        logger.info(f"User {user_who_pins.id} pinned message {message_to_pin.message_id} in chat {chat.id}. Notification: {'Disabled' if disable_notification else 'Enabled'}")
+        
+        if getattr(bot_member, 'can_delete_messages', False):
+            try:
+                await update.message.delete()
+            except Exception as e_del:
+                logger.warning(f"Could not delete /pin command message: {e_del}")
+
+    except TelegramError as e:
+        logger.error(f"Failed to pin message in chat {chat.id}: {e}")
+        error_message = str(e)
+        if "message to pin not found" in error_message.lower():
+            await update.message.reply_text("Mrow? I can't find the message you replied to. Maybe it was deleted?")
+        elif "not enough rights" in error_message.lower() or "not admin" in error_message.lower():
+             await update.message.reply_text("Meeeow! It seems I don't have enough rights to pin messages, or the target message cannot be pinned by me (e.g., message from another bot, or I can't pin messages from this specific user).")
+        else:
+            await update.message.reply_text(f"Failed to pin message: {html.escape(error_message)}")
+    except Exception as e:
+        logger.error(f"Unexpected error in /pin: {e}", exc_info=True)
+        await update.message.reply_text("An unexpected error occurred while trying to pin the message.")
         
 # --- Simple Text Command Definitions ---
 async def send_random_text(update: Update, context: ContextTypes.DEFAULT_TYPE, text_list: list[str], list_name: str) -> None:
