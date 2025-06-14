@@ -2029,12 +2029,12 @@ async def mute_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         return
 
     bot_member = await context.bot.get_chat_member(chat.id, context.bot.id)
-    if bot_member.status != ChatMemberStatus.ADMINISTRATOR or not bot_member.can_restrict_members:
+    if bot_member.status != ChatMemberStatus.ADMINISTRATOR or not getattr(bot_member, 'can_restrict_members', False):
         await update.message.reply_text("Meeeow! I need to be an admin with rights to restrict users in this chat. 😿")
         return
         
     is_caller_privileged_for_bot = is_privileged_user(user_who_mutes.id)
-
+    actor_chat_member = None
     if not is_caller_privileged_for_bot:
         try:
             actor_chat_member = await context.bot.get_chat_member(chat.id, user_who_mutes.id)
@@ -2074,7 +2074,7 @@ async def mute_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             if not target_user:
                 try: 
                     chat_info = await context.bot.get_chat(target_arg)
-                    if chat_info.type == ChatType.PRIVATE: target_user = User(id=chat_info.id, first_name=chat_info.first_name or "",is_bot=False,username=chat_info.username)
+                    if chat_info.type == ChatType.PRIVATE: target_user = User(id=chat_info.id, first_name=chat_info.first_name or "",is_bot=False,username=chat_info.username, last_name=chat_info.last_name)
                 except: pass
             if not target_user: await update.message.reply_text(f"User @{html.escape(username_to_find)} not found."); return
         else:
@@ -2082,7 +2082,7 @@ async def mute_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                 target_id = int(target_arg)
                 try:
                     chat_info = await context.bot.get_chat(target_id)
-                    if chat_info.type == ChatType.PRIVATE: target_user = User(id=chat_info.id, first_name=chat_info.first_name or f"User {target_id}", is_bot=getattr(chat_info, 'is_bot',False), username=chat_info.username)
+                    if chat_info.type == ChatType.PRIVATE: target_user = User(id=chat_info.id, first_name=chat_info.first_name or f"User {target_id}", is_bot=getattr(chat_info, 'is_bot',False), username=chat_info.username, last_name=chat_info.last_name)
                     else: await update.message.reply_text("Target ID does not seem to be a user."); return
                 except: target_user = User(id=target_id, first_name=f"User {target_id}", is_bot=False)
             except ValueError: await update.message.reply_text("Invalid user ID."); return
@@ -2091,24 +2091,39 @@ async def mute_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         return
 
     if not target_user: await update.message.reply_text("Could not identify user to mute."); return
+    if not isinstance(target_user, User): await update.message.reply_text("Mute can only be applied to users."); return
     if target_user.id == OWNER_ID: await update.message.reply_text("Cannot mute the Owner! 😼"); return
     if target_user.id == context.bot.id: await update.message.reply_text("I can't mute myself!"); return
     if target_user.id == user_who_mutes.id: await update.message.reply_text("Mrow? You can't mute yourself."); return
 
     target_member_status = None
+    if actor_chat_member is None and not is_caller_privileged_for_bot:
+        try: actor_chat_member = await context.bot.get_chat_member(chat.id, user_who_mutes.id)
+        except: pass
+
     try:
         target_member = await context.bot.get_chat_member(chat.id, target_user.id)
         target_member_status = target_member.status
-    except: pass
+    except TelegramError as e:
+        if "user not found" in str(e).lower():
+            await update.message.reply_text(f"User {target_user.mention_html()} is not a member of this chat, cannot mute.")
+            return
+        logger.warning(f"Could not get target member status for mute: {e}")
+
 
     if target_member_status in ["administrator", "creator"] and \
-       user_who_mutes.id != OWNER_ID and \
+       (not is_caller_privileged_for_bot or (is_caller_privileged_for_bot and user_who_mutes.id != OWNER_ID)) and \
        (actor_chat_member and not actor_chat_member.status == "creator"):
-         await update.message.reply_text("Meeeow! You cannot mute another administrator or the chat creator unless you are the creator.")
+         await update.message.reply_text("Meeeow! You cannot mute another administrator or the chat creator unless you are the chat creator or bot owner.")
          return
 
     duration_td = parse_duration_to_timedelta(duration_str)
-    permissions = ChatPermissions(can_send_messages=False, can_send_media_messages=False, can_send_other_messages=False, can_send_polls=False, can_add_web_page_previews=False)
+    permissions_to_set_for_mute = ChatPermissions(
+        can_send_messages=False, can_send_audios=False, can_send_documents=False,
+        can_send_photos=False, can_send_videos=False, can_send_video_notes=False,
+        can_send_voice_notes=False, can_send_polls=False, can_send_other_messages=False,
+        can_add_web_page_previews=False
+    )
     until_date_timestamp_iso: str | None = None
     until_date_dt: datetime | None = None
     time_str_display = "permanently"
@@ -2119,7 +2134,7 @@ async def mute_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         time_str_display = f"for {duration_str}"
     
     try:
-        await context.bot.restrict_chat_member(chat_id=chat.id, user_id=target_user.id, permissions=permissions, until_date=until_date_dt)
+        await context.bot.restrict_chat_member(chat_id=chat.id, user_id=target_user.id, permissions=permissions_to_set_for_mute, until_date=until_date_dt)
         add_restriction_to_db(chat.id, target_user.id, "mute", user_who_mutes.id, until_date_timestamp_iso, reason)
         user_display_name = target_user.mention_html() if target_user.username else html.escape(target_user.first_name or str(target_user.id))
         
@@ -2140,6 +2155,7 @@ async def mute_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         logger.error(f"Unexpected error in /mute: {e}", exc_info=True)
         await update.message.reply_text("An unexpected error occurred.")
 
+
 async def unmute_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     chat = update.effective_chat
     user_who_unmutes = update.effective_user
@@ -2149,7 +2165,7 @@ async def unmute_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         return
 
     bot_member = await context.bot.get_chat_member(chat.id, context.bot.id)
-    if bot_member.status != ChatMemberStatus.ADMINISTRATOR or not bot_member.can_restrict_members:
+    if bot_member.status != ChatMemberStatus.ADMINISTRATOR or not getattr(bot_member, 'can_restrict_members', False):
         await update.message.reply_text("Meeeow! I need to be an admin with rights to change user permissions in this chat. 😿")
         return
         
@@ -2178,7 +2194,7 @@ async def unmute_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             if not target_user:
                 try: 
                     chat_info = await context.bot.get_chat(target_arg)
-                    if chat_info.type == ChatType.PRIVATE: target_user = User(id=chat_info.id, first_name=chat_info.first_name or "",is_bot=False,username=chat_info.username)
+                    if chat_info.type == ChatType.PRIVATE: target_user = User(id=chat_info.id, first_name=chat_info.first_name or "",is_bot=False,username=chat_info.username, last_name=chat_info.last_name)
                 except: pass
             if not target_user: await update.message.reply_text(f"User @{html.escape(username_to_find)} not found."); return
         else:
@@ -2186,7 +2202,7 @@ async def unmute_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                 target_id = int(target_arg)
                 try:
                     chat_info = await context.bot.get_chat(target_id)
-                    if chat_info.type == ChatType.PRIVATE: target_user = User(id=chat_info.id, first_name=chat_info.first_name or f"User {target_id}", is_bot=getattr(chat_info, 'is_bot',False), username=chat_info.username)
+                    if chat_info.type == ChatType.PRIVATE: target_user = User(id=chat_info.id, first_name=chat_info.first_name or f"User {target_id}", is_bot=getattr(chat_info, 'is_bot',False), username=chat_info.username, last_name=chat_info.last_name)
                     else: target_user = User(id=target_id, first_name=f"User {target_id}", is_bot=False)
                 except: target_user = User(id=target_id, first_name=f"User {target_id}", is_bot=False)
             except ValueError: await update.message.reply_text("Invalid user ID."); return
@@ -2195,17 +2211,18 @@ async def unmute_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         return
 
     if not target_user: await update.message.reply_text("Could not identify user to unmute."); return
+    if not isinstance(target_user, User): await update.message.reply_text("Unmute can only be applied to users."); return
     
     permissions_to_restore = ChatPermissions(
         can_send_messages=True, can_send_audios=True, can_send_documents=True,
         can_send_photos=True, can_send_videos=True, can_send_video_notes=True,
         can_send_voice_notes=True, can_send_polls=True, can_send_other_messages=True,
-        can_add_web_page_previews=True, can_change_info=True, can_invite_users=True,
-        can_pin_messages=True, can_manage_topics=True
+        can_add_web_page_previews=True, 
+        can_change_info=None, can_invite_users=None, can_pin_messages=None, can_manage_topics=None
     )
 
     try:
-        await context.bot.restrict_chat_member(chat_id=chat.id, user_id=target_user.id, permissions=permissions_to_restore)
+        await context.bot.restrict_chat_member(chat_id=chat.id, user_id=target_user.id, permissions=permissions_to_restore, until_date=0)
         remove_restriction_from_db(chat.id, target_user.id, "mute")
         user_display_name = target_user.mention_html() if target_user.username else html.escape(target_user.first_name or str(target_user.id))
         response_lines = [
