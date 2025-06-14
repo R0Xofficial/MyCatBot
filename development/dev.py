@@ -2959,6 +2959,65 @@ async def del_sudo_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             logger.error(f"Error preparing/sending #SUDO_REMOVED operational log: {e}", exc_info=True)
     else:
         await update.message.reply_text("Mrow? Failed to remove user from sudo list. Check logs.")
+        
+async def list_sudo_users_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    user = update.effective_user
+    if user.id != OWNER_ID:
+        logger.warning(f"Unauthorized /listsudo attempt by user {user.id}.")
+        return
+
+    sudo_user_tuples = get_all_sudo_users_from_db()
+
+    if not sudo_user_tuples:
+        await update.message.reply_text("Meeeow! There are currently no users with sudo privileges. 😼")
+        return
+
+    response_lines = ["<b>🛡️ Sudo Users List:</b>\n"]
+    
+    for user_id, timestamp_str in sudo_user_tuples:
+        user_display_name = f"<code>{user_id}</code>"
+        user_obj_from_db = get_user_from_db_by_username(str(user_id))
+
+        if user_obj_from_db:
+            display_name_parts = []
+            if user_obj_from_db.first_name: display_name_parts.append(html.escape(user_obj_from_db.first_name))
+            if user_obj_from_db.last_name: display_name_parts.append(html.escape(user_obj_from_db.last_name))
+            if user_obj_from_db.username: display_name_parts.append(f"(@{html.escape(user_obj_from_db.username)})")
+            
+            if display_name_parts:
+                user_display_name = " ".join(display_name_parts) + f" (<code>{user_id}</code>)"
+            else:
+                user_display_name = f"User (<code>{user_id}</code>)"
+        else:
+            try:
+                chat_info = await context.bot.get_chat(user_id)
+                name_parts = []
+                if chat_info.first_name: name_parts.append(html.escape(chat_info.first_name))
+                if chat_info.last_name: name_parts.append(html.escape(chat_info.last_name))
+                if chat_info.username: name_parts.append(f"(@{html.escape(chat_info.username)})")
+                
+                if name_parts:
+                    user_display_name = " ".join(name_parts) + f" (<code>{user_id}</code>)"
+            except Exception:
+                pass
+
+        formatted_added_time = timestamp_str
+        try:
+            dt_obj = datetime.fromisoformat(timestamp_str.replace("Z", "+00:00"))
+            formatted_added_time = dt_obj.strftime('%Y-%m-%d %H:%M')
+        except ValueError:
+            logger.warning(f"Could not parse timestamp '{timestamp_str}' for sudo user {user_id}")
+            pass
+
+        response_lines.append(f"  • {user_display_name} - Added: <code>{formatted_added_time}</code>")
+
+    message_text = "\n".join(response_lines)
+    if len(message_text) > 4000:
+        message_text = "\n".join(response_lines[:15])
+        message_text += f"\n\n...and {len(sudo_user_tuples) - 15} more (list too long to display fully)."
+        logger.info(f"Sudo list too long, truncated for display. Total: {len(sudo_user_tuples)}")
+
+    await update.message.reply_html(message_text)
 
 # --- Main Function ---
 def main() -> None:
@@ -3020,6 +3079,7 @@ def main() -> None:
     application.add_handler(CommandHandler("speedtest", speedtest_command))
     application.add_handler(CommandHandler("blist", blacklist_user_command))
     application.add_handler(CommandHandler("unblist", unblacklist_user_command))
+    application.add_handler(CommandHandler("listsudo", list_sudo_users_command))
     application.add_handler(CommandHandler("addsudo", add_sudo_command))
     application.add_handler(CommandHandler("delsudo", del_sudo_command))
 
