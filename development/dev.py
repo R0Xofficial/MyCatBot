@@ -1837,19 +1837,23 @@ async def ban_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         await update.message.reply_text("Mrow? Cannot ban users in a private chat.")
         return
 
-    bot_member = await context.bot.get_chat_member(chat.id, context.bot.id)
-    if bot_member.status != ChatMemberStatus.ADMINISTRATOR or not bot_member.can_restrict_members:
-        await update.message.reply_text("Meeeow! I need to be an admin with rights to ban users in this chat. 😿")
+    try:
+        bot_member = await context.bot.get_chat_member(chat.id, context.bot.id)
+        if not (bot_member.status == ChatMemberStatus.ADMINISTRATOR and getattr(bot_member, 'can_restrict_members', False)):
+            await update.message.reply_text("Meeeow! I need to be an admin with rights to ban users in this chat. 😿")
+            return
+    except TelegramError as e:
+        logger.error(f"Error checking bot's own permissions in /ban for chat {chat.id}: {e}")
+        await update.message.reply_text("Mrow? Couldn't verify my own permissions in this chat.")
         return
         
     is_caller_privileged_for_bot = is_privileged_user(user_who_bans.id)
-
     if not is_caller_privileged_for_bot:
         try:
             actor_chat_member = await context.bot.get_chat_member(chat.id, user_who_bans.id)
             if not (actor_chat_member.status in ["administrator", "creator"] and \
                     getattr(actor_chat_member, 'can_restrict_members', False)):
-                await update.message.reply_text("Meeeow! You need to be an admin with rights to ban users in this chat, or a bot sudo user.")
+                await update.message.reply_text("Meeeow! You need to be an admin with rights to ban users in this chat, or a bot privileged user.")
                 return
         except TelegramError as e:
             logger.warning(f"Could not get chat member info for ban executor {user_who_bans.id} in {chat.id}: {e}")
@@ -1858,32 +1862,22 @@ async def ban_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
     target_user: User | None = None
     duration_str: str | None = None
+    reason_list: list[str] = []
     reason: str = "No reason provided."
+    args_to_parse_for_duration_reason = list(context.args)
 
     if update.message.reply_to_message:
         target_user = update.message.reply_to_message.from_user
-        if context.args:
-            potential_duration_td = parse_duration_to_timedelta(context.args[0])
-            if potential_duration_td:
-                duration_str = context.args[0]
-                if len(context.args) > 1: reason = " ".join(context.args[1:])
-            else:
-                reason = " ".join(context.args) if context.args else reason
     elif context.args:
-        target_arg, parsed_duration_str, parsed_reason = await _parse_mod_command_args(list(context.args))
-        if not target_arg:
-            await update.message.reply_text("Usage: /ban <ID/@username/reply> [duration (e.g., 1h, 30m)] [reason]")
-            return
-        duration_str = parsed_duration_str
-        if parsed_reason: reason = parsed_reason
-        
+        target_arg = context.args[0]
+        args_to_parse_for_duration_reason = list(context.args[1:])
         if target_arg.startswith("@"):
             username_to_find = target_arg[1:]
             target_user = get_user_from_db_by_username(username_to_find)
             if not target_user:
                 try: 
                     chat_info = await context.bot.get_chat(target_arg)
-                    if chat_info.type == ChatType.PRIVATE: target_user = User(id=chat_info.id, first_name=chat_info.first_name or "", is_bot=getattr(chat_info, 'is_bot',False), username=chat_info.username)
+                    if chat_info.type == ChatType.PRIVATE: target_user = User(id=chat_info.id, first_name=chat_info.first_name or "",is_bot=getattr(chat_info, 'is_bot', False),username=chat_info.username, last_name=chat_info.last_name)
                 except: pass
             if not target_user: await update.message.reply_text(f"User @{html.escape(username_to_find)} not found."); return
         else:
@@ -1891,31 +1885,37 @@ async def ban_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                 target_id = int(target_arg)
                 try:
                     chat_info = await context.bot.get_chat(target_id)
-                    if chat_info.type == ChatType.PRIVATE: target_user = User(id=chat_info.id, first_name=chat_info.first_name or f"User {target_id}", is_bot=getattr(chat_info, 'is_bot',False), username=chat_info.username)
+                    if chat_info.type == ChatType.PRIVATE: target_user = User(id=chat_info.id, first_name=chat_info.first_name or f"User {target_id}", is_bot=getattr(chat_info, 'is_bot',False), username=chat_info.username, last_name=chat_info.last_name)
                     else: await update.message.reply_text("Target ID does not seem to be a user."); return
-                except: target_user = User(id=target_id, first_name=f"User {target_id}", is_bot=False) # Fallback
+                except: target_user = User(id=target_id, first_name=f"User {target_id}", is_bot=False)
             except ValueError: await update.message.reply_text("Invalid user ID."); return
     else:
-        await update.message.reply_text("Usage: /ban <ID/@username/reply> [duration] [reason]")
+        await update.message.reply_text("Usage: /ban <ID/@username/reply> [duration (e.g., 1h, 30m)] [reason]")
         return
 
+    if args_to_parse_for_duration_reason:
+        potential_duration_td = parse_duration_to_timedelta(args_to_parse_for_duration_reason[0])
+        if potential_duration_td:
+            duration_str = args_to_parse_for_duration_reason[0]
+            if len(args_to_parse_for_duration_reason) > 1: reason_list = args_to_parse_for_duration_reason[1:]
+        else:
+            reason_list = args_to_parse_for_duration_reason
+        if reason_list: reason = " ".join(reason_list)
+
     if not target_user: await update.message.reply_text("Could not identify user to ban."); return
+    if not isinstance(target_user, User): await update.message.reply_text("Ban can only be applied to users."); return
     if target_user.id == OWNER_ID: await update.message.reply_text("The Owner is unbannable! 😼"); return
     if target_user.id == context.bot.id: await update.message.reply_text("I can't ban myself!"); return
     if target_user.id == user_who_bans.id: await update.message.reply_text("Mrow? You can't ban yourself."); return
     
-    target_member_status = None
     try:
-        target_member = await context.bot.get_chat_member(chat.id, target_user.id)
-        target_member_status = target_member.status
-    except: pass # Ignore if user not in chat, ban will still work
-
-    if target_member_status in ["administrator", "creator"] and \
-       user_who_bans.id != OWNER_ID and \
-       (actor_chat_member and not actor_chat_member.status == "creator"):
-         await update.message.reply_text("Meeeow! You cannot ban another administrator or the chat creator unless you are the creator.")
-         return
-
+        target_chat_member = await context.bot.get_chat_member(chat.id, target_user.id)
+        if target_chat_member.status == "creator":
+            await update.message.reply_text("Meeeow! The chat Creator is sacred and cannot be touched by this bot! 😼👑")
+            return
+    except TelegramError as e:
+        if "user not found" in str(e).lower(): logger.info(f"Target user {target_user.id} for /ban not found in chat {chat.id}.")
+        else: logger.warning(f"Could not get target's chat member status for /ban: {e}")
 
     duration_td = parse_duration_to_timedelta(duration_str)
     until_date_timestamp_iso: str | None = None
@@ -1932,22 +1932,15 @@ async def ban_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         add_restriction_to_db(chat.id, target_user.id, "ban", user_who_bans.id, until_date_timestamp_iso, reason)
         user_display_name = target_user.mention_html() if target_user.username else html.escape(target_user.first_name or str(target_user.id))
         
-        response_lines = [
-            "Meow! User Banned:",
-            f"<b>• User:</b> {user_display_name} (<code>{target_user.id}</code>)",
-            f"<b>• Reason:</b> {html.escape(reason)}",
-        ]
-        if duration_str:
-            response_lines.append(f"<b>• Duration:</b> <code>{time_str_display.replace('for ', '')}</code> (until <code>{until_date_dt.strftime('%Y-%m-%d %H:%M:%S %Z') if until_date_dt else 'Permanent'}</code>)")
-        else:
-            response_lines.append(f"<b>• Duration:</b> <code>Permanent</code>")
-            
+        response_lines = ["Meow! User Banned:"]
+        response_lines.append(f"<b>• User:</b> {user_display_name} (<code>{target_user.id}</code>)")
+        response_lines.append(f"<b>• Reason:</b> {html.escape(reason)}")
+        if duration_str: response_lines.append(f"<b>• Duration:</b> <code>{time_str_display.replace('for ', '')}</code> (until <code>{until_date_dt.strftime('%Y-%m-%d %H:%M:%S %Z') if until_date_dt else 'Permanent'}</code>)")
+        else: response_lines.append(f"<b>• Duration:</b> <code>Permanent</code>")
         await update.message.reply_html("\n".join(response_lines))
-    except TelegramError as e:
-        await update.message.reply_text(f"Failed to ban user: {e}")
-    except Exception as e:
-        logger.error(f"Unexpected error in /ban: {e}", exc_info=True)
-        await update.message.reply_text("An unexpected error occurred.")
+    except TelegramError as e: await update.message.reply_text(f"Failed to ban user: {html.escape(str(e))}")
+    except Exception as e: logger.error(f"Unexpected error in /ban: {e}", exc_info=True); await update.message.reply_text("An unexpected error occurred.")
+
 
 async def unban_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     chat = update.effective_chat
@@ -1957,19 +1950,23 @@ async def unban_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         await update.message.reply_text("Mrow? Cannot unban users in a private chat.")
         return
 
-    bot_member = await context.bot.get_chat_member(chat.id, context.bot.id)
-    if bot_member.status != ChatMemberStatus.ADMINISTRATOR or not bot_member.can_restrict_members:
-        await update.message.reply_text("Meeeow! I need to be an admin with rights to unban users in this chat. 😿")
+    try:
+        bot_member = await context.bot.get_chat_member(chat.id, context.bot.id)
+        if not (bot_member.status == ChatMemberStatus.ADMINISTRATOR and getattr(bot_member, 'can_restrict_members', False)):
+            await update.message.reply_text("Meeeow! I need to be an admin with rights to unban users in this chat. 😿")
+            return
+    except TelegramError as e:
+        logger.error(f"Error checking bot's own permissions in /unban for chat {chat.id}: {e}")
+        await update.message.reply_text("Mrow? Couldn't verify my own permissions in this chat.")
         return
         
     is_caller_privileged_for_bot = is_privileged_user(user_who_unbans.id)
-
     if not is_caller_privileged_for_bot:
         try:
             actor_chat_member = await context.bot.get_chat_member(chat.id, user_who_unbans.id)
             if not (actor_chat_member.status in ["administrator", "creator"] and \
                     getattr(actor_chat_member, 'can_restrict_members', False)):
-                await update.message.reply_text("Meeeow! You need to be an admin with rights to unban users in this chat, or a bot sudo user.")
+                await update.message.reply_text("Meeeow! You need to be an admin with rights to unban users in this chat, or a bot privileged user.")
                 return
         except TelegramError as e:
             logger.warning(f"Could not get chat member info for unban executor {user_who_unbans.id} in {chat.id}: {e}")
@@ -1987,7 +1984,7 @@ async def unban_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             if not target_user:
                 try: 
                     chat_info = await context.bot.get_chat(target_arg)
-                    if chat_info.type == ChatType.PRIVATE: target_user = User(id=chat_info.id, first_name=chat_info.first_name or "",is_bot=False,username=chat_info.username)
+                    if chat_info.type == ChatType.PRIVATE: target_user = User(id=chat_info.id, first_name=chat_info.first_name or "",is_bot=getattr(chat_info, 'is_bot', False),username=chat_info.username, last_name=chat_info.last_name)
                 except: pass
             if not target_user: await update.message.reply_text(f"User @{html.escape(username_to_find)} not found."); return
         else:
@@ -1995,30 +1992,26 @@ async def unban_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
                 target_id = int(target_arg)
                 try:
                     chat_info = await context.bot.get_chat(target_id)
-                    if chat_info.type == ChatType.PRIVATE: target_user = User(id=chat_info.id, first_name=chat_info.first_name or f"User {target_id}", is_bot=getattr(chat_info, 'is_bot',False), username=chat_info.username)
-                    else: target_user = User(id=target_id, first_name=f"User {target_id}", is_bot=False) # Fallback
-                except: target_user = User(id=target_id, first_name=f"User {target_id}", is_bot=False) # Fallback
+                    if chat_info.type == ChatType.PRIVATE: target_user = User(id=chat_info.id, first_name=chat_info.first_name or f"User {target_id}", is_bot=getattr(chat_info, 'is_bot',False), username=chat_info.username, last_name=chat_info.last_name)
+                    else: target_user = User(id=target_id, first_name=f"User {target_id}", is_bot=False)
+                except: target_user = User(id=target_id, first_name=f"User {target_id}", is_bot=False)
             except ValueError: await update.message.reply_text("Invalid user ID."); return
     else:
         await update.message.reply_text("Usage: /unban <ID/@username/reply>")
         return
 
     if not target_user: await update.message.reply_text("Could not identify user to unban."); return
+    if not isinstance(target_user, User): await update.message.reply_text("Unban can only be applied to users."); return
     
     try:
         await context.bot.unban_chat_member(chat_id=chat.id, user_id=target_user.id, only_if_banned=True)
         remove_restriction_from_db(chat.id, target_user.id, "ban")
         user_display_name = target_user.mention_html() if target_user.username else html.escape(target_user.first_name or str(target_user.id))
-        response_lines = [
-            "Meow! User Unbanned:",
-            f"<b>• User:</b> {user_display_name} (<code>{target_user.id}</code>)"
-        ]
+        response_lines = ["Meow! User Unbanned:", f"<b>• User:</b> {user_display_name} (<code>{target_user.id}</code>)"]
         await update.message.reply_html("\n".join(response_lines))
-    except TelegramError as e:
-        await update.message.reply_text(f"Failed to unban user: {e}")
-    except Exception as e:
-        logger.error(f"Unexpected error in /unban: {e}", exc_info=True)
-        await update.message.reply_text("An unexpected error occurred.")
+    except TelegramError as e: await update.message.reply_text(f"Failed to unban user: {html.escape(str(e))}")
+    except Exception as e: logger.error(f"Unexpected error in /unban: {e}", exc_info=True); await update.message.reply_text("An unexpected error occurred.")
+
 
 async def mute_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     chat = update.effective_chat
@@ -2028,13 +2021,17 @@ async def mute_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         await update.message.reply_text("Mrow? Cannot mute users in a private chat.")
         return
 
-    bot_member = await context.bot.get_chat_member(chat.id, context.bot.id)
-    if bot_member.status != ChatMemberStatus.ADMINISTRATOR or not getattr(bot_member, 'can_restrict_members', False):
-        await update.message.reply_text("Meeeow! I need to be an admin with rights to restrict users in this chat. 😿")
+    try:
+        bot_member = await context.bot.get_chat_member(chat.id, context.bot.id)
+        if not (bot_member.status == ChatMemberStatus.ADMINISTRATOR and getattr(bot_member, 'can_restrict_members', False)):
+            await update.message.reply_text("Meeeow! I need to be an admin with rights to restrict users in this chat. 😿")
+            return
+    except TelegramError as e:
+        logger.error(f"Error checking bot's own permissions in /mute for chat {chat.id}: {e}")
+        await update.message.reply_text("Mrow? Couldn't verify my own permissions in this chat.")
         return
         
     is_caller_privileged_for_bot = is_privileged_user(user_who_mutes.id)
-    actor_chat_member = None
     if not is_caller_privileged_for_bot:
         try:
             actor_chat_member = await context.bot.get_chat_member(chat.id, user_who_mutes.id)
@@ -2049,32 +2046,22 @@ async def mute_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
     target_user: User | None = None
     duration_str: str | None = None
+    reason_list: list[str] = []
     reason: str = "No reason provided."
+    args_to_parse_for_duration_reason = list(context.args)
 
     if update.message.reply_to_message:
         target_user = update.message.reply_to_message.from_user
-        if context.args:
-            potential_duration_td = parse_duration_to_timedelta(context.args[0])
-            if potential_duration_td:
-                duration_str = context.args[0]
-                if len(context.args) > 1: reason = " ".join(context.args[1:])
-            else:
-                reason = " ".join(context.args) if context.args else reason
     elif context.args:
-        target_arg, parsed_duration_str, parsed_reason = await _parse_mod_command_args(list(context.args))
-        if not target_arg:
-            await update.message.reply_text("Usage: /mute <ID/@username/reply> [duration] [reason]")
-            return
-        duration_str = parsed_duration_str
-        if parsed_reason: reason = parsed_reason
-        
+        target_arg = context.args[0]
+        args_to_parse_for_duration_reason = list(context.args[1:])
         if target_arg.startswith("@"):
             username_to_find = target_arg[1:]
             target_user = get_user_from_db_by_username(username_to_find)
             if not target_user:
                 try: 
                     chat_info = await context.bot.get_chat(target_arg)
-                    if chat_info.type == ChatType.PRIVATE: target_user = User(id=chat_info.id, first_name=chat_info.first_name or "",is_bot=False,username=chat_info.username, last_name=chat_info.last_name)
+                    if chat_info.type == ChatType.PRIVATE: target_user = User(id=chat_info.id, first_name=chat_info.first_name or "",is_bot=getattr(chat_info, 'is_bot',False),username=chat_info.username, last_name=chat_info.last_name)
                 except: pass
             if not target_user: await update.message.reply_text(f"User @{html.escape(username_to_find)} not found."); return
         else:
@@ -2090,40 +2077,34 @@ async def mute_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         await update.message.reply_text("Usage: /mute <ID/@username/reply> [duration] [reason]")
         return
 
+    if args_to_parse_for_duration_reason:
+        potential_duration_td = parse_duration_to_timedelta(args_to_parse_for_duration_reason[0])
+        if potential_duration_td:
+            duration_str = args_to_parse_for_duration_reason[0]
+            if len(args_to_parse_for_duration_reason) > 1: reason_list = args_to_parse_for_duration_reason[1:]
+        else:
+            reason_list = args_to_parse_for_duration_reason
+        if reason_list: reason = " ".join(reason_list)
+
     if not target_user: await update.message.reply_text("Could not identify user to mute."); return
     if not isinstance(target_user, User): await update.message.reply_text("Mute can only be applied to users."); return
     if target_user.id == OWNER_ID: await update.message.reply_text("Cannot mute the Owner! 😼"); return
     if target_user.id == context.bot.id: await update.message.reply_text("I can't mute myself!"); return
     if target_user.id == user_who_mutes.id: await update.message.reply_text("Mrow? You can't mute yourself."); return
-
-    target_member_status = None
-    if actor_chat_member is None and not is_caller_privileged_for_bot:
-        try: actor_chat_member = await context.bot.get_chat_member(chat.id, user_who_mutes.id)
-        except: pass
-
+    
     try:
-        target_member = await context.bot.get_chat_member(chat.id, target_user.id)
-        target_member_status = target_member.status
+        target_chat_member = await context.bot.get_chat_member(chat.id, target_user.id)
+        if target_chat_member.status == "creator":
+            await update.message.reply_text("Meeeow! The chat Creator is sacred and cannot be muted by this bot! 😼👑")
+            return
     except TelegramError as e:
         if "user not found" in str(e).lower():
-            await update.message.reply_text(f"User {target_user.mention_html()} is not a member of this chat, cannot mute.")
+            await update.message.reply_text(f"User {target_user.mention_html()} is not in this chat, cannot be muted.")
             return
-        logger.warning(f"Could not get target member status for mute: {e}")
-
-
-    if target_member_status in ["administrator", "creator"] and \
-       (not is_caller_privileged_for_bot or (is_caller_privileged_for_bot and user_who_mutes.id != OWNER_ID)) and \
-       (actor_chat_member and not actor_chat_member.status == "creator"):
-         await update.message.reply_text("Meeeow! You cannot mute another administrator or the chat creator unless you are the chat creator or bot owner.")
-         return
+        logger.warning(f"Could not get target's chat member status for /mute: {e}")
 
     duration_td = parse_duration_to_timedelta(duration_str)
-    permissions_to_set_for_mute = ChatPermissions(
-        can_send_messages=False, can_send_audios=False, can_send_documents=False,
-        can_send_photos=False, can_send_videos=False, can_send_video_notes=False,
-        can_send_voice_notes=False, can_send_polls=False, can_send_other_messages=False,
-        can_add_web_page_previews=False
-    )
+    permissions_to_set_for_mute = ChatPermissions(can_send_messages=False, can_send_audios=False, can_send_documents=False, can_send_photos=False, can_send_videos=False, can_send_video_notes=False, can_send_voice_notes=False, can_send_polls=False, can_send_other_messages=False, can_add_web_page_previews=False)
     until_date_timestamp_iso: str | None = None
     until_date_dt: datetime | None = None
     time_str_display = "permanently"
@@ -2138,22 +2119,14 @@ async def mute_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         add_restriction_to_db(chat.id, target_user.id, "mute", user_who_mutes.id, until_date_timestamp_iso, reason)
         user_display_name = target_user.mention_html() if target_user.username else html.escape(target_user.first_name or str(target_user.id))
         
-        response_lines = [
-            "Meow! User Muted:",
-            f"<b>• User:</b> {user_display_name} (<code>{target_user.id}</code>)",
-            f"<b>• Reason:</b> {html.escape(reason)}",
-        ]
-        if duration_str:
-            response_lines.append(f"<b>• Duration:</b> <code>{time_str_display.replace('for ', '')}</code> (until <code>{until_date_dt.strftime('%Y-%m-%d %H:%M:%S %Z') if until_date_dt else 'Permanent'}</code>)")
-        else:
-            response_lines.append(f"<b>• Duration:</b> <code>Permanent</code>")
-
+        response_lines = ["Meow! User Muted:"]
+        response_lines.append(f"<b>• User:</b> {user_display_name} (<code>{target_user.id}</code>)")
+        response_lines.append(f"<b>• Reason:</b> {html.escape(reason)}")
+        if duration_str: response_lines.append(f"<b>• Duration:</b> <code>{time_str_display.replace('for ', '')}</code> (until <code>{until_date_dt.strftime('%Y-%m-%d %H:%M:%S %Z') if until_date_dt else 'Permanent'}</code>)")
+        else: response_lines.append(f"<b>• Duration:</b> <code>Permanent</code>")
         await update.message.reply_html("\n".join(response_lines))
-    except TelegramError as e:
-        await update.message.reply_text(f"Failed to mute user: {e}")
-    except Exception as e:
-        logger.error(f"Unexpected error in /mute: {e}", exc_info=True)
-        await update.message.reply_text("An unexpected error occurred.")
+    except TelegramError as e: await update.message.reply_text(f"Failed to mute user: {html.escape(str(e))}")
+    except Exception as e: logger.error(f"Unexpected error in /mute: {e}", exc_info=True); await update.message.reply_text("An unexpected error occurred.")
 
 
 async def unmute_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -2164,13 +2137,17 @@ async def unmute_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await update.message.reply_text("Mrow? Cannot unmute users in a private chat.")
         return
 
-    bot_member = await context.bot.get_chat_member(chat.id, context.bot.id)
-    if bot_member.status != ChatMemberStatus.ADMINISTRATOR or not getattr(bot_member, 'can_restrict_members', False):
-        await update.message.reply_text("Meeeow! I need to be an admin with rights to change user permissions in this chat. 😿")
+    try:
+        bot_member = await context.bot.get_chat_member(chat.id, context.bot.id)
+        if not (bot_member.status == ChatMemberStatus.ADMINISTRATOR and getattr(bot_member, 'can_restrict_members', False)):
+            await update.message.reply_text("Meeeow! I need to be an admin with rights to change user permissions in this chat. 😿")
+            return
+    except TelegramError as e:
+        logger.error(f"Error checking bot's own permissions in /unmute for chat {chat.id}: {e}")
+        await update.message.reply_text("Mrow? Couldn't verify my own permissions in this chat.")
         return
         
     is_caller_privileged_for_bot = is_privileged_user(user_who_unmutes.id)
-
     if not is_caller_privileged_for_bot:
         try:
             actor_chat_member = await context.bot.get_chat_member(chat.id, user_who_unmutes.id)
@@ -2194,7 +2171,7 @@ async def unmute_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             if not target_user:
                 try: 
                     chat_info = await context.bot.get_chat(target_arg)
-                    if chat_info.type == ChatType.PRIVATE: target_user = User(id=chat_info.id, first_name=chat_info.first_name or "",is_bot=False,username=chat_info.username, last_name=chat_info.last_name)
+                    if chat_info.type == ChatType.PRIVATE: target_user = User(id=chat_info.id, first_name=chat_info.first_name or "",is_bot=getattr(chat_info, 'is_bot',False),username=chat_info.username, last_name=chat_info.last_name)
                 except: pass
             if not target_user: await update.message.reply_text(f"User @{html.escape(username_to_find)} not found."); return
         else:
@@ -2225,16 +2202,11 @@ async def unmute_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await context.bot.restrict_chat_member(chat_id=chat.id, user_id=target_user.id, permissions=permissions_to_restore, until_date=0)
         remove_restriction_from_db(chat.id, target_user.id, "mute")
         user_display_name = target_user.mention_html() if target_user.username else html.escape(target_user.first_name or str(target_user.id))
-        response_lines = [
-            "Meow! User Unmuted:",
-            f"<b>• User:</b> {user_display_name} (<code>{target_user.id}</code>)"
-        ]
+        response_lines = ["Meow! User Unmuted:", f"<b>• User:</b> {user_display_name} (<code>{target_user.id}</code>)"]
         await update.message.reply_html("\n".join(response_lines))
-    except TelegramError as e:
-        await update.message.reply_text(f"Failed to unmute user: {e}")
-    except Exception as e:
-        logger.error(f"Unexpected error in /unmute: {e}", exc_info=True)
-        await update.message.reply_text("An unexpected error occurred.")
+    except TelegramError as e: await update.message.reply_text(f"Failed to unmute user: {html.escape(str(e))}")
+    except Exception as e: logger.error(f"Unexpected error in /unmute: {e}", exc_info=True); await update.message.reply_text("An unexpected error occurred.")
+
 
 async def kick_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     chat = update.effective_chat
@@ -2244,19 +2216,23 @@ async def kick_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         await update.message.reply_text("Mrow? Cannot kick users from a private chat.")
         return
 
-    bot_member = await context.bot.get_chat_member(chat.id, context.bot.id)
-    if bot_member.status != ChatMemberStatus.ADMINISTRATOR or not bot_member.can_restrict_members:
-        await update.message.reply_text("Meeeow! I need to be an admin with rights to ban users in this chat. 😿")
+    try:
+        bot_member = await context.bot.get_chat_member(chat.id, context.bot.id)
+        if not (bot_member.status == ChatMemberStatus.ADMINISTRATOR and getattr(bot_member, 'can_restrict_members', False)):
+            await update.message.reply_text("Meeeow! I need to be an admin with rights to ban/kick users in this chat. 😿")
+            return
+    except TelegramError as e:
+        logger.error(f"Error checking bot's own permissions in /kick for chat {chat.id}: {e}")
+        await update.message.reply_text("Mrow? Couldn't verify my own permissions in this chat.")
         return
         
     is_caller_privileged_for_bot = is_privileged_user(user_who_kicks.id)
-
     if not is_caller_privileged_for_bot:
         try:
             actor_chat_member = await context.bot.get_chat_member(chat.id, user_who_kicks.id)
             if not (actor_chat_member.status in ["administrator", "creator"] and \
                     getattr(actor_chat_member, 'can_restrict_members', False)):
-                await update.message.reply_text("Meeeow! You need to be an admin with rights to ban users in this chat (for kicking), or a bot sudo user.")
+                await update.message.reply_text("Meeeow! You need to be an admin with rights to ban/kick users in this chat, or a bot privileged user.")
                 return
         except TelegramError as e:
             logger.warning(f"Could not get chat member info for kick executor {user_who_kicks.id} in {chat.id}: {e}")
@@ -2264,20 +2240,23 @@ async def kick_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             return
 
     target_user: User | None = None
+    reason_list: list[str] = []
     reason: str = "No reason provided."
+    args_to_parse_for_reason = list(context.args)
 
     if update.message.reply_to_message:
         target_user = update.message.reply_to_message.from_user
-        if context.args: reason = " ".join(context.args)
+        if context.args: reason_list = list(context.args)
     elif context.args:
         target_arg = context.args[0]
+        args_to_parse_for_reason = list(context.args[1:])
         if target_arg.startswith("@"):
             username_to_find = target_arg[1:]
             target_user = get_user_from_db_by_username(username_to_find)
             if not target_user:
                 try: 
                     chat_info = await context.bot.get_chat(target_arg)
-                    if chat_info.type == ChatType.PRIVATE: target_user = User(id=chat_info.id, first_name=chat_info.first_name or "",is_bot=False,username=chat_info.username)
+                    if chat_info.type == ChatType.PRIVATE: target_user = User(id=chat_info.id, first_name=chat_info.first_name or "",is_bot=getattr(chat_info, 'is_bot', False),username=chat_info.username, last_name=chat_info.last_name)
                 except: pass
             if not target_user: await update.message.reply_text(f"User @{html.escape(username_to_find)} not found."); return
         else:
@@ -2285,48 +2264,42 @@ async def kick_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                 target_id = int(target_arg)
                 try:
                     chat_info = await context.bot.get_chat(target_id)
-                    if chat_info.type == ChatType.PRIVATE: target_user = User(id=chat_info.id, first_name=chat_info.first_name or f"User {target_id}", is_bot=getattr(chat_info, 'is_bot',False), username=chat_info.username)
+                    if chat_info.type == ChatType.PRIVATE: target_user = User(id=chat_info.id, first_name=chat_info.first_name or f"User {target_id}", is_bot=getattr(chat_info, 'is_bot',False), username=chat_info.username, last_name=chat_info.last_name)
                     else: await update.message.reply_text("Target ID does not seem to be a user."); return
                 except: target_user = User(id=target_id, first_name=f"User {target_id}", is_bot=False)
             except ValueError: await update.message.reply_text("Invalid user ID."); return
-        if len(context.args) > 1: reason = " ".join(context.args[1:])
     else:
         await update.message.reply_text("Usage: /kick <ID/@username/reply> [reason]")
         return
 
+    if args_to_parse_for_reason: reason = " ".join(args_to_parse_for_reason)
+
     if not target_user: await update.message.reply_text("Could not identify user to kick."); return
+    if not isinstance(target_user, User): await update.message.reply_text("Kick can only be applied to users."); return
     if target_user.id == OWNER_ID: await update.message.reply_text("Cannot kick the Owner! 😼"); return
     if target_user.id == context.bot.id: await update.message.reply_text("I can't kick myself!"); return
     if target_user.id == user_who_kicks.id: await update.message.reply_text("Mrow? You can't kick yourself."); return
     
-    target_member_status = None
     try:
-        target_member = await context.bot.get_chat_member(chat.id, target_user.id)
-        target_member_status = target_member.status
-    except: pass
-
-    if target_member_status in ["administrator", "creator"] and \
-       user_who_kicks.id != OWNER_ID and \
-       (actor_chat_member and not actor_chat_member.status == "creator"):
-         await update.message.reply_text("Meeeow! You cannot kick another administrator or the chat creator unless you are the creator.")
-         return
-
+        target_chat_member = await context.bot.get_chat_member(chat.id, target_user.id)
+        if target_chat_member.status == "creator":
+            await update.message.reply_text("Meeeow! The chat Creator is sacred and cannot be kicked by this bot! 😼👑")
+            return
+    except TelegramError as e:
+        if "user not found" in str(e).lower():
+             await update.message.reply_text(f"User {target_user.mention_html()} is not in this chat, cannot be kicked.")
+             return
+        logger.warning(f"Could not get target's chat member status for /kick: {e}")
+    
     try:
-        await context.bot.ban_chat_member(chat_id=chat.id, user_id=target_user.id) # Ban
-        await context.bot.unban_chat_member(chat_id=chat.id, user_id=target_user.id, only_if_banned=True) # Immediately unban
+        await context.bot.ban_chat_member(chat_id=chat.id, user_id=target_user.id)
+        await context.bot.unban_chat_member(chat_id=chat.id, user_id=target_user.id, only_if_banned=True)
         
         user_display_name = target_user.mention_html() if target_user.username else html.escape(target_user.first_name or str(target_user.id))
-        response_lines = [
-            "Meow! User Kicked:",
-            f"<b>• User:</b> {user_display_name} (<code>{target_user.id}</code>)",
-            f"<b>• Reason:</b> {html.escape(reason)}",
-        ]
+        response_lines = ["Meow! User Kicked:", f"<b>• User:</b> {user_display_name} (<code>{target_user.id}</code>)", f"<b>• Reason:</b> {html.escape(reason)}"]
         await update.message.reply_html("\n".join(response_lines))
-    except TelegramError as e:
-        await update.message.reply_text(f"Failed to kick user: {e}")
-    except Exception as e:
-        logger.error(f"Unexpected error in /kick: {e}", exc_info=True)
-        await update.message.reply_text("An unexpected error occurred.")
+    except TelegramError as e: await update.message.reply_text(f"Failed to kick user: {html.escape(str(e))}")
+    except Exception as e: logger.error(f"Unexpected error in /kick: {e}", exc_info=True); await update.message.reply_text("An unexpected error occurred.")
         
 # --- Simple Text Command Definitions ---
 async def send_random_text(update: Update, context: ContextTypes.DEFAULT_TYPE, text_list: list[str], list_name: str) -> None:
