@@ -20,6 +20,7 @@ from telegram import Update, User, Chat, constants
 from telegram.constants import ChatType, ParseMode, ChatMemberStatus
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, ApplicationHandlerStop
 from telegram.error import TelegramError
+from telegram.request import HTTPXRequest
 from datetime import datetime, timezone, timedelta
 
 # --- Logging Configuration ---
@@ -2958,6 +2959,15 @@ def main() -> None:
     init_db()
     logger.info("Initializing bot application...")
     application = Application.builder().token(BOT_TOKEN).build()
+
+    custom_request_settings = HTTPXRequest(
+        connect_timeout=10.0,
+        read_timeout=60.0,
+        write_timeout=60.0,
+        pool_timeout=10.0
+    )
+    application = Application.builder().token(BOT_TOKEN).request(custom_request_settings).build()
+    logger.info(f"Custom request timeouts set: read={custom_request_settings.read_timeout}, write={custom_request_settings.write_timeout}")
 
     logger.info("Registering blacklist check handler...")
     application.add_handler(MessageHandler(filters.COMMAND, check_blacklist_handler), group=-1)
