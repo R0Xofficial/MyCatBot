@@ -1,7 +1,11 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-# --- MyCatBot ---
+# --- MyCatBot [Development] ---
+# This is the development environment where the bot code is created.
+# This code is in active development.
+# It may contain bugs, unfinished features, or not work at all.
+# Use for testing and development only!
 
 import logging
 import random
@@ -9,6 +13,8 @@ import os
 import requests
 import html
 import sqlite3
+import speedtest
+import asyncio
 from typing import List, Tuple
 from telegram import Update, User, Chat, constants
 from telegram.constants import ChatType, ParseMode, ChatMemberStatus
@@ -1410,12 +1416,17 @@ async def get_themed_gif(context: ContextTypes.DEFAULT_TYPE, search_terms: list[
 HELP_TEXT = """
 <b>Meeeow! 🐾 Here are the commands you can use:</b>
 
+<b>Bot Commands:</b>
 /start - Shows the welcome message. ✨
 /help - Shows this help message. ❓
 /github - Get the link to my source code! 💻
 /owner - Info about my designated human! ❤️
+
+<b>Management Commands:</b>
 /info [ID/reply/@user] - Get info about a user. 👤
 /chatstat - Get basic stats about the current chat. 📈
+
+<b>4FUN Commands:</b>
 /gif - Get a random cat GIF! 🖼️
 /photo - Get a random cat photo! 📷
 /meow - Get a random cat sound or phrase. 🔊
@@ -1822,33 +1833,61 @@ async def photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
     if not is_privileged_user(user.id):
-        logger.warning(f"Unauthorized /status attempt by user {user.id}.")
+        logger.warning(f"Unauthorized /status attempt by user {user.id}. Silently ignoring.")
         return
 
-    ping_ms_str = "N/A"
-    if update.message and update.message.date:
-        try:
-            now_utc = datetime.now(timezone.utc)
-            msg_utc = update.message.date.astimezone(timezone.utc)
-            delta_ping = now_utc - msg_utc
-            ping_ms = int(delta_ping.total_seconds() * 1000)
-            if 0 <= ping_ms < 60000:
-                ping_ms_str = f"{ping_ms} ms"
-            else:
-                ping_ms_str = f"~{ping_ms} ms (?)"
-        except Exception as e:
-            logger.error(f"Error calculating ping: {e}")
-            ping_ms_str = "Error"
-    
     uptime_delta = datetime.now() - BOT_START_TIME 
     readable_uptime = get_readable_time_delta(uptime_delta)
-    status_msg = (
-        f"<b>Purrrr! Bot Status:</b> ✨\n"
-        f"<b>• Uptime:</b> {readable_uptime} 🕰️\n"
-        f"<b>• Ping:</b> {ping_ms_str} 📶\n"
-        f"<b>• Owner ID:</b> <code>{OWNER_ID}</code> 👑\n"
-        f"<b>• Status:</b> Ready & Purring! 🐾"
-    )
+
+    known_users_count = "N/A"
+    blacklisted_count = "N/A"
+    sudo_users_count = "N/A"
+
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_NAME)
+        cursor = conn.cursor()
+        
+        cursor.execute("SELECT COUNT(*) FROM users")
+        count_result_users = cursor.fetchone()
+        if count_result_users:
+            known_users_count = str(count_result_users[0])
+
+        cursor.execute("SELECT COUNT(*) FROM blacklist")
+        count_result_blacklist = cursor.fetchone()
+        if count_result_blacklist:
+            blacklisted_count = str(count_result_blacklist[0])
+            
+        cursor.execute("SELECT COUNT(*) FROM sudo_users")
+        count_result_sudo = cursor.fetchone()
+        if count_result_sudo:
+            sudo_users_count = str(count_result_sudo[0])
+            
+    except sqlite3.Error as e:
+        logger.error(f"SQLite error fetching counts for /status: {e}", exc_info=True)
+        known_users_count = "DB Error"
+        blacklisted_count = "DB Error"
+        sudo_users_count = "DB Error"
+    except Exception as e:
+        logger.error(f"Unexpected error fetching counts for /status: {e}", exc_info=True)
+        known_users_count = "Error"
+        blacklisted_count = "Error"
+        sudo_users_count = "Error"
+    finally:
+        if conn:
+            conn.close()
+
+    status_lines = [
+        "<b>Purrrr! Bot Status:</b> ✨\n",
+        f"<b>• State:</b> Ready & Purring! 🐾",
+        f"<b>• Last Nap:</b> <code>{readable_uptime}</code> ago 😴\n",
+        "<b>📊 Database Stats:</b>",
+        f"  <b>• 👀 Known Users:</b> <code>{known_users_count}</code>",
+        f"  <b>• 🛡 Sudo Users:</b> <code>{sudo_users_count}</code>",
+        f"  <b>• 🚫 Blacklisted Users:</b> <code>{blacklisted_count}</code>"
+    ]
+
+    status_msg = "\n".join(status_lines)
     await update.message.reply_html(status_msg)
 
 async def say(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -2190,6 +2229,103 @@ async def chat_info_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
     message_text = "\n".join(info_lines)
     await update.message.reply_html(message_text, disable_web_page_preview=True)
+
+def run_speed_test_blocking():
+    try:
+        logger.info("Starting blocking speed test...")
+        s = speedtest.Speedtest()
+        s.get_best_server()
+        logger.info("Getting download speed...")
+        s.download()
+        logger.info("Getting upload speed...")
+        s.upload()
+        results_dict = s.results.dict()
+        logger.info("Speed test finished successfully (blocking part).")
+        return results_dict
+    except speedtest.ConfigRetrievalError as e:
+        logger.error(f"Speedtest config retrieval error: {e}")
+        return {"error": f"Config retrieval error: {str(e)}"}
+    except speedtest.NoMatchedServers as e:
+        logger.error(f"Speedtest no matched servers: {e}")
+        return {"error": f"No suitable test servers found: {str(e)}"}
+    except Exception as e:
+        logger.error(f"General error during blocking speedtest function: {e}", exc_info=True)
+        return {"error": f"A general error occurred during test: {type(e).__name__}"}
+
+async def speedtest_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    user = update.effective_user
+    if user.id != OWNER_ID:
+        logger.warning(f"Unauthorized /speedtest attempt by user {user.id}.")
+        return
+
+    message = await update.message.reply_text("Meeeow! Starting speed test... this might take a moment 🐾💨")
+    
+    loop = asyncio.get_event_loop()
+    try:
+        results = await loop.run_in_executor(None, run_speed_test_blocking)
+
+        if results and "error" not in results:
+            ping_val = results.get("ping", 0.0)
+            download_bps = results.get("download", 0)
+            upload_bps = results.get("upload", 0)
+            
+            download_mbps_val = download_bps / 1000 / 1000
+            upload_mbps_val = upload_bps / 1000 / 1000
+
+            bytes_sent_val = results.get("bytes_sent", 0)
+            bytes_received_val = results.get("bytes_received", 0)
+            data_sent_mb_val = bytes_sent_val / 1024 / 1024
+            data_received_mb_val = bytes_received_val / 1024 / 1024
+            
+            timestamp_str_val = results.get("timestamp", "N/A")
+            formatted_time_val = "N/A"
+            if timestamp_str_val != "N/A":
+                try:
+                    dt_obj = datetime.fromisoformat(timestamp_str_val.replace("Z", "+00:00"))
+                    formatted_time_val = dt_obj.strftime('%Y-%m-%d %H:%M:%S %Z') 
+                except ValueError:
+                    formatted_time_val = html.escape(timestamp_str_val)
+
+            server_info_dict = results.get("server", {})
+            server_name_val = server_info_dict.get("name", "N/A")
+            server_country_val = server_info_dict.get("country", "N/A")
+            server_cc_val = server_info_dict.get("cc", "N/A")
+            server_sponsor_val = server_info_dict.get("sponsor", "N/A")
+            server_lat_val = server_info_dict.get("lat", "N/A")
+            server_lon_val = server_info_dict.get("lon", "N/A")
+
+            info_lines = [
+                "<b>🌐 Ookla SPEEDTEST:</b>\n",
+                "<b>📊 RESULTS:</b>",
+                f"  <b>• 📤 Upload:</b> <code>{upload_mbps_val:.2f} Mbps</code>",
+                f"  <b>• 📥 Download:</b> <code>{download_mbps_val:.2f} Mbps</code>",
+                f"  <b>• ⏳️ Ping:</b> <code>{ping_val:.2f} ms</code>",
+                f"  <b>• 🕒 Time:</b> <code>{formatted_time_val}</code>",
+                f"  <b>• 📨 Data Sent:</b> <code>{data_sent_mb_val:.2f} MB</code>",
+                f"  <b>• 📩 Data Received:</b> <code>{data_received_mb_val:.2f} MB</code>\n",
+                "<b>🖥 SERVER INFO:</b>",
+                f"  <b>• 🪪 Name:</b> <code>{html.escape(server_name_val)}</code>",
+                f"  <b>• 🌍 Country:</b> <code>{html.escape(server_country_val)} ({html.escape(server_cc_val)})</code>",
+                f"  <b>• 🛠 Sponsor:</b> <code>{html.escape(server_sponsor_val)}</code>",
+                f"  <b>• 🧭 Latitude:</b> <code>{server_lat_val}</code>",
+                f"  <b>• 🧭 Longitude:</b> <code>{server_lon_val}</code>"
+            ]
+            
+            result_message = "\n".join(info_lines)
+            await context.bot.edit_message_text(chat_id=message.chat_id, message_id=message.message_id, text=result_message, parse_mode=ParseMode.HTML)
+        
+        elif results and "error" in results:
+            error_msg = results["error"]
+            await context.bot.edit_message_text(chat_id=message.chat_id, message_id=message.message_id, text=f"😿 Mrow! Speed test failed: {html.escape(error_msg)}")
+        else:
+            await context.bot.edit_message_text(chat_id=message.chat_id, message_id=message.message_id, text="😿 Mrow! Speed test failed to return results or returned an unexpected format.")
+
+    except Exception as e:
+        logger.error(f"Error in speedtest_command outer try-except: {e}", exc_info=True)
+        try:
+            await context.bot.edit_message_text(chat_id=message.chat_id, message_id=message.message_id, text=f"💥 An unexpected error occurred during the speed test: {html.escape(str(e))}")
+        except Exception:
+            pass
     
 async def leave_chat(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
@@ -2863,13 +2999,42 @@ def main() -> None:
     application.add_handler(CommandHandler("status", status))
     application.add_handler(CommandHandler("say", say))
     application.add_handler(CommandHandler("leave", leave_chat))
+    application.add_handler(CommandHandler("speedtest", speedtest_command))
     application.add_handler(CommandHandler("blist", blacklist_user_command))
     application.add_handler(CommandHandler("unblist", unblacklist_user_command))
     application.add_handler(CommandHandler("addsudo", add_sudo_command))
     application.add_handler(CommandHandler("delsudo", del_sudo_command))
+    application.add_handler(CommandHandler("update", update_bot_command))
 
     logger.info("Registering message handlers for group joins...")
     application.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS & filters.ChatType.GROUPS, handle_new_group_members))
+
+    async def send_simple_startup_message(app: Application) -> None:
+        startup_message_text = "<i>Bot Started...</i>"
+        
+        target_id_for_log = LOG_CHAT_ID
+        if not target_id_for_log and OWNER_ID:
+            target_id_for_log = OWNER_ID
+        
+        if target_id_for_log:
+            try:
+                await app.bot.send_message(chat_id=target_id_for_log, text=startup_message_text, parse_mode=ParseMode.HTML)
+                logger.info(f"Sent simple startup notification to {target_id_for_log}.")
+            except TelegramError as e:
+                logger.error(f"Failed to send simple startup message to {target_id_for_log}: {e}")
+                if LOG_CHAT_ID and target_id_for_log == LOG_CHAT_ID and OWNER_ID and LOG_CHAT_ID != OWNER_ID:
+                    logger.info("Falling back to send simple startup message to OWNER_ID.")
+                    try:
+                        await app.bot.send_message(chat_id=OWNER_ID, text=f"[Fallback] {startup_message_text}", parse_mode=ParseMode.HTML)
+                    except Exception as e_owner:
+                         logger.error(f"Failed to send simple startup message to OWNER_ID as fallback: {e_owner}")
+            except Exception as e_other:
+                logger.error(f"Unexpected error sending simple startup message to {target_id_for_log}: {e_other}", exc_info=True)
+
+        else:
+            logger.warning("No target (LOG_CHAT_ID or OWNER_ID) to send simple startup message.")
+
+    application.post_init = send_simple_startup_message
 
     logger.info(f"Bot starting polling... Owner ID configured: {OWNER_ID}")
     print(f"Bot starting polling... Owner ID: {OWNER_ID}")
