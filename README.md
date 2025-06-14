@@ -97,6 +97,8 @@ If you want run test bot version use command:
 
 /speedtest - Perform an internet speed test.
 
+/listsudo - List all users with sudo privileges.
+
 /addsudo [ID/reply/@user] - Grants SUDO (bot admin) permissions to a user.
 
 /delsudo [ID/reply/@user] - Revokes SUDO (bot admin) permissions from a user.
