@@ -9,7 +9,7 @@ Meet **MyCatbot**, the playful and quirky cat-themed Telegram bot that will make
 - **Random Cat Responses**: Get hilarious and random responses, just like your real-life furry friend would give.
 - **Cat-Like Actions**: Watch the bot act like a cat, from zoomies to pouncing and cuddles.
 - **Simple and Fun Commands**: Easy-to-use commands for everyone, whether you're looking to chat or just have a laugh.
-- **Owner Commands**: Exclusive commands for the bot's owner to manage things and keep the cat-spiracy under control.
+- **Owner & SUDO Commands**: Exclusive commands to manage things and keep the cat-spiracy under control.
 
 ## How to run
 
@@ -33,7 +33,7 @@ If you want run test bot version use command:
 
 **cd ~/catbot && . ./env.sh && python catbot_test.py**
 
-## Commands
+## User Commands:
 
 /start - Shows the welcome message. ✨
 
@@ -79,16 +79,24 @@ If you want run test bot version use command:
 
 ## (Note: Owner cannot be targeted by attack/kill/punch/slap/bite/hug)
 
-# Owner Only Commands (Hidden):
+# SUDO commands:
 
 /status - Show bot status.
 
-/cinfo [optional_chat_ID] - Get detailed info about the current or specified chat. 📊
+/cinfo [optional_chat_ID] - Get detailed info about the current or specified chat. 
 
 /say [optional_chat_id] [your text] - Send message as bot.
-
-/leave [optional_chat_id] - Make the bot leave a chat.
 
 /blist [ID/reply/@user] [reason] - Add user to blacklist.
 
 /unblist [ID/reply/@user] - Remove user from blacklist.
+
+# Owner Commands:
+
+/leave [optional_chat_id] - Make the bot leave a chat.
+
+/speedtest - Perform an internet speed test.
+
+/addsudo [ID/reply/@user] - Grants SUDO (bot admin) permissions to a user.
+
+/delsudo [ID/reply/@user] - Revokes SUDO (bot admin) permissions from a user.
