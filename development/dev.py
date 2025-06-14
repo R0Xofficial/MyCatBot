@@ -1828,33 +1828,61 @@ async def photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
     if not is_privileged_user(user.id):
-        logger.warning(f"Unauthorized /status attempt by user {user.id}.")
+        logger.warning(f"Unauthorized /status attempt by user {user.id}. Silently ignoring.")
         return
 
-    ping_ms_str = "N/A"
-    if update.message and update.message.date:
-        try:
-            now_utc = datetime.now(timezone.utc)
-            msg_utc = update.message.date.astimezone(timezone.utc)
-            delta_ping = now_utc - msg_utc
-            ping_ms = int(delta_ping.total_seconds() * 1000)
-            if 0 <= ping_ms < 60000:
-                ping_ms_str = f"{ping_ms} ms"
-            else:
-                ping_ms_str = f"~{ping_ms} ms (?)"
-        except Exception as e:
-            logger.error(f"Error calculating ping: {e}")
-            ping_ms_str = "Error"
-    
     uptime_delta = datetime.now() - BOT_START_TIME 
     readable_uptime = get_readable_time_delta(uptime_delta)
-    status_msg = (
-        f"<b>Purrrr! Bot Status:</b> ✨\n"
-        f"<b>• Uptime:</b> {readable_uptime} 🕰️\n"
-        f"<b>• Ping:</b> {ping_ms_str} 📶\n"
-        f"<b>• Owner ID:</b> <code>{OWNER_ID}</code> 👑\n"
-        f"<b>• Status:</b> Ready & Purring! 🐾"
-    )
+
+    known_users_count = "N/A"
+    blacklisted_count = "N/A"
+    sudo_users_count = "N/A"
+
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_NAME)
+        cursor = conn.cursor()
+        
+        cursor.execute("SELECT COUNT(*) FROM users")
+        count_result_users = cursor.fetchone()
+        if count_result_users:
+            known_users_count = str(count_result_users[0])
+
+        cursor.execute("SELECT COUNT(*) FROM blacklist")
+        count_result_blacklist = cursor.fetchone()
+        if count_result_blacklist:
+            blacklisted_count = str(count_result_blacklist[0])
+            
+        cursor.execute("SELECT COUNT(*) FROM sudo_users")
+        count_result_sudo = cursor.fetchone()
+        if count_result_sudo:
+            sudo_users_count = str(count_result_sudo[0])
+            
+    except sqlite3.Error as e:
+        logger.error(f"SQLite error fetching counts for /status: {e}", exc_info=True)
+        known_users_count = "DB Error"
+        blacklisted_count = "DB Error"
+        sudo_users_count = "DB Error"
+    except Exception as e:
+        logger.error(f"Unexpected error fetching counts for /status: {e}", exc_info=True)
+        known_users_count = "Error"
+        blacklisted_count = "Error"
+        sudo_users_count = "Error"
+    finally:
+        if conn:
+            conn.close()
+
+    status_lines = [
+        "<b>Purrrr! Bot Status:</b> ✨\n",
+        f"<b>• Current State:</b> Ready & Purring! 🐾",
+        f"<b>• I haven't napped since:</b> <code>{readable_uptime}</code> ago 😴\n",
+        "<b>Database Stats:</b>",
+        f"  <b>• Known Users:</b> <code>{known_users_count}</code> 🧑‍🤝‍🧑",
+        f"  <b>• Sudo Users:</b> <code>{sudo_users_count}</code> 🛡️",
+        f"  <b>• Blacklisted Users:</b> <code>{blacklisted_count}</code> 🚫"
+    ]
+
+    status_msg = "\n".join(status_lines)
     await update.message.reply_html(status_msg)
 
 async def say(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -2258,26 +2286,24 @@ async def speedtest_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             server_country_val = server_info_dict.get("country", "N/A")
             server_cc_val = server_info_dict.get("cc", "N/A")
             server_sponsor_val = server_info_dict.get("sponsor", "N/A")
-            server_latency_val = server_info_dict.get("latency", ping_val)
             server_lat_val = server_info_dict.get("lat", "N/A")
             server_lon_val = server_info_dict.get("lon", "N/A")
 
             info_lines = [
-                "<b>Ookla SPEEDTEST: 💨</b>\n",
-                "<b>RESULTS:</b>",
-                f"  <b>• Upload:</b> <code>{upload_mbps_val:.2f} Mbps</code>",
-                f"  <b>• Download:</b> <code>{download_mbps_val:.2f} Mbps</code>",
-                f"  <b>• Ping:</b> <code>{ping_val:.2f} ms</code>",
-                f"  <b>• Time:</b> <code>{formatted_time_val}</code>",
-                f"  <b>• Data Sent:</b> <code>{data_sent_mb_val:.2f} MB</code>",
-                f"  <b>• Data Received:</b> <code>{data_received_mb_val:.2f} MB</code>\n",
-                "<b>SERVER INFO:</b>",
-                f"  <b>• Name:</b> <code>{html.escape(server_name_val)}</code>",
-                f"  <b>• Country:</b> <code>{html.escape(server_country_val)} ({html.escape(server_cc_val)})</code>",
-                f"  <b>• Sponsor:</b> <code>{html.escape(server_sponsor_val)}</code>",
-                f"  <b>• Latency:</b> <code>{server_latency_val:.2f} ms</code>" if isinstance(server_latency_val, float) else f"  <b>• Latency:</b> <code>{server_latency_val}</code>",
-                f"  <b>• Latitude:</b> <code>{server_lat_val}</code>",
-                f"  <b>• Longitude:</b> <code>{server_lon_val}</code>"
+                "<b>💨 Ookla SPEEDTEST: 💨</b>\n",
+                "<b>📊 RESULTS:</b>",
+                f"  <b>• 📤 Upload:</b> <code>{upload_mbps_val:.2f} Mbps</code>",
+                f"  <b>• 📥 Download:</b> <code>{download_mbps_val:.2f} Mbps</code>",
+                f"  <b>• ⏳️ Ping:</b> <code>{ping_val:.2f} ms</code>",
+                f"  <b>• 🕒 Time:</b> <code>{formatted_time_val}</code>",
+                f"  <b>• 📨 Data Sent:</b> <code>{data_sent_mb_val:.2f} MB</code>",
+                f"  <b>• 📩 Data Received:</b> <code>{data_received_mb_val:.2f} MB</code>\n",
+                "<b>🖥 SERVER INFO:</b>",
+                f"  <b>• 🪪 Name:</b> <code>{html.escape(server_name_val)}</code>",
+                f"  <b>• 🌍 Country:</b> <code>{html.escape(server_country_val)} ({html.escape(server_cc_val)})</code>",
+                f"  <b>• 🛠 Sponsor:</b> <code>{html.escape(server_sponsor_val)}</code>",
+                f"  <b>• 🧭 Latitude:</b> <code>{server_lat_val}</code>",
+                f"  <b>• 🧭 Longitude:</b> <code>{server_lon_val}</code>"
             ]
             
             result_message = "\n".join(info_lines)
