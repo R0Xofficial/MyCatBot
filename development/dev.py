@@ -2960,7 +2960,7 @@ async def update_bot_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
         logger.warning(f"Unauthorized /update attempt by user {user.id}.")
         return
 
-        script_path = os.path.expanduser("~/catbot/scripts/update.sh")
+        script_path = os.path.expanduser("~/catbot/development/scripts/devupdate.sh")
 
     if not os.path.isfile(script_path):
         logger.error(f"Update script not found at: {script_path}")
