@@ -2263,14 +2263,15 @@ async def speedtest_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             server_lon_val = server_info_dict.get("lon", "N/A")
 
             info_lines = [
-                "<b>SPEEDTEST INFO:</b>",
+                "<b>Ookla SPEEDTEST: 💨</b>\n",
+                "<b>RESULTS:</b>",
                 f"  <b>• Upload:</b> <code>{upload_mbps_val:.2f} Mbps</code>",
                 f"  <b>• Download:</b> <code>{download_mbps_val:.2f} Mbps</code>",
                 f"  <b>• Ping:</b> <code>{ping_val:.2f} ms</code>",
                 f"  <b>• Time:</b> <code>{formatted_time_val}</code>",
                 f"  <b>• Data Sent:</b> <code>{data_sent_mb_val:.2f} MB</code>",
                 f"  <b>• Data Received:</b> <code>{data_received_mb_val:.2f} MB</code>\n",
-                "<b>SPEEDTEST SERVER:</b>",
+                "<b>SERVER INFO:</b>",
                 f"  <b>• Name:</b> <code>{html.escape(server_name_val)}</code>",
                 f"  <b>• Country:</b> <code>{html.escape(server_country_val)} ({html.escape(server_cc_val)})</code>",
                 f"  <b>• Sponsor:</b> <code>{html.escape(server_sponsor_val)}</code>",
