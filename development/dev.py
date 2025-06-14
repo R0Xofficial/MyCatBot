@@ -2259,6 +2259,7 @@ async def speedtest_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     loop = asyncio.get_event_loop()
     try:
         results = await loop.run_in_executor(None, run_speed_test_blocking)
+        await asyncio.sleep(4)
 
         if results and "error" not in results:
             ping_val = results.get("ping", 0.0)
