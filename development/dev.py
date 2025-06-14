@@ -14,7 +14,6 @@ import requests
 import html
 import sqlite3
 import speedtest
-import subprocess
 import asyncio
 from typing import List, Tuple
 from telegram import Update, User, Chat, constants
