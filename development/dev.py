@@ -1417,12 +1417,17 @@ async def get_themed_gif(context: ContextTypes.DEFAULT_TYPE, search_terms: list[
 HELP_TEXT = """
 <b>Meeeow! 🐾 Here are the commands you can use:</b>
 
+<b>Bot Commands:</b>
 /start - Shows the welcome message. ✨
 /help - Shows this help message. ❓
 /github - Get the link to my source code! 💻
 /owner - Info about my designated human! ❤️
+
+<b>Management Commands:</b>
 /info [ID/reply/@user] - Get info about a user. 👤
 /chatstat - Get basic stats about the current chat. 📈
+
+<b>4FUN Commands:</b>
 /gif - Get a random cat GIF! 🖼️
 /photo - Get a random cat photo! 📷
 /meow - Get a random cat sound or phrase. 🔊
