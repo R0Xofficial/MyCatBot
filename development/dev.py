@@ -2954,41 +2954,6 @@ async def del_sudo_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     else:
         await update.message.reply_text("Mrow? Failed to remove user from sudo list. Check logs.")
 
-async def update_bot_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    user = update.effective_user
-    if user.id != OWNER_ID:
-        logger.warning(f"Unauthorized /update attempt by user {user.id}. Silently ignoring.")
-        return
-
-    script_path = os.path.expanduser("~/catbot/development/scripts/devupdate.sh")
-    logger.info(f"Owner {user.id} initiated update. Using script path: {script_path}")
-
-    if not os.path.isfile(script_path):
-        logger.error(f"Update script not found at: {script_path}")
-        await update.message.reply_text(f"😿 Mrow! Update script not found at the configured path: <code>{html.escape(script_path)}</code>", parse_mode=ParseMode.HTML)
-        return
-        
-    if not os.access(script_path, os.X_OK):
-        logger.error(f"Update script at {script_path} is not executable.")
-        await update.message.reply_text(f"😿 Mrow! Update script at <code>{html.escape(script_path)}</code> is not executable (chmod +x needed).", parse_mode=ParseMode.HTML)
-        return
-
-    try:
-        await update.message.reply_text("Meeeow! Initiating bot update sequence... I'll be back soon (hopefully)! 😼⚙️ This message might self-destruct if update is too fast.")
-        logger.info(f"Launching update script: {script_path}")
-        
-        subprocess.Popen([script_path])
-        logger.info(f"Update script {script_path} launched via Popen. Bot process should be terminated by the script shortly.")
-        
-        await asyncio.sleep(1)
-        
-    except Exception as e:
-        logger.error(f"Failed to launch update script {script_path}: {e}", exc_info=True)
-        try:
-            await update.message.reply_text(f"😿 Mrow! Failed to start the update script: {html.escape(str(e))}")
-        except Exception:
-            pass
-
 # --- Main Function ---
 def main() -> None:
     init_db()
