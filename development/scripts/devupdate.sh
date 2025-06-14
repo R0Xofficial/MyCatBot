@@ -4,6 +4,7 @@ BOT_DIR="~/catbot/development"
 PYTHON_SCRIPT_NAME="dev.py"
 LOG_FILE="${BOT_DIR}/logs/update_run_dev.log"
 ENV_SCRIPT_PATH="${BOT_DIR}/env.sh"
+mkdir "${BOT_DIR}/logs"
 
 echo "--------------------------------------" >> "$LOG_FILE"
 echo "$(date '+%Y-%m-%d %H:%M:%S %Z'): --- Starting Bot Update Script ---" >> "$LOG_FILE"
