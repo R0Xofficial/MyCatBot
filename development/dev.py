@@ -3718,46 +3718,46 @@ def main() -> None:
     application.post_init = send_simple_startup_message
 
     async def check_and_lift_expired_restrictions(application: Application) -> None:
-    logger.info("Checking for expired restrictions...")
-    now_utc = datetime.now(timezone.utc)
-    restrictions_to_check = get_active_restrictions_from_db()
-    lifted_count = 0
-
-    for chat_id, user_id, restriction_type, until_timestamp_iso in restrictions_to_check:
-        if until_timestamp_iso:
-            try:
-                until_dt = datetime.fromisoformat(until_timestamp_iso)
-                if now_utc >= until_dt:
-                    logger.info(f"Restriction '{restriction_type}' for user {user_id} in chat {chat_id} expired. Lifting...")
-                    try:
-                        if restriction_type == "ban":
-                            await application.bot.unban_chat_member(chat_id=chat_id, user_id=user_id, only_if_banned=True)
-                        elif restriction_type == "mute":
-                            perms_to_restore = ChatPermissions(
-                                can_send_messages=True, can_send_audios=True, can_send_documents=True,
-                                can_send_photos=True, can_send_videos=True, can_send_video_notes=True,
-                                can_send_voice_notes=True, can_send_polls=True, can_send_other_messages=True,
-                                can_add_web_page_previews=True, can_change_info=True, can_invite_users=True,
-                                can_pin_messages=True, can_manage_topics=True 
-                            )
-                            await application.bot.restrict_chat_member(chat_id=chat_id, user_id=user_id, permissions=perms_to_restore)
-                        
-                        remove_restriction_from_db(chat_id, user_id, restriction_type)
-                        lifted_count += 1
-                        
-                    except TelegramError as e:
-                        logger.error(f"Failed to lift expired {restriction_type} for user {user_id} in chat {chat_id}: {e}")
-                        if "user not found" in str(e).lower() or "rights to restrict" in str(e).lower():
-                             remove_restriction_from_db(chat_id, user_id, restriction_type)
-                    except Exception as e_lift:
-                        logger.error(f"Unexpected error lifting {restriction_type} for user {user_id} in chat {chat_id}: {e_lift}", exc_info=True)
-            except ValueError:
-                logger.error(f"Invalid timestamp format in DB for restriction: chat {chat_id}, user {user_id}, ts: {until_timestamp_iso}")
+        logger.info("Checking for expired restrictions...")
+        now_utc = datetime.now(timezone.utc)
+        restrictions_to_check = get_active_restrictions_from_db()
+        lifted_count = 0
     
-    if lifted_count > 0:
-        logger.info(f"Lifted {lifted_count} expired restrictions.")
-    else:
-        logger.info("No expired restrictions found to lift or process.")
+        for chat_id, user_id, restriction_type, until_timestamp_iso in restrictions_to_check:
+            if until_timestamp_iso:
+                try:
+                    until_dt = datetime.fromisoformat(until_timestamp_iso)
+                    if now_utc >= until_dt:
+                        logger.info(f"Restriction '{restriction_type}' for user {user_id} in chat {chat_id} expired. Lifting...")
+                        try:
+                            if restriction_type == "ban":
+                                await application.bot.unban_chat_member(chat_id=chat_id, user_id=user_id, only_if_banned=True)
+                            elif restriction_type == "mute":
+                                perms_to_restore = ChatPermissions(
+                                    can_send_messages=True, can_send_audios=True, can_send_documents=True,
+                                    can_send_photos=True, can_send_videos=True, can_send_video_notes=True,
+                                    can_send_voice_notes=True, can_send_polls=True, can_send_other_messages=True,
+                                    can_add_web_page_previews=True, can_change_info=True, can_invite_users=True,
+                                    can_pin_messages=True, can_manage_topics=True 
+                                )
+                                await application.bot.restrict_chat_member(chat_id=chat_id, user_id=user_id, permissions=perms_to_restore)
+                            
+                            remove_restriction_from_db(chat_id, user_id, restriction_type)
+                            lifted_count += 1
+                            
+                        except TelegramError as e:
+                            logger.error(f"Failed to lift expired {restriction_type} for user {user_id} in chat {chat_id}: {e}")
+                            if "user not found" in str(e).lower() or "rights to restrict" in str(e).lower():
+                                 remove_restriction_from_db(chat_id, user_id, restriction_type)
+                        except Exception as e_lift:
+                            logger.error(f"Unexpected error lifting {restriction_type} for user {user_id} in chat {chat_id}: {e_lift}", exc_info=True)
+                except ValueError:
+                    logger.error(f"Invalid timestamp format in DB for restriction: chat {chat_id}, user {user_id}, ts: {until_timestamp_iso}")
+        
+        if lifted_count > 0:
+            logger.info(f"Lifted {lifted_count} expired restrictions.")
+        else:
+            logger.info("No expired restrictions found to lift or process.")
 
     logger.info(f"Bot starting polling... Owner ID configured: {OWNER_ID}")
     print(f"Bot starting polling... Owner ID: {OWNER_ID}")
