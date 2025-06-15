@@ -2400,17 +2400,26 @@ async def promote_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         await update.message.reply_text("Mrow? Couldn't verify my own permissions in this chat.")
         return
     
-    actor_chat_member: ChatMember | None = None
+    actor_can_promote = False
     try:
         actor_chat_member = await context.bot.get_chat_member(chat.id, user_who_promotes.id)
-        if not (actor_chat_member.status in ["administrator", "creator"] and \
-                getattr(actor_chat_member, 'can_promote_members', False)):
+        if actor_chat_member.status == "creator":
+            actor_can_promote = True
+        elif actor_chat_member.status == "administrator" and getattr(actor_chat_member, 'can_promote_members', False):
+            actor_can_promote = True
+        
+        if not actor_can_promote:
             await update.message.reply_text("Meeeow! You need to be an admin with rights to promote other members in this chat to use this command.")
             return
+            
     except TelegramError as e:
         logger.warning(f"Could not get chat member info for promote executor {user_who_promotes.id} in {chat.id}: {e}")
-        await update.message.reply_text("Meeeow! Could not verify your admin rights in this chat to promote members.")
-        return
+        if not is_privileged_user(user_who_promotes.id):
+            await update.message.reply_text("Meeeow! Could not verify your admin rights in this chat to promote members.")
+            return
+        else:
+            logger.info(f"Executor {user_who_promotes.id} is bot privileged; proceeding with promote attempt despite not verifying chat admin rights.")
+            actor_chat_member = None
 
     target_user: User | None = None
     provided_custom_title: str | None = None
@@ -2523,16 +2532,26 @@ async def demote_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await update.message.reply_text("Mrow? Couldn't verify my own permissions in this chat.")
         return
         
+    actor_can_demote = False
+    actor_chat_member: ChatMember | None = None
     try:
         actor_chat_member = await context.bot.get_chat_member(chat.id, user_who_demotes.id)
-        if not (actor_chat_member.status in ["administrator", "creator"] and \
-                getattr(actor_chat_member, 'can_promote_members', False)):
+        if actor_chat_member.status == "creator": # Twórca zawsze może
+            actor_can_demote = True
+        elif actor_chat_member.status == "administrator" and getattr(actor_chat_member, 'can_promote_members', False):
+            actor_can_demote = True
+
+        if not actor_can_demote:
             await update.message.reply_text("Meeeow! You need to be an admin with rights to manage admin privileges in this chat to use this command.")
             return
+
     except TelegramError as e:
         logger.warning(f"Could not get chat member info for demote executor {user_who_demotes.id} in {chat.id}: {e}")
-        await update.message.reply_text("Meeeow! Could not verify your admin rights in this chat to manage admin privileges.")
-        return
+        if not is_privileged_user(user_who_demotes.id):
+            await update.message.reply_text("Meeeow! Could not verify your admin rights in this chat to manage admin privileges.")
+            return
+        else:
+            logger.info(f"Executor {user_who_demotes.id} is bot privileged; proceeding with demote attempt despite not verifying chat admin rights.")
 
     target_user: User | None = None
     if update.message.reply_to_message:
