@@ -2691,7 +2691,7 @@ async def unpin_message_command(update: Update, context: ContextTypes.DEFAULT_TY
         await update.message.reply_text("Meeeow! To unpin a message, please reply to the message you want to unpin and then use the /unpin command. 📌")
         return
 
-    message_to_unpin = update.message.reply_to_message
+    message_to_unpin_candidate = update.message.reply_to_message
 
     bot_member = None
     try:
@@ -2721,20 +2721,36 @@ async def unpin_message_command(update: Update, context: ContextTypes.DEFAULT_TY
         return
 
     try:
+        full_chat_object = await context.bot.get_chat(chat.id)
+        current_pinned_message = getattr(full_chat_object, 'pinned_message', None)
+
+        if not current_pinned_message:
+            await update.message.reply_text("Mrow? There are no messages currently pinned in this chat (that I can see).")
+            return
+
+        if current_pinned_message.message_id != message_to_unpin_candidate.message_id:
+            await update.message.reply_text("Mrow? The message you replied to is not the one currently pinned in this chat. To unpin the current one, use /unpin without replying, or reply directly to the pinned message.")
+            return
+            
+    except TelegramError as e:
+        logger.error(f"Error fetching chat details for /unpin in chat {chat.id}: {e}")
+        await update.message.reply_text("Mrow? Could not verify pinned message details.")
+        return
+
+
+    try:
         await context.bot.unpin_chat_message(
             chat_id=chat.id,
-            message_id=message_to_unpin.message_id
+            message_id=message_to_unpin_candidate.message_id
         )
-        logger.info(f"User {user_who_unpins.id} unpinned message {message_to_unpin.message_id} in chat {chat.id}.")
-        await update.message.reply_text(f"📌 Meow! Message (ID: <code>{message_to_unpin.message_id}</code>) unpinned successfully!", quote=False, parse_mode=ParseMode.HTML)
+        logger.info(f"User {user_who_unpins.id} unpinned message {message_to_unpin_candidate.message_id} in chat {chat.id}.")
+        await update.message.reply_text("📌 Meow! Message unpinned successfully!", quote=False)
         
     except TelegramError as e:
-        logger.error(f"Failed to unpin message {message_to_unpin.message_id} in chat {chat.id}: {e}")
+        logger.error(f"Failed to unpin message {message_to_unpin_candidate.message_id} in chat {chat.id}: {e}")
         error_message = str(e)
-        if "message to unpin not found" in error_message.lower() or "message not found" in error_message.lower():
-            await update.message.reply_text("Mrow? I can't find that message to unpin, or it wasn't pinned.")
-        elif "message can't be unpinned" in error_message.lower():
-             await update.message.reply_text("Mrow? This message can't be unpinned (perhaps it wasn't pinned by me or an admin I can override, or it's not pinned at all).")
+        if "message to unpin not found" in error_message.lower() or "message not found" in error_message.lower() or "message can't be unpinned" in error_message.lower():
+            await update.message.reply_text("Mrow? I can't find that message to unpin, or it wasn't pinned, or it can't be unpinned by me.")
         elif "not enough rights" in error_message.lower():
              await update.message.reply_text("Meeeow! It seems I don't have enough rights to unpin messages.")
         else:
