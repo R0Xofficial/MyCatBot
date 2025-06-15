@@ -2851,15 +2851,9 @@ async def purge_messages_command(update: Update, context: ContextTypes.DEFAULT_T
              display_deleted_count = max(0, deleted_count_total -1 )
 
         if display_deleted_count > 0:
-            msg = f"✅ Meow! Purged <code>{display_deleted_count}</code> messages (up to and including the replied message) in <code>{duration_secs:.2f}s</code>."
+            msg = f"✅ Meow! Purged <code>{display_deleted_count}</code> messages in <code>{duration_secs:.2f}s</code>."
             if errors_occurred: msg += "\nSome messages could not be deleted (e.g., older than 48h or service messages)."
-            response_msg = await context.bot.send_message(chat_id=chat.id, text=msg, parse_mode=ParseMode.HTML)
-            if response_msg:
-                await asyncio.sleep(10)
-                try:
-                    await response_msg.delete()
-                except Exception as e_del_response:
-                    logger.warning(f"Could not delete success message for purge: {e_del_response}")
+            await context.bot.send_message(chat_id=chat.id, text=msg, parse_mode=ParseMode.HTML)
         elif errors_occurred:
             await context.bot.send_message(chat_id=chat.id, text=f"Mrow! Could not delete messages. They might be older than 48 hours or service messages. Purge took <code>{duration_secs:.2f}s</code>.", parse_mode=ParseMode.HTML)
         else: 
@@ -2884,7 +2878,7 @@ async def send_random_text(update: Update, context: ContextTypes.DEFAULT_TYPE, t
     except Exception as e_other:
         logger.error(f"Unexpected error sending HTML reply for {list_name}: {e_other}", exc_info=True)
         try:
-            await update.message.reply_text(chosen_text) # Fallback na zwykły tekst
+            await update.message.reply_text(chosen_text)
             logger.info(f"Sent plain text fallback for {list_name} after unexpected error.")
         except Exception as e_plain_fallback:
             logger.error(f"Fallback plain text reply also failed for {list_name} after unexpected error: {e_plain_fallback}")
