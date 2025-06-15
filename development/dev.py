@@ -1566,10 +1566,11 @@ HELP_TEXT = """
 /mute [ID/reply/@user] [Time] [Reason] - Mute user in chat. 🚫
 <i>Note: [Time] is optional</i>
 /kick [ID/reply/@user] [Reason] - Kick user from chat. ⚠️
-/promote [ID/reply/@user] [admin_title] - Promote a user to administrator.
+/promote [ID/reply/@user] [admin_title] - Promote a user to administrator. 👷‍♂️
 <i>Note: [admin_title] is optional</i>
-/demote [ID/reply/@user] - Demote an administrator to a regular member.
-/pin [silent/notify] - Pin the replied message (default: with notification).
+/demote [ID/reply/@user] - Demote an administrator to a regular member. 🙍‍♂️
+/pin [silent] - Pin the replied message. 📌
+/unpin - Unpin the replied message. 📍
 
 <b>4FUN Commands:</b>
 /gif - Get a random cat GIF! 🖼️
@@ -2639,7 +2640,7 @@ async def pin_message_command(update: Update, context: ContextTypes.DEFAULT_TYPE
             logger.warning(f"Could not get chat member info for pin executor {user_who_pins.id} in {chat.id}: {e}")
     
     if not caller_has_permission:
-        await update.message.reply_text("Meeeow! You need to be an admin with 'Pin Messages' permission in this chat, or a privileged bot user, to use this command.")
+        await update.message.reply_text("Meeeow! You need to be an admin with 'Pin Messages' permission in this chat to use this command.")
         return
 
     disable_notification = False
@@ -2676,6 +2677,190 @@ async def pin_message_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     except Exception as e:
         logger.error(f"Unexpected error in /pin: {e}", exc_info=True)
         await update.message.reply_text("An unexpected error occurred while trying to pin the message.")
+
+async def unpin_message_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    chat = update.effective_chat
+    user_who_unpins = update.effective_user
+
+    if chat.type not in [ChatType.GROUP, ChatType.SUPERGROUP, ChatType.CHANNEL]:
+        await update.message.reply_text("Mrow? Messages can only be unpinned in groups, supergroups, or channels.")
+        return
+
+    if not update.message.reply_to_message:
+        await update.message.reply_text("Meeeow! To unpin a message, please reply to the message you want to unpin and then use the /unpin command. 📌")
+        return
+
+    message_to_unpin = update.message.reply_to_message
+
+    bot_member = None
+    try:
+        bot_member = await context.bot.get_chat_member(chat.id, context.bot.id)
+        if not (bot_member.status == ChatMemberStatus.ADMINISTRATOR and getattr(bot_member, 'can_pin_messages', False)):
+            await update.message.reply_text("Meeeow! I need to be an admin with the 'Pin Messages' permission in this chat to do that. 😿")
+            return
+    except TelegramError as e:
+        logger.error(f"Error checking bot's own permissions in /unpin for chat {chat.id}: {e}")
+        await update.message.reply_text("Mrow? Couldn't verify my own permissions in this chat.")
+        return
+        
+    caller_has_permission = False
+    if is_privileged_user(user_who_unpins.id):
+        caller_has_permission = True
+    else:
+        try:
+            actor_chat_member = await context.bot.get_chat_member(chat.id, user_who_unpins.id)
+            if actor_chat_member.status in ["administrator", "creator"] and \
+               getattr(actor_chat_member, 'can_pin_messages', False):
+                caller_has_permission = True
+        except TelegramError as e:
+            logger.warning(f"Could not get chat member info for unpin executor {user_who_unpins.id} in {chat.id}: {e}")
+    
+    if not caller_has_permission:
+        await update.message.reply_text("Meeeow! You need to be an admin with 'Pin Messages' permission in this chat to use this command.")
+        return
+
+    try:
+        await context.bot.unpin_chat_message(
+            chat_id=chat.id,
+            message_id=message_to_unpin.message_id
+        )
+        logger.info(f"User {user_who_unpins.id} unpinned message {message_to_unpin.message_id} in chat {chat.id}.")
+        await update.message.reply_text(f"📌 Meow! Message (ID: <code>{message_to_unpin.message_id}</code>) unpinned successfully!", quote=False, parse_mode=ParseMode.HTML)
+        
+    except TelegramError as e:
+        logger.error(f"Failed to unpin message {message_to_unpin.message_id} in chat {chat.id}: {e}")
+        error_message = str(e)
+        if "message to unpin not found" in error_message.lower() or "message not found" in error_message.lower():
+            await update.message.reply_text("Mrow? I can't find that message to unpin, or it wasn't pinned.")
+        elif "message can't be unpinned" in error_message.lower():
+             await update.message.reply_text("Mrow? This message can't be unpinned (perhaps it wasn't pinned by me or an admin I can override, or it's not pinned at all).")
+        elif "not enough rights" in error_message.lower():
+             await update.message.reply_text("Meeeow! It seems I don't have enough rights to unpin messages.")
+        else:
+            await update.message.reply_text(f"Failed to unpin message: {html.escape(error_message)}")
+    except Exception as e:
+        logger.error(f"Unexpected error in /unpin: {e}", exc_info=True)
+        await update.message.reply_text("An unexpected error occurred while trying to unpin the message.")
+
+async def purge_messages_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    chat = update.effective_chat
+    user_who_purges = update.effective_user
+    command_message = update.message
+    replied_to_message = update.message.reply_to_message
+
+    if chat.type not in [ChatType.GROUP, ChatType.SUPERGROUP]:
+        await command_message.reply_text("Mrow? Messages can only be purged in groups and supergroups.")
+        return
+
+    if not replied_to_message:
+        await command_message.reply_text("Meeeow! Please use this command by replying to the message up to which you want to delete (that message will also be deleted).")
+        return
+
+    bot_member = None
+    try:
+        bot_member = await context.bot.get_chat_member(chat.id, context.bot.id)
+        if not (bot_member.status == ChatMemberStatus.ADMINISTRATOR and getattr(bot_member, 'can_delete_messages', False)):
+            await command_message.reply_text("Meeeow! I need to be an admin with the 'Delete Messages' permission in this chat. 😿")
+            return
+    except TelegramError as e:
+        logger.error(f"Error checking bot's own permissions in /purge for chat {chat.id}: {e}")
+        await command_message.reply_text("Mrow? Couldn't verify my own permissions in this chat.")
+        return
+        
+    caller_can_purge = False
+    if is_privileged_user(user_who_purges.id):
+        caller_can_purge = True
+    else:
+        try:
+            actor_chat_member = await context.bot.get_chat_member(chat.id, user_who_purges.id)
+            if actor_chat_member.status in ["administrator", "creator"] and \
+               getattr(actor_chat_member, 'can_delete_messages', False):
+                caller_can_purge = True
+        except TelegramError as e:
+            logger.warning(f"Could not get chat member info for purge executor {user_who_purges.id} in {chat.id}: {e}")
+    
+    if not caller_can_purge:
+        logger.warning(f"Unauthorized /purge attempt by user {user_who_purges.id} in chat {chat.id}.")
+        owner_mention = f"<code>{OWNER_ID}</code>"
+        if OWNER_ONLY_REFUSAL:
+            try:
+                owner_chat_obj = await context.bot.get_chat(OWNER_ID)
+                owner_mention = owner_chat_obj.mention_html()
+            except Exception: pass
+            refusal_text = random.choice(OWNER_ONLY_REFUSAL).format(owner_mention=owner_mention)
+            await command_message.reply_html(refusal_text)
+        else:
+            await command_message.reply_text("Meeeow! You do not have permission to use this command.")
+        return
+
+    is_silent_purge = False
+    if context.args and context.args[0].lower() == "silent":
+        is_silent_purge = True
+        logger.info(f"User {user_who_purges.id} initiated silent purge in chat {chat.id} up to message {replied_to_message.message_id}")
+    else:
+        logger.info(f"User {user_who_purges.id} initiated purge in chat {chat.id} up to message {replied_to_message.message_id}")
+
+    start_message_id = replied_to_message.message_id
+    end_message_id = command_message.message_id 
+    message_ids_to_delete = list(range(start_message_id, end_message_id + 1))
+
+    if not message_ids_to_delete or len(message_ids_to_delete) < 2 :
+        if not is_silent_purge:
+            await command_message.reply_text("Mrow? No messages found between your reply and this command to delete.")
+        elif bot_member and getattr(bot_member, 'can_delete_messages', False) and command_message.message_id in message_ids_to_delete:
+             try: await context.bot.delete_messages(chat.id, [command_message.message_id])
+             except: pass
+        return
+
+    deleted_count_total = 0
+    errors_occurred = False
+    start_time = datetime.now()
+
+    for i in range(0, len(message_ids_to_delete), 100):
+        batch_ids = message_ids_to_delete[i:i + 100]
+        try:
+            success_flags = await context.bot.delete_messages(chat_id=chat.id, message_ids=batch_ids)
+            current_batch_deleted_count = 0
+            if isinstance(success_flags, bool) and success_flags: current_batch_deleted_count = len(batch_ids)
+            elif isinstance(success_flags, list): current_batch_deleted_count = sum(1 for s in success_flags if s is True)
+            deleted_count_total += current_batch_deleted_count
+            if current_batch_deleted_count < len(batch_ids): errors_occurred = True; logger.warning(f"Partially purged batch in chat {chat.id}. Expected {len(batch_ids)}, deleted {current_batch_deleted_count}.")
+            else: logger.info(f"Purged batch of {current_batch_deleted_count} messages in chat {chat.id}")
+            if len(message_ids_to_delete) > 100 and i + 100 < len(message_ids_to_delete): await asyncio.sleep(1.1)
+        except TelegramError as e:
+            logger.error(f"TelegramError during purge batch in chat {chat.id}: {e}")
+            errors_occurred = True
+            if "message to delete not found" in str(e).lower() or "message can't be deleted" in str(e).lower():
+                logger.warning(f"Some messages in batch (IDs: {batch_ids[0]}..{batch_ids[-1]}) not found or can't be deleted.")
+            else:
+                if not is_silent_purge: await context.bot.send_message(chat_id=chat.id, text=f"Mrow! An error occurred while deleting a batch: {html.escape(str(e))}. Purge might be incomplete.")
+                break 
+        except Exception as e:
+            logger.error(f"Unexpected error during purge batch in chat {chat.id}: {e}", exc_info=True)
+            errors_occurred = True
+            if not is_silent_purge: await context.bot.send_message(chat_id=chat.id, text="Mrow! An unexpected error occurred. Purge might be incomplete.")
+            break 
+    
+    end_time = datetime.now()
+    duration_secs = (end_time - start_time).total_seconds()
+    
+    if not is_silent_purge:
+        display_deleted_count = deleted_count_total
+        if command_message.message_id in message_ids_to_delete and display_deleted_count > 0:
+             display_deleted_count = max(0, deleted_count_total -1 )
+
+        if display_deleted_count > 0:
+            msg = f"✅ Meow! Purged <code>{display_deleted_count}</code> messages (up to and including the replied message) in <code>{duration_secs:.2f}s</code>."
+            if errors_occurred: msg += "\nSome messages could not be deleted (e.g., older than 48h or service messages)."
+            response_msg = await context.bot.send_message(chat_id=chat.id, text=msg, parse_mode=ParseMode.HTML)
+            if response_msg: await asyncio.sleep(10); try: await response_msg.delete(); except Exception: pass
+        elif errors_occurred:
+            await context.bot.send_message(chat_id=chat.id, text=f"Mrow! Could not delete messages. They might be older than 48 hours or service messages. Purge took <code>{duration_secs:.2f}s</code>.", parse_mode=ParseMode.HTML)
+        else: 
+             await context.bot.send_message(chat_id=chat.id, text=f"Mrow? No messages were found to purge in the specified range (or only the command itself).")
+    else:
+        total_targeted_for_user = len(message_ids_to_delete) -1 if command_message.message_id in message_ids_to_delete else len(message_ids_to_delete)
+        logger.info(f"Silent purge completed in chat {chat.id}. Attempted to delete up to {total_targeted_for_user} messages. Actual deleted (incl. command): {deleted_count_total}. Duration: {duration_secs:.2f}s")
         
 # --- Simple Text Command Definitions ---
 async def send_random_text(update: Update, context: ContextTypes.DEFAULT_TYPE, text_list: list[str], list_name: str) -> None:
