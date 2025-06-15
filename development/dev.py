@@ -4231,6 +4231,90 @@ async def list_sudo_users_command(update: Update, context: ContextTypes.DEFAULT_
 
     await update.message.reply_html(message_text)
 
+# --- Main Function ---
+def main() -> None:
+    init_db()
+    logger.info("Initializing bot application...")
+    
+    connect_timeout_val = 20.0
+    read_timeout_val = 80.0
+    write_timeout_val = 80.0
+    pool_timeout_val = 20.0
+
+    custom_request_settings = HTTPXRequest(
+        connect_timeout=connect_timeout_val,
+        read_timeout=read_timeout_val,
+        write_timeout=write_timeout_val,
+        pool_timeout=pool_timeout_val
+    )
+    application = Application.builder().token(BOT_TOKEN).request(custom_request_settings).build()
+    
+    logger.info(f"Custom request timeouts set for HTTPXRequest: "
+                f"Connect={connect_timeout_val}, Read={read_timeout_val}, "
+                f"Write={write_timeout_val}, Pool={pool_timeout_val}")
+    
+    logger.info("Registering global pre-handlers...")
+    application.add_handler(MessageHandler(filters.COMMAND & (~filters.UpdateType.EDITED_MESSAGE), check_blacklist_handler), group=-2)
+    application.add_handler(MessageHandler(filters.TEXT & (~filters.UpdateType.EDITED_MESSAGE), mban_monitor_handler), group=-1)
+
+    logger.info("Registering user interaction logging handler...")
+    application.add_handler(MessageHandler(
+        filters.ALL & (~filters.UpdateType.EDITED_MESSAGE),
+        log_user_from_interaction
+    ), group=10)
+
+    logger.info("Registering command handlers...")
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("help", help_command))
+    application.add_handler(CommandHandler("github", github))
+    application.add_handler(CommandHandler("owner", owner_info))
+    application.add_handler(CommandHandler("info", entity_info_command))
+    application.add_handler(CommandHandler("chatstat", chat_stat_command))
+    application.add_handler(CommandHandler("cinfo", chat_info_command))
+    application.add_handler(CommandHandler("ban", ban_command))
+    application.add_handler(CommandHandler("unban", unban_command))
+    application.add_handler(CommandHandler("mute", mute_command))
+    application.add_handler(CommandHandler("unmute", unmute_command))
+    application.add_handler(CommandHandler("kick", kick_command))
+    application.add_handler(CommandHandler("kickme", kickme_command))
+    application.add_handler(CommandHandler("promote", promote_command))
+    application.add_handler(CommandHandler("demote", demote_command))
+    application.add_handler(CommandHandler("pin", pin_message_command))
+    application.add_handler(CommandHandler("unpin", unpin_message_command))
+    application.add_handler(CommandHandler("purge", purge_messages_command))
+    application.add_handler(CommandHandler("gif", gif))
+    application.add_handler(CommandHandler("photo", photo))
+    application.add_handler(CommandHandler("meow", meow))
+    application.add_handler(CommandHandler("nap", nap))
+    application.add_handler(CommandHandler("play", play))
+    application.add_handler(CommandHandler("treat", treat))
+    application.add_handler(CommandHandler("zoomies", zoomies))
+    application.add_handler(CommandHandler("judge", judge))
+    application.add_handler(CommandHandler("fed", fed))
+    application.add_handler(CommandHandler("attack", attack))
+    application.add_handler(CommandHandler("kill", kill))
+    application.add_handler(CommandHandler("punch", punch))
+    application.add_handler(CommandHandler("slap", slap))
+    application.add_handler(CommandHandler("bite", bite))
+    application.add_handler(CommandHandler("hug", hug))
+    application.add_handler(CommandHandler("status", status))
+    application.add_handler(CommandHandler("say", say))
+    application.add_handler(CommandHandler("leave", leave_chat))
+    application.add_handler(CommandHandler("speedtest", speedtest_command))
+    application.add_handler(CommandHandler("blist", blacklist_user_command))
+    application.add_handler(CommandHandler("unblist", unblacklist_user_command))
+    application.add_handler(CommandHandler("mban", mban_command))
+    application.add_handler(CommandHandler("unmban", unmban_command))
+    application.add_handler(CommandHandler("listsudo", list_sudo_users_command))
+    application.add_handler(CommandHandler("addsudo", add_sudo_command))
+    application.add_handler(CommandHandler("delsudo", del_sudo_command))
+    application.add_handler(CommandHandler("update", update_bot_command))
+
+
+    logger.info("Registering other message handlers...")
+    application.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS & filters.ChatType.GROUPS, handle_new_group_members))
+
+
 async def check_and_lift_expired_restrictions(application: Application) -> None:
     logger.info("Checking for expired BAN restrictions...")
     now_utc = datetime.now(timezone.utc)
@@ -4318,103 +4402,6 @@ async def send_simple_startup_message(app: Application) -> None:
             logger.warning("No target (LOG_CHAT_ID or OWNER_ID) to send simple startup message.")
 
     application.post_init = send_simple_startup_message
-
-# --- Main Function ---
-def main() -> None:
-    init_db()
-    logger.info("Initializing bot application...")
-    
-    connect_timeout_val = 20.0
-    read_timeout_val = 80.0
-    write_timeout_val = 80.0
-    pool_timeout_val = 20.0
-
-    custom_request_settings = HTTPXRequest(
-        connect_timeout=connect_timeout_val,
-        read_timeout=read_timeout_val,
-        write_timeout=write_timeout_val,
-        pool_timeout=pool_timeout_val
-    )
-    application = Application.builder().token(BOT_TOKEN).request(custom_request_settings).build()
-    
-    logger.info(f"Custom request timeouts set for HTTPXRequest: "
-                f"Connect={connect_timeout_val}, Read={read_timeout_val}, "
-                f"Write={write_timeout_val}, Pool={pool_timeout_val}")
-    
-    logger.info("Registering global pre-handlers...")
-    application.add_handler(MessageHandler(filters.COMMAND & (~filters.UpdateType.EDITED_MESSAGE), check_blacklist_handler), group=-2)
-    application.add_handler(MessageHandler(filters.TEXT & (~filters.UpdateType.EDITED_MESSAGE), mban_monitor_handler), group=-1)
-
-    logger.info("Registering user interaction logging handler...")
-    application.add_handler(MessageHandler(
-        filters.ALL & (~filters.UpdateType.EDITED_MESSAGE),
-        log_user_from_interaction
-    ), group=10)
-
-    logger.info("Registering command handlers...")
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("help", help_command))
-    application.add_handler(CommandHandler("github", github))
-    application.add_handler(CommandHandler("owner", owner_info))
-    application.add_handler(CommandHandler("info", entity_info_command))
-    application.add_handler(CommandHandler("chatstat", chat_stat_command))
-    application.add_handler(CommandHandler("cinfo", chat_info_command))
-    application.add_handler(CommandHandler("ban", ban_command))
-    application.add_handler(CommandHandler("unban", unban_command))
-    application.add_handler(CommandHandler("mute", mute_command))
-    application.add_handler(CommandHandler("unmute", unmute_command))
-    application.add_handler(CommandHandler("kick", kick_command))
-    application.add_handler(CommandHandler("kickme", kickme_command))
-    application.add_handler(CommandHandler("promote", promote_command))
-    application.add_handler(CommandHandler("demote", demote_command))
-    application.add_handler(CommandHandler("pin", pin_message_command))
-    application.add_handler(CommandHandler("unpin", unpin_message_command))
-    application.add_handler(CommandHandler("purge", purge_messages_command))
-    application.add_handler(CommandHandler("gif", gif))
-    application.add_handler(CommandHandler("photo", photo))
-    application.add_handler(CommandHandler("meow", meow))
-    application.add_handler(CommandHandler("nap", nap))
-    application.add_handler(CommandHandler("play", play))
-    application.add_handler(CommandHandler("treat", treat))
-    application.add_handler(CommandHandler("zoomies", zoomies))
-    application.add_handler(CommandHandler("judge", judge))
-    application.add_handler(CommandHandler("fed", fed))
-    application.add_handler(CommandHandler("attack", attack))
-    application.add_handler(CommandHandler("kill", kill))
-    application.add_handler(CommandHandler("punch", punch))
-    application.add_handler(CommandHandler("slap", slap))
-    application.add_handler(CommandHandler("bite", bite))
-    application.add_handler(CommandHandler("hug", hug))
-    application.add_handler(CommandHandler("status", status))
-    application.add_handler(CommandHandler("say", say))
-    application.add_handler(CommandHandler("leave", leave_chat))
-    application.add_handler(CommandHandler("speedtest", speedtest_command))
-    application.add_handler(CommandHandler("blist", blacklist_user_command))
-    application.add_handler(CommandHandler("unblist", unblacklist_user_command))
-    application.add_handler(CommandHandler("mban", mban_command))
-    application.add_handler(CommandHandler("unmban", unmban_command))
-    application.add_handler(CommandHandler("listsudo", list_sudo_users_command))
-    application.add_handler(CommandHandler("addsudo", add_sudo_command))
-    application.add_handler(CommandHandler("delsudo", del_sudo_command))
-    application.add_handler(CommandHandler("update", update_bot_command))
-
-
-    logger.info("Registering other message handlers...")
-    application.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS & filters.ChatType.GROUPS, handle_new_group_members))
-
-
-    async def post_init_tasks(app: Application):
-        if 'send_simple_startup_message' in globals() and callable(globals()['send_simple_startup_message']):
-            await send_simple_startup_message(app)
-        else:
-            logger.error("send_simple_startup_message function not found for post_init!")
-
-        if 'check_and_lift_expired_restrictions' in globals() and callable(globals()['check_and_lift_expired_restrictions']):
-            await check_and_lift_expired_restrictions(app)
-        else:
-            logger.error("check_and_lift_expired_restrictions function not found for post_init!")
-    
-    application.post_init = post_init_tasks
 
     logger.info(f"Bot starting polling... Owner ID configured: {OWNER_ID}")
     print(f"Bot starting polling... Owner ID: {OWNER_ID}")
