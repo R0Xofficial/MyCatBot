@@ -4401,8 +4401,6 @@ async def send_simple_startup_message(app: Application) -> None:
         else:
             logger.warning("No target (LOG_CHAT_ID or OWNER_ID) to send simple startup message.")
 
-    application.post_init = send_simple_startup_message
-
     logger.info(f"Bot starting polling... Owner ID configured: {OWNER_ID}")
     print(f"Bot starting polling... Owner ID: {OWNER_ID}")
     try: 
