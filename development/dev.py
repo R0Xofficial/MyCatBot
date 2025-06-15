@@ -2853,7 +2853,12 @@ async def purge_messages_command(update: Update, context: ContextTypes.DEFAULT_T
             msg = f"✅ Meow! Purged <code>{display_deleted_count}</code> messages (up to and including the replied message) in <code>{duration_secs:.2f}s</code>."
             if errors_occurred: msg += "\nSome messages could not be deleted (e.g., older than 48h or service messages)."
             response_msg = await context.bot.send_message(chat_id=chat.id, text=msg, parse_mode=ParseMode.HTML)
-            if response_msg: await asyncio.sleep(10); try: await response_msg.delete(); except Exception: pass
+            if response_msg:
+                await asyncio.sleep(10)
+                try:
+                    await response_msg.delete()
+                except Exception as e_del_response:
+                    logger.warning(f"Could not delete success message for purge: {e_del_response}")
         elif errors_occurred:
             await context.bot.send_message(chat_id=chat.id, text=f"Mrow! Could not delete messages. They might be older than 48 hours or service messages. Purge took <code>{duration_secs:.2f}s</code>.", parse_mode=ParseMode.HTML)
         else: 
