@@ -4216,153 +4216,147 @@ async def debug_purge_messages_command(update: Update, context: ContextTypes.DEF
     command_message = update.message
     replied_to_message = update.message.reply_to_message
 
-    logger.info(f"DEBUG_PURGE: Command initiated by user {user_who_purges.id} in chat {chat.id}")
+    logger.info(f"DEBUG_PURGE_SINGLE: Command initiated by user {user_who_purges.id} in chat {chat.id}")
 
     if chat.type not in [ChatType.GROUP, ChatType.SUPERGROUP]:
-        logger.warning("DEBUG_PURGE: Command used outside of group/supergroup.")
+        logger.warning("DEBUG_PURGE_SINGLE: Command used outside of group/supergroup.")
         await command_message.reply_text("Mrow? Messages can only be purged in groups and supergroups.")
         return
 
     if not replied_to_message:
-        logger.warning("DEBUG_PURGE: Command used without replying to a message.")
+        logger.warning("DEBUG_PURGE_SINGLE: Command used without replying to a message.")
         await command_message.reply_text("Meeeow! Please use this command by replying to the message up to which you want to delete.")
         return
 
-    logger.info(f"DEBUG_PURGE: Replied to message ID: {replied_to_message.message_id}, Command message ID: {command_message.message_id}")
+    logger.info(f"DEBUG_PURGE_SINGLE: Replied to message ID: {replied_to_message.message_id}, Command message ID: {command_message.message_id}")
 
     bot_member = None
     try:
         bot_member = await context.bot.get_chat_member(chat.id, context.bot.id)
-        logger.info(f"DEBUG_PURGE: Bot status in chat: {bot_member.status}, can_delete: {getattr(bot_member, 'can_delete_messages', False)}")
+        logger.info(f"DEBUG_PURGE_SINGLE: Bot status in chat: {bot_member.status}, can_delete: {getattr(bot_member, 'can_delete_messages', False)}")
         if not (bot_member.status == ChatMemberStatus.ADMINISTRATOR and getattr(bot_member, 'can_delete_messages', False)):
             await command_message.reply_text("Meeeow! I need to be an admin with 'Delete Messages' permission. 😿")
             return
     except TelegramError as e:
-        logger.error(f"DEBUG_PURGE: Error checking bot's own permissions: {e}")
+        logger.error(f"DEBUG_PURGE_SINGLE: Error checking bot's own permissions: {e}")
         await command_message.reply_text("Mrow? Couldn't verify my own permissions.")
         return
         
     caller_can_purge = False
     if is_privileged_user(user_who_purges.id):
         caller_can_purge = True
-        logger.info(f"DEBUG_PURGE: Caller {user_who_purges.id} is a privileged bot user.")
     else:
         try:
             actor_chat_member = await context.bot.get_chat_member(chat.id, user_who_purges.id)
-            logger.info(f"DEBUG_PURGE: Caller {user_who_purges.id} status in chat: {actor_chat_member.status}, can_delete: {getattr(actor_chat_member, 'can_delete_messages', False)}")
+            logger.info(f"DEBUG_PURGE_SINGLE: Caller {user_who_purges.id} status in chat: {actor_chat_member.status}, can_delete: {getattr(actor_chat_member, 'can_delete_messages', False)}")
             if actor_chat_member.status in ["administrator", "creator"] and \
                getattr(actor_chat_member, 'can_delete_messages', False):
                 caller_can_purge = True
         except TelegramError as e:
-            logger.warning(f"DEBUG_PURGE: Could not get chat member info for purge executor {user_who_purges.id}: {e}")
+            logger.warning(f"DEBUG_PURGE_SINGLE: Could not get chat member info for purge executor {user_who_purges.id}: {e}")
     
     if not caller_can_purge:
-        logger.warning(f"DEBUG_PURGE: Unauthorized /purge attempt by user {user_who_purges.id}. Silently ignoring.")
+        logger.warning(f"DEBUG_PURGE_SINGLE: Unauthorized /purge attempt by user {user_who_purges.id}. Silently ignoring.")
         return
 
     is_silent_purge = False
     if context.args and context.args[0].lower() == "silent":
         is_silent_purge = True
-        logger.info(f"DEBUG_PURGE: Silent purge initiated up to message {replied_to_message.message_id}")
+        logger.info(f"DEBUG_PURGE_SINGLE: Silent purge initiated up to message {replied_to_message.message_id}")
     else:
-        logger.info(f"DEBUG_PURGE: Standard purge initiated up to message {replied_to_message.message_id}")
+        logger.info(f"DEBUG_PURGE_SINGLE: Standard purge initiated up to message {replied_to_message.message_id}")
 
     start_message_id = replied_to_message.message_id
     end_message_id = command_message.message_id 
     
     message_ids_to_delete = list(range(start_message_id, end_message_id + 1))
-    logger.info(f"DEBUG_PURGE: Generated message_ids_to_delete (count: {len(message_ids_to_delete)}): {message_ids_to_delete}")
-
+    logger.info(f"DEBUG_PURGE_SINGLE: Generated message_ids_to_delete (count: {len(message_ids_to_delete)}): {message_ids_to_delete}")
 
     if not message_ids_to_delete or len(message_ids_to_delete) < 2 :
-        logger.info("DEBUG_PURGE: No messages in range or only the command message itself.")
+        logger.info("DEBUG_PURGE_SINGLE: No messages in range or only the command message itself.")
         if not is_silent_purge:
             await command_message.reply_text("Mrow? No messages found between your reply and this command to delete.")
         elif bot_member and getattr(bot_member, 'can_delete_messages', False) and command_message.message_id in message_ids_to_delete:
              try: 
-                 logger.info(f"DEBUG_PURGE: Silently deleting only the command message: {command_message.message_id}")
+                 logger.info(f"DEBUG_PURGE_SINGLE: Silently deleting only the command message: {command_message.message_id}")
                  await context.bot.delete_messages(chat.id, [command_message.message_id])
              except Exception as e_del_cmd:
-                 logger.warning(f"DEBUG_PURGE: Failed to delete silent command message: {e_del_cmd}")
+                 logger.warning(f"DEBUG_PURGE_SINGLE: Failed to delete silent command message: {e_del_cmd}")
         return
 
     deleted_count_total = 0
     errors_occurred = False
+    failed_to_delete_ids = []
     start_time = datetime.now()
-    logger.info(f"DEBUG_PURGE: Starting purge loop. Total IDs: {len(message_ids_to_delete)}")
+    logger.info(f"DEBUG_PURGE_SINGLE: Starting single message deletion loop. Total IDs to try: {len(message_ids_to_delete)}")
 
-    for i in range(0, len(message_ids_to_delete), 100):
-        batch_ids = message_ids_to_delete[i:i + 100]
-        logger.info(f"DEBUG_PURGE: Processing batch_ids: {batch_ids}")
+    for msg_id_to_del in message_ids_to_delete:
+        logger.info(f"DEBUG_PURGE_SINGLE: Attempting to delete single ID: {msg_id_to_del}")
         try:
-            success_flags = await context.bot.delete_messages(chat_id=chat.id, message_ids=batch_ids)
-            logger.info(f"DEBUG_PURGE: Result of delete_messages for batch {batch_ids}: {success_flags}")
-            
-            current_batch_deleted_count = 0
-            if isinstance(success_flags, bool) and success_flags:
-                current_batch_deleted_count = len(batch_ids)
-            elif isinstance(success_flags, list):
-                for idx, succeeded in enumerate(success_flags):
-                    if succeeded:
-                        current_batch_deleted_count += 1
-                    else:
-                        logger.warning(f"DEBUG_PURGE: Failed to delete message ID: {batch_ids[idx]} from batch.")
-            
-            deleted_count_total += current_batch_deleted_count
-            if current_batch_deleted_count < len(batch_ids):
-                errors_occurred = True
-                logger.warning(f"DEBUG_PURGE: Partially purged batch. Expected {len(batch_ids)}, deleted {current_batch_deleted_count}.")
-            else:
-                logger.info(f"DEBUG_PURGE: Successfully purged batch of {current_batch_deleted_count} messages.")
+            success_flags = await context.bot.delete_messages(chat_id=chat.id, message_ids=[msg_id_to_del])
+            logger.info(f"DEBUG_PURGE_SINGLE: Result for single ID {msg_id_to_del}: {success_flags}")
 
-            if len(message_ids_to_delete) > 100 and i + 100 < len(message_ids_to_delete):
-                logger.debug("DEBUG_PURGE: Sleeping briefly between batches...")
-                await asyncio.sleep(1.1)
-        except TelegramError as e:
-            logger.error(f"DEBUG_PURGE: TelegramError during purge batch {batch_ids}: {e}")
-            errors_occurred = True
-            if "message to delete not found" in str(e).lower() or "message can't be deleted" in str(e).lower():
-                logger.warning(f"DEBUG_PURGE: Some messages in batch {batch_ids} not found or can't be deleted (e.g., too old, service message).")
+            if isinstance(success_flags, list) and len(success_flags) > 0 and success_flags[0] is True:
+                deleted_count_total += 1
+                logger.info(f"DEBUG_PURGE_SINGLE: Successfully deleted message ID: {msg_id_to_del}")
+            elif isinstance(success_flags, bool) and success_flags:
+                deleted_count_total +=1
+                logger.info(f"DEBUG_PURGE_SINGLE: Successfully deleted message ID: {msg_id_to_del} (API returned single bool)")
             else:
+                errors_occurred = True
+                failed_to_delete_ids.append(msg_id_to_del)
+                logger.warning(f"DEBUG_PURGE_SINGLE: Failed to delete message ID: {msg_id_to_del}, API result: {success_flags}")
+            
+            await asyncio.sleep(0.3)
+        except TelegramError as e:
+            logger.error(f"DEBUG_PURGE_SINGLE: TelegramError deleting single ID {msg_id_to_del}: {e}")
+            errors_occurred = True
+            failed_to_delete_ids.append(msg_id_to_del)
+            if "message to delete not found" in str(e).lower() or "message can't be deleted" in str(e).lower():
+                logger.warning(f"DEBUG_PURGE_SINGLE: Message {msg_id_to_del} not found or can't be deleted.")
+            else: # Inny błąd API, może warto przerwać
                 if not is_silent_purge:
-                    try: await context.bot.send_message(chat_id=chat.id, text=f"Mrow! API error during batch delete: {html.escape(str(e))}. Purge might be incomplete.")
-                    except Exception as e_send: logger.error(f"DEBUG_PURGE: Failed to send API error message to chat: {e_send}")
+                    try: await context.bot.send_message(chat.id, f"Mrow! API error during single delete for {msg_id_to_del}: {html.escape(str(e))}. Stopping purge.")
+                    except Exception as e_send: logger.error(f"DEBUG_PURGE_SINGLE: Failed to send API error message to chat: {e_send}")
                 break 
         except Exception as e:
-            logger.error(f"DEBUG_PURGE: Unexpected error during purge batch {batch_ids}: {e}", exc_info=True)
+            logger.error(f"DEBUG_PURGE_SINGLE: Unexpected error deleting single ID {msg_id_to_del}: {e}", exc_info=True)
             errors_occurred = True
+            failed_to_delete_ids.append(msg_id_to_del)
             if not is_silent_purge:
-                try: await context.bot.send_message(chat_id=chat.id, text="Mrow! An unexpected error occurred during deletion. Purge might be incomplete.")
-                except Exception as e_send: logger.error(f"DEBUG_PURGE: Failed to send unexpected error message to chat: {e_send}")
+                try: await context.bot.send_message(chat.id, "Mrow! An unexpected error occurred during single deletion. Stopping purge.")
+                except Exception as e_send: logger.error(f"DEBUG_PURGE_SINGLE: Failed to send unexpected error message to chat: {e_send}")
             break 
     
     end_time = datetime.now()
     duration_secs = (end_time - start_time).total_seconds()
-    logger.info(f"DEBUG_PURGE: Purge loop finished. Total deleted: {deleted_count_total}. Errors: {errors_occurred}. Duration: {duration_secs:.2f}s")
-    
+    logger.info(f"DEBUG_PURGE_SINGLE: Purge loop finished. Total deleted: {deleted_count_total} out of {len(message_ids_to_delete)}. Errors: {errors_occurred}. Duration: {duration_secs:.2f}s")
+    if failed_to_delete_ids:
+        logger.warning(f"DEBUG_PURGE_SINGLE: IDs failed to delete: {failed_to_delete_ids}")
+
     if not is_silent_purge:
         display_deleted_count = deleted_count_total
-        if command_message.message_id in message_ids_to_delete and display_deleted_count > 0:
+        if command_message.message_id in message_ids_to_delete and command_message.message_id not in failed_to_delete_ids:
              display_deleted_count = max(0, deleted_count_total -1 )
 
         final_message_text = ""
         if display_deleted_count > 0:
-            final_message_text = f"✅ Meow! Purged <code>{display_deleted_count}</code> messages (up to and including the replied message) in <code>{duration_secs:.2f}s</code>."
+            final_message_text = f"✅ Meow! Purged <code>{display_deleted_count}</code> messages (up to/incl. replied) in <code>{duration_secs:.2f}s</code>."
             if errors_occurred:
-                final_message_text += "\nSome messages might not have been deleted (e.g., older than 48h, service messages, or messages from other bots I can't remove)."
+                final_message_text += f"\nSome messages (<code>{len(failed_to_delete_ids)}</code>) could not be deleted (e.g., too old, service, or from other bots)."
         elif errors_occurred:
-            final_message_text = f"Mrow! Could not delete messages. They might be older than 48 hours or service messages. Purge attempt took <code>{duration_secs:.2f}s</code>."
+            final_message_text = f"Mrow! Could not delete messages. They might be older than 48h or from other bots. Failed IDs: <code>{len(failed_to_delete_ids)}</code>. Purge attempt took <code>{duration_secs:.2f}s</code>."
         else: 
              final_message_text = f"Mrow? No messages were found to purge in the specified range (or only the command itself)."
         
         try:
             await context.bot.send_message(chat_id=chat.id, text=final_message_text, parse_mode=ParseMode.HTML)
         except Exception as e_send_final:
-            logger.error(f"DEBUG_PURGE: Failed to send final purge status message: {e_send_final}")
+            logger.error(f"DEBUG_PURGE_SINGLE: Failed to send final purge status message: {e_send_final}")
             
-    else: # Silent purge
+    else:
         total_targeted_for_user = len(message_ids_to_delete) -1 if command_message.message_id in message_ids_to_delete else len(message_ids_to_delete)
-        logger.info(f"DEBUG_PURGE: Silent purge completed. Targeted: {total_targeted_for_user}, Actually deleted (incl. command): {deleted_count_total}. Duration: {duration_secs:.2f}s. Errors: {errors_occurred}")
+        logger.info(f"DEBUG_PURGE_SINGLE: Silent purge completed. Targeted: {total_targeted_for_user}, Actually deleted (incl. command): {deleted_count_total}. Duration: {duration_secs:.2f}s. Errors: {errors_occurred}. Failed IDs: {failed_to_delete_ids}")
 
 # --- Main Function ---
 def main() -> None:
