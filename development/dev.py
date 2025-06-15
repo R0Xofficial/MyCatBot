@@ -2485,10 +2485,6 @@ async def promote_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             logger.info(f"Custom admin title '{provided_custom_title}' too long for user {target_user.id}. Defaulting to 'Admin'.")
         else:
             title_to_set = provided_custom_title
-    
-    can_promote_others_flag_for_target = False
-    if actor_chat_member and actor_chat_member.status == "creator":
-        can_promote_others_flag_for_target = False
         
     try:
         await context.bot.promote_chat_member(
@@ -2536,7 +2532,7 @@ async def demote_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     actor_chat_member: ChatMember | None = None
     try:
         actor_chat_member = await context.bot.get_chat_member(chat.id, user_who_demotes.id)
-        if actor_chat_member.status == "creator": # Twórca zawsze może
+        if actor_chat_member.status == "creator":
             actor_can_demote = True
         elif actor_chat_member.status == "administrator" and getattr(actor_chat_member, 'can_promote_members', False):
             actor_can_demote = True
