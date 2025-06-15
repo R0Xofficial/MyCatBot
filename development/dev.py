@@ -4240,6 +4240,25 @@ async def test_delete_bot_message(update: Update, context: ContextTypes.DEFAULT_
         await update.message.reply_text(f"Unexpected error deleting message {message_id_to_test_delete}: {e}")
         logger.error(f"Unexpected error deleting message {message_id_to_test_delete}: {e}", exc_info=True)
 
+async def minimal_delete_test(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not context.args:
+        await update.message.reply_text("Podaj ID wiadomości.")
+        return
+    try:
+        msg_id = int(context.args[0])
+        chat_id = update.effective_chat.id
+        logger.info(f"MINIMAL_DELETE: Attempting to delete message {msg_id} in chat {chat_id}")
+        bot_member = await context.bot.get_chat_member(chat_id, context.bot.id)
+        logger.info(f"MINIMAL_DELETE: Bot perms: status={bot_member.status}, can_delete={getattr(bot_member, 'can_delete_messages', False)}")
+        
+        result = await context.bot.delete_messages(chat_id=chat_id, message_ids=[msg_id])
+        
+        logger.info(f"MINIMAL_DELETE: Result for {msg_id}: {result}")
+        await update.message.reply_text(f"Minimal delete result for {msg_id}: {result}")
+    except Exception as e:
+        logger.error(f"MINIMAL_DELETE: Error: {e}", exc_info=True)
+        await update.message.reply_text(f"Minimal delete error: {e}")
+
 # --- Main Function ---
 def main() -> None:
     init_db()
@@ -4315,6 +4334,7 @@ def main() -> None:
     application.add_handler(CommandHandler("addsudo", add_sudo_command))
     application.add_handler(CommandHandler("delsudo", del_sudo_command))
     application.add_handler(CommandHandler("testdel", test_delete_bot_message))
+    application.add_handler(CommandHandler("mindel", minimal_delete_test))
 
     logger.info("Registering message handlers for group joins...")
     application.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS & filters.ChatType.GROUPS, handle_new_group_members))
