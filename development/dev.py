@@ -2492,8 +2492,7 @@ async def promote_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             can_manage_chat=True, can_delete_messages=True, can_manage_video_chats=False,
             can_restrict_members=True, can_change_info=True, can_invite_users=True,
             can_pin_messages=True, can_manage_topics=(chat.is_forum if hasattr(chat, 'is_forum') else None),
-            can_promote_members=can_promote_others_flag_for_target,
-            is_anonymous=False, can_post_messages=None, can_edit_messages=None, 
+            can_promote_members=False, is_anonymous=False, can_post_messages=None, can_edit_messages=None, 
             can_delete_stories=False, can_edit_stories=False, can_post_stories=False
         )
         await context.bot.set_chat_administrator_custom_title(chat.id, target_user.id, title_to_set)
