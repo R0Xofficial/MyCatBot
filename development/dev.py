@@ -4309,93 +4309,93 @@ def main() -> None:
     logger.info("Registering message handlers for group joins...")
     application.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS & filters.ChatType.GROUPS, handle_new_group_members))
 
-async def check_and_lift_expired_restrictions(application: Application) -> None:
-    logger.info("Checking for expired BAN restrictions...")
-    now_utc = datetime.now(timezone.utc)
-    restrictions_to_check = get_active_restrictions_from_db() 
-    lifted_count = 0
-    processed_count = 0
-
-    if not restrictions_to_check:
-        logger.info("No active restrictions found in the database to check.")
-        return
-
-    logger.info(f"Found {len(restrictions_to_check)} active restrictions to evaluate.")
-
-    for chat_id, user_id, restriction_type, until_timestamp_iso_str in restrictions_to_check:
-        processed_count +=1
-        
-        if restriction_type != "ban":
-            logger.debug(f"Skipping non-ban restriction: ChatID={chat_id}, UserID={user_id}, Type='{restriction_type}'")
-            continue
-
-        logger.debug(f"Evaluating BAN restriction: ChatID={chat_id}, UserID={user_id}, ExpiresISO='{until_timestamp_iso_str}'")
-
-        if until_timestamp_iso_str:
-            try:
-                until_dt_from_db = datetime.fromisoformat(until_timestamp_iso_str)
-                until_dt_from_db_aware_utc = None
-                if until_dt_from_db.tzinfo is None or until_dt_from_db.tzinfo.utcoffset(until_dt_from_db) is None:
-                    until_dt_from_db_aware_utc = until_dt_from_db.replace(tzinfo=timezone.utc)
-                else:
-                    until_dt_from_db_aware_utc = until_dt_from_db.astimezone(timezone.utc)
-                
-                if now_utc >= until_dt_from_db_aware_utc:
-                    logger.info(f"Ban for user {user_id} in chat {chat_id} EXPIRED. Lifting...")
-                    try:
-                        await application.bot.unban_chat_member(chat_id=chat_id, user_id=user_id, only_if_banned=True)
-                        logger.info(f"API unban_chat_member called for user {user_id} in chat {chat_id}")
-                        remove_restriction_from_db(chat_id, user_id, "ban")
-                        logger.info(f"Ban restriction removed from DB for user {user_id} in chat {chat_id}")
-                        lifted_count += 1
-                    except TelegramError as e_api:
-                        logger.error(f"API Error lifting expired ban for user {user_id} in chat {chat_id}: {e_api}")
-                        if "user not found" in str(e_api).lower() or "rights to restrict" in str(e_api).lower() or "not enough rights" in str(e_api).lower() or "member was kicked" in str(e_api).lower() or "user is not a member" in str(e_api).lower():
-                             logger.info(f"Removing expired ban from DB for user {user_id} in chat {chat_id} due to API error: {e_api}")
-                             remove_restriction_from_db(chat_id, user_id, "ban")
-                    except Exception as e_lift_unexpected:
-                        logger.error(f"Unexpected error lifting ban for user {user_id} in chat {chat_id}: {e_lift_unexpected}", exc_info=True)
-                else:
-                    logger.debug(f"Ban for user {user_id} in chat {chat_id} NOT YET EXPIRED.")
-            except ValueError as e_val:
-                logger.error(f"Invalid timestamp format in DB for ban restriction (Chat: {chat_id}, User: {user_id}). Error: {e_val}")
-            except Exception as e_outer_loop:
-                 logger.error(f"Error processing one ban restriction (Chat: {chat_id}, User: {user_id}): {e_outer_loop}", exc_info=True)
-        else:
-            logger.debug(f"Ban for UserID={user_id}, ChatID={chat_id} is permanent. Skipping.")
+    async def check_and_lift_expired_restrictions(application: Application) -> None:
+        logger.info("Checking for expired BAN restrictions...")
+        now_utc = datetime.now(timezone.utc)
+        restrictions_to_check = get_active_restrictions_from_db() 
+        lifted_count = 0
+        processed_count = 0
     
-    logger.info(f"Finished checking {processed_count} active restrictions (focused on bans).")
-    if lifted_count > 0:
-        logger.info(f"Lifted {lifted_count} expired ban restrictions.")
-    else:
-        logger.info("No expired ban restrictions were lifted during this check.")
-
-async def send_simple_startup_message(app: Application) -> None:
-        startup_message_text = "<i>Bot Started...</i>"
+        if not restrictions_to_check:
+            logger.info("No active restrictions found in the database to check.")
+            return
+    
+        logger.info(f"Found {len(restrictions_to_check)} active restrictions to evaluate.")
+    
+        for chat_id, user_id, restriction_type, until_timestamp_iso_str in restrictions_to_check:
+            processed_count +=1
+            
+            if restriction_type != "ban":
+                logger.debug(f"Skipping non-ban restriction: ChatID={chat_id}, UserID={user_id}, Type='{restriction_type}'")
+                continue
+    
+            logger.debug(f"Evaluating BAN restriction: ChatID={chat_id}, UserID={user_id}, ExpiresISO='{until_timestamp_iso_str}'")
+    
+            if until_timestamp_iso_str:
+                try:
+                    until_dt_from_db = datetime.fromisoformat(until_timestamp_iso_str)
+                    until_dt_from_db_aware_utc = None
+                    if until_dt_from_db.tzinfo is None or until_dt_from_db.tzinfo.utcoffset(until_dt_from_db) is None:
+                        until_dt_from_db_aware_utc = until_dt_from_db.replace(tzinfo=timezone.utc)
+                    else:
+                        until_dt_from_db_aware_utc = until_dt_from_db.astimezone(timezone.utc)
+                    
+                    if now_utc >= until_dt_from_db_aware_utc:
+                        logger.info(f"Ban for user {user_id} in chat {chat_id} EXPIRED. Lifting...")
+                        try:
+                            await application.bot.unban_chat_member(chat_id=chat_id, user_id=user_id, only_if_banned=True)
+                            logger.info(f"API unban_chat_member called for user {user_id} in chat {chat_id}")
+                            remove_restriction_from_db(chat_id, user_id, "ban")
+                            logger.info(f"Ban restriction removed from DB for user {user_id} in chat {chat_id}")
+                            lifted_count += 1
+                        except TelegramError as e_api:
+                            logger.error(f"API Error lifting expired ban for user {user_id} in chat {chat_id}: {e_api}")
+                            if "user not found" in str(e_api).lower() or "rights to restrict" in str(e_api).lower() or "not enough rights" in str(e_api).lower() or "member was kicked" in str(e_api).lower() or "user is not a member" in str(e_api).lower():
+                                 logger.info(f"Removing expired ban from DB for user {user_id} in chat {chat_id} due to API error: {e_api}")
+                                 remove_restriction_from_db(chat_id, user_id, "ban")
+                        except Exception as e_lift_unexpected:
+                            logger.error(f"Unexpected error lifting ban for user {user_id} in chat {chat_id}: {e_lift_unexpected}", exc_info=True)
+                    else:
+                        logger.debug(f"Ban for user {user_id} in chat {chat_id} NOT YET EXPIRED.")
+                except ValueError as e_val:
+                    logger.error(f"Invalid timestamp format in DB for ban restriction (Chat: {chat_id}, User: {user_id}). Error: {e_val}")
+                except Exception as e_outer_loop:
+                     logger.error(f"Error processing one ban restriction (Chat: {chat_id}, User: {user_id}): {e_outer_loop}", exc_info=True)
+            else:
+                logger.debug(f"Ban for UserID={user_id}, ChatID={chat_id} is permanent. Skipping.")
         
-        target_id_for_log = LOG_CHAT_ID
-        if not target_id_for_log and OWNER_ID:
-            target_id_for_log = OWNER_ID
-        
-        if target_id_for_log:
-            try:
-                await app.bot.send_message(chat_id=target_id_for_log, text=startup_message_text, parse_mode=ParseMode.HTML)
-                logger.info(f"Sent simple startup notification to {target_id_for_log}.")
-            except TelegramError as e:
-                logger.error(f"Failed to send simple startup message to {target_id_for_log}: {e}")
-                if LOG_CHAT_ID and target_id_for_log == LOG_CHAT_ID and OWNER_ID and LOG_CHAT_ID != OWNER_ID:
-                    logger.info("Falling back to send simple startup message to OWNER_ID.")
-                    try:
-                        await app.bot.send_message(chat_id=OWNER_ID, text=f"[Fallback] {startup_message_text}", parse_mode=ParseMode.HTML)
-                    except Exception as e_owner:
-                         logger.error(f"Failed to send simple startup message to OWNER_ID as fallback: {e_owner}")
-            except Exception as e_other:
-                logger.error(f"Unexpected error sending simple startup message to {target_id_for_log}: {e_other}", exc_info=True)
-
+        logger.info(f"Finished checking {processed_count} active restrictions (focused on bans).")
+        if lifted_count > 0:
+            logger.info(f"Lifted {lifted_count} expired ban restrictions.")
         else:
-            logger.warning("No target (LOG_CHAT_ID or OWNER_ID) to send simple startup message.")
+            logger.info("No expired ban restrictions were lifted during this check.")
+    
+    async def send_simple_startup_message(app: Application) -> None:
+            startup_message_text = "<i>Bot Started...</i>"
+            
+            target_id_for_log = LOG_CHAT_ID
+            if not target_id_for_log and OWNER_ID:
+                target_id_for_log = OWNER_ID
+            
+            if target_id_for_log:
+                try:
+                    await app.bot.send_message(chat_id=target_id_for_log, text=startup_message_text, parse_mode=ParseMode.HTML)
+                    logger.info(f"Sent simple startup notification to {target_id_for_log}.")
+                except TelegramError as e:
+                    logger.error(f"Failed to send simple startup message to {target_id_for_log}: {e}")
+                    if LOG_CHAT_ID and target_id_for_log == LOG_CHAT_ID and OWNER_ID and LOG_CHAT_ID != OWNER_ID:
+                        logger.info("Falling back to send simple startup message to OWNER_ID.")
+                        try:
+                            await app.bot.send_message(chat_id=OWNER_ID, text=f"[Fallback] {startup_message_text}", parse_mode=ParseMode.HTML)
+                        except Exception as e_owner:
+                             logger.error(f"Failed to send simple startup message to OWNER_ID as fallback: {e_owner}")
+                except Exception as e_other:
+                    logger.error(f"Unexpected error sending simple startup message to {target_id_for_log}: {e_other}", exc_info=True)
+    
+            else:
+                logger.warning("No target (LOG_CHAT_ID or OWNER_ID) to send simple startup message.")
 
-application.post_init = send_simple_startup_message
+    application.post_init = send_simple_startup_message
 
     logger.info(f"Bot starting polling... Owner ID configured: {OWNER_ID}")
     print(f"Bot starting polling... Owner ID: {OWNER_ID}")
