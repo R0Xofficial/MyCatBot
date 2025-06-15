@@ -1878,7 +1878,7 @@ async def ban_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
     try:
         bot_member = await context.bot.get_chat_member(chat.id, context.bot.id)
-        if not (bot_member.status == ChatMemberStatus.ADMINISTRATOR and getattr(bot_member, 'can_restrict_members', False)):
+        if not (bot_member.status == "administrator" and getattr(bot_member, 'can_restrict_members', False)):
             await update.message.reply_text("Meeeow! I need to be an admin with rights to ban users in this chat. 😿")
             return
     except TelegramError as e:
@@ -1887,12 +1887,13 @@ async def ban_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         return
         
     is_caller_privileged_for_bot = is_privileged_user(user_who_bans.id)
+    actor_chat_member: ChatMember | None = None
     if not is_caller_privileged_for_bot:
         try:
             actor_chat_member = await context.bot.get_chat_member(chat.id, user_who_bans.id)
             if not (actor_chat_member.status in ["administrator", "creator"] and \
                     getattr(actor_chat_member, 'can_restrict_members', False)):
-                await update.message.reply_text("Meeeow! You need to be an admin with rights to ban users in this chat.")
+                await update.message.reply_text("Meeeow! You need to be an admin with rights to ban users in this chat, or a bot privileged user.")
                 return
         except TelegramError as e:
             logger.warning(f"Could not get chat member info for ban executor {user_who_bans.id} in {chat.id}: {e}")
@@ -1947,28 +1948,34 @@ async def ban_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     if target_user.id == context.bot.id: await update.message.reply_text("I can't ban myself!"); return
     if target_user.id == user_who_bans.id: await update.message.reply_text("Mrow? You can't ban yourself."); return
     
+    target_chat_member_status: str | None = None
     try:
         target_chat_member = await context.bot.get_chat_member(chat.id, target_user.id)
-        if target_chat_member.status == "creator":
+        target_chat_member_status = target_chat_member.status
+        if target_chat_member_status == "creator":
             await update.message.reply_text("Meeeow! The chat Creator is sacred and cannot be touched by this bot! 😼👑")
             return
+        if target_chat_member_status == "administrator":
+            is_caller_chat_creator = actor_chat_member and actor_chat_member.status == "creator"
+            is_caller_bot_owner = is_privileged_user(user_who_bans.id) and user_who_bans.id == OWNER_ID
+            if not (is_caller_chat_creator or is_caller_bot_owner):
+                await update.message.reply_text("Meeeow! Only the chat Creator or the Bot Owner can ban other administrators.")
+                return
     except TelegramError as e:
         if "user not found" in str(e).lower(): logger.info(f"Target user {target_user.id} for /ban not found in chat {chat.id}.")
         else: logger.warning(f"Could not get target's chat member status for /ban: {e}")
 
     duration_td = parse_duration_to_timedelta(duration_str)
-    until_date_timestamp_iso: str | None = None
     until_date_dt: datetime | None = None
     time_str_display = "permanently"
 
     if duration_td:
         until_date_dt = datetime.now(timezone.utc) + duration_td
-        until_date_timestamp_iso = until_date_dt.isoformat()
         time_str_display = f"for {duration_str}"
     
     try:
         await context.bot.ban_chat_member(chat_id=chat.id, user_id=target_user.id, until_date=until_date_dt)
-        add_restriction_to_db(chat.id, target_user.id, "ban", user_who_bans.id, until_date_timestamp_iso, reason)
+        add_ban_restriction_to_db(chat.id, target_user.id, user_who_bans.id, until_date_dt, reason) 
         user_display_name = target_user.mention_html() if target_user.username else html.escape(target_user.first_name or str(target_user.id))
         
         response_lines = ["Meow! User Banned:"]
