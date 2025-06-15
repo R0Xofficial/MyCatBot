@@ -1571,6 +1571,7 @@ HELP_TEXT = """
 /demote [ID/reply/@user] - Demote an administrator to a regular member. 🙍‍♂️
 /pin [silent] - Pin the replied message. 📌
 /unpin - Unpin the replied message. 📍
+/purge [silent] - Deletes all messages up to the replied-to message.
 
 <b>4FUN Commands:</b>
 /gif - Get a random cat GIF! 🖼️
