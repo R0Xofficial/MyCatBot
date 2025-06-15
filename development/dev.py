@@ -1975,7 +1975,7 @@ async def ban_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     
     try:
         await context.bot.ban_chat_member(chat_id=chat.id, user_id=target_user.id, until_date=until_date_dt)
-        add_ban_restriction_to_db(chat.id, target_user.id, user_who_bans.id, until_date_dt, reason) 
+        add_restriction_to_db(chat.id, target_user.id, user_who_bans.id, until_date_dt, reason) 
         user_display_name = target_user.mention_html() if target_user.username else html.escape(target_user.first_name or str(target_user.id))
         
         response_lines = ["Meow! User Banned:"]
