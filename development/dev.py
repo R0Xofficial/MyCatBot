@@ -1880,13 +1880,12 @@ async def ban_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         return
         
     is_caller_privileged_for_bot = is_privileged_user(user_who_bans.id)
-    actor_chat_member: ChatMember | None = None
     if not is_caller_privileged_for_bot:
         try:
             actor_chat_member = await context.bot.get_chat_member(chat.id, user_who_bans.id)
             if not (actor_chat_member.status in ["administrator", "creator"] and \
                     getattr(actor_chat_member, 'can_restrict_members', False)):
-                await update.message.reply_text("Meeeow! You need to be an admin with rights to ban users in this chat, or a bot privileged user.")
+                await update.message.reply_text("Meeeow! You need to be an admin with rights to ban users in this chat.")
                 return
         except TelegramError as e:
             logger.warning(f"Could not get chat member info for ban executor {user_who_bans.id} in {chat.id}: {e}")
@@ -1941,40 +1940,34 @@ async def ban_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     if target_user.id == context.bot.id: await update.message.reply_text("I can't ban myself!"); return
     if target_user.id == user_who_bans.id: await update.message.reply_text("Mrow? You can't ban yourself."); return
     
-    target_chat_member_status: str | None = None
     try:
         target_chat_member = await context.bot.get_chat_member(chat.id, target_user.id)
-        target_chat_member_status = target_chat_member.status
-        if target_chat_member_status == "creator":
+        if target_chat_member.status == "creator":
             await update.message.reply_text("Meeeow! The chat Creator is sacred and cannot be touched by this bot! 😼👑")
             return
-        if target_chat_member_status == "administrator":
-            is_caller_chat_creator = actor_chat_member and actor_chat_member.status == "creator"
-            is_caller_bot_owner = is_privileged_user(user_who_bans.id) and user_who_bans.id == OWNER_ID
-            if not (is_caller_chat_creator or is_caller_bot_owner):
-                await update.message.reply_text("Meeeow! Only the chat Creator or the Bot Owner can ban other administrators.")
-                return
     except TelegramError as e:
         if "user not found" in str(e).lower(): logger.info(f"Target user {target_user.id} for /ban not found in chat {chat.id}.")
         else: logger.warning(f"Could not get target's chat member status for /ban: {e}")
 
     duration_td = parse_duration_to_timedelta(duration_str)
+    until_date_timestamp_iso: str | None = None
     until_date_dt: datetime | None = None
     time_str_display = "permanently"
 
     if duration_td:
         until_date_dt = datetime.now(timezone.utc) + duration_td
+        until_date_timestamp_iso = until_date_dt.isoformat()
         time_str_display = f"for {duration_str}"
     
     try:
         await context.bot.ban_chat_member(chat_id=chat.id, user_id=target_user.id, until_date=until_date_dt)
-        add_restriction_to_db(chat.id, target_user.id, "ban", user_who_bans.id, until_date_dt, reason)
+        add_restriction_to_db(chat.id, target_user.id, "ban", user_who_bans.id, until_date_timestamp_iso, reason)
         user_display_name = target_user.mention_html() if target_user.username else html.escape(target_user.first_name or str(target_user.id))
         
         response_lines = ["Meow! User Banned:"]
         response_lines.append(f"<b>• User:</b> {user_display_name} (<code>{target_user.id}</code>)")
         response_lines.append(f"<b>• Reason:</b> {html.escape(reason)}")
-        if duration_str: response_lines.append(f"  <b>• Duration:</b> <code>{time_str_display.replace('for ', '')}</code> (until <code>{until_date_dt.strftime('%Y-%m-%d %H:%M:%S %Z') if until_date_dt else 'Permanent'}</code>)")
+        if duration_str: response_lines.append(f"<b>• Duration:</b> <code>{time_str_display.replace('for ', '')}</code> (until <code>{until_date_dt.strftime('%Y-%m-%d %H:%M:%S %Z') if until_date_dt else 'Permanent'}</code>)")
         else: response_lines.append(f"<b>• Duration:</b> <code>Permanent</code>")
         await update.message.reply_html("\n".join(response_lines))
     except TelegramError as e: await update.message.reply_text(f"Failed to ban user: {html.escape(str(e))}")
@@ -2071,13 +2064,12 @@ async def mute_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         return
         
     is_caller_privileged_for_bot = is_privileged_user(user_who_mutes.id)
-    actor_chat_member: ChatMember | None = None
     if not is_caller_privileged_for_bot:
         try:
             actor_chat_member = await context.bot.get_chat_member(chat.id, user_who_mutes.id)
             if not (actor_chat_member.status in ["administrator", "creator"] and \
                     getattr(actor_chat_member, 'can_restrict_members', False)):
-                await update.message.reply_text("Meeeow! You need to be an admin with rights to restrict users in this chat, or a bot sudo user.")
+                await update.message.reply_text("Meeeow! You need to be an admin with rights to restrict users in this chat.")
                 return
         except TelegramError as e:
             logger.warning(f"Could not get chat member info for mute executor {user_who_mutes.id} in {chat.id}: {e}")
@@ -2132,19 +2124,11 @@ async def mute_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     if target_user.id == context.bot.id: await update.message.reply_text("I can't mute myself!"); return
     if target_user.id == user_who_mutes.id: await update.message.reply_text("Mrow? You can't mute yourself."); return
     
-    target_chat_member_status: str | None = None
     try:
         target_chat_member = await context.bot.get_chat_member(chat.id, target_user.id)
-        target_chat_member_status = target_chat_member.status
-        if target_chat_member_status == "creator":
+        if target_chat_member.status == "creator":
             await update.message.reply_text("Meeeow! The chat Creator is sacred and cannot be muted by this bot! 😼👑")
             return
-        if target_chat_member_status == "administrator":
-            is_caller_chat_creator = actor_chat_member and actor_chat_member.status == "creator"
-            is_caller_bot_owner = is_privileged_user(user_who_mutes.id) and user_who_mutes.id == OWNER_ID
-            if not (is_caller_chat_creator or is_caller_bot_owner):
-                 await update.message.reply_text("Meeeow! Only the chat Creator or the Bot Owner can mute other administrators.")
-                 return
     except TelegramError as e:
         if "user not found" in str(e).lower():
             await update.message.reply_text(f"User {target_user.mention_html()} is not in this chat, cannot be muted.")
@@ -2153,23 +2137,25 @@ async def mute_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
     duration_td = parse_duration_to_timedelta(duration_str)
     permissions_to_set_for_mute = ChatPermissions(can_send_messages=False, can_send_audios=False, can_send_documents=False, can_send_photos=False, can_send_videos=False, can_send_video_notes=False, can_send_voice_notes=False, can_send_polls=False, can_send_other_messages=False, can_add_web_page_previews=False)
+    until_date_timestamp_iso: str | None = None
     until_date_dt: datetime | None = None
     time_str_display = "permanently"
 
     if duration_td:
         until_date_dt = datetime.now(timezone.utc) + duration_td
+        until_date_timestamp_iso = until_date_dt.isoformat()
         time_str_display = f"for {duration_str}"
     
     try:
         await context.bot.restrict_chat_member(chat_id=chat.id, user_id=target_user.id, permissions=permissions_to_set_for_mute, until_date=until_date_dt)
-        add_restriction_to_db(chat.id, target_user.id, "mute", user_who_mutes.id, until_date_dt, reason)
+        add_restriction_to_db(chat.id, target_user.id, "mute", user_who_mutes.id, until_date_timestamp_iso, reason)
         user_display_name = target_user.mention_html() if target_user.username else html.escape(target_user.first_name or str(target_user.id))
         
         response_lines = ["Meow! User Muted:"]
-        response_lines.append(f"  <b>• User:</b> {user_display_name} (<code>{target_user.id}</code>)")
-        response_lines.append(f"  <b>• Reason:</b> {html.escape(reason)}")
-        if duration_str: response_lines.append(f"  <b>• Duration:</b> <code>{time_str_display.replace('for ', '')}</code> (until <code>{until_date_dt.strftime('%Y-%m-%d %H:%M:%S %Z') if until_date_dt else 'Permanent'}</code>)")
-        else: response_lines.append(f"  <b>• Duration:</b> <code>Permanent</code>")
+        response_lines.append(f"<b>• User:</b> {user_display_name} (<code>{target_user.id}</code>)")
+        response_lines.append(f"<b>• Reason:</b> {html.escape(reason)}")
+        if duration_str: response_lines.append(f"<b>• Duration:</b> <code>{time_str_display.replace('for ', '')}</code> (until <code>{until_date_dt.strftime('%Y-%m-%d %H:%M:%S %Z') if until_date_dt else 'Permanent'}</code>)")
+        else: response_lines.append(f"<b>• Duration:</b> <code>Permanent</code>")
         await update.message.reply_html("\n".join(response_lines))
     except TelegramError as e: await update.message.reply_text(f"Failed to mute user: {html.escape(str(e))}")
     except Exception as e: logger.error(f"Unexpected error in /mute: {e}", exc_info=True); await update.message.reply_text("An unexpected error occurred.")
@@ -4338,78 +4324,47 @@ def main() -> None:
 
     application.post_init = send_simple_startup_message
 
-async def check_and_lift_expired_restrictions(application: Application) -> None:
-    logger.info("Checking for expired restrictions...")
-    now_utc = datetime.now(timezone.utc)
-    restrictions_to_check = get_active_restrictions_from_db()
-    lifted_count = 0
-    processed_count = 0
-
-    if not restrictions_to_check:
-        logger.info("No active restrictions found in the database to check.")
-        return
-
-    logger.info(f"Found {len(restrictions_to_check)} active restrictions to evaluate.")
-
-    for chat_id, user_id, restriction_type, until_timestamp_iso_str in restrictions_to_check:
-        processed_count +=1
-        logger.debug(f"Evaluating restriction: ChatID={chat_id}, UserID={user_id}, Type='{restriction_type}', ExpiresISO='{until_timestamp_iso_str}'")
-
-        if until_timestamp_iso_str:
-            try:
-                until_dt_from_db = datetime.fromisoformat(until_timestamp_iso_str)
-
-                if until_dt_from_db.tzinfo is None or until_dt_from_db.tzinfo.utcoffset(until_dt_from_db) is None:
-                    logger.warning(f"Timestamp for restriction (Chat: {chat_id}, User: {user_id}) from DB is naive: '{until_timestamp_iso_str}'. Assuming UTC.")
-                    until_dt_from_db_aware_utc = until_dt_from_db.replace(tzinfo=timezone.utc)
-                else:
-                    until_dt_from_db_aware_utc = until_dt_from_db.astimezone(timezone.utc)
-                
-                logger.debug(f"Comparing: Now_UTC ({now_utc}) vs Expires_UTC ({until_dt_from_db_aware_utc}) for User {user_id} in Chat {chat_id}")
-
-                if now_utc >= until_dt_from_db_aware_utc:
-                    logger.info(f"Restriction '{restriction_type}' for user {user_id} in chat {chat_id} EXPIRED. Lifting...")
-                    try:
-                        if restriction_type == "ban":
-                            await application.bot.unban_chat_member(chat_id=chat_id, user_id=user_id, only_if_banned=True)
-                            logger.info(f"API unban_chat_member called for user {user_id} in chat {chat_id}")
-                        elif restriction_type == "mute":
-                            perms_to_restore = ChatPermissions(
-                                can_send_messages=True, can_send_audios=True, can_send_documents=True,
-                                can_send_photos=True, can_send_videos=True, can_send_video_notes=True,
-                                can_send_voice_notes=True, can_send_polls=True, can_send_other_messages=True,
-                                can_add_web_page_previews=True, can_change_info=None, 
-                                can_invite_users=None, can_pin_messages=None, can_manage_topics=None
-                            )
-                            await application.bot.restrict_chat_member(chat_id=chat_id, user_id=user_id, permissions=perms_to_restore, until_date=0)
-                            logger.info(f"API restrict_chat_member (unmute) called for user {user_id} in chat {chat_id}")
-                        
-                        remove_restriction_from_db(chat_id, user_id, restriction_type)
-                        logger.info(f"Restriction removed from DB for user {user_id} in chat {chat_id}")
-                        lifted_count += 1
-                        
-                    except TelegramError as e_api:
-                        logger.error(f"API Error lifting expired {restriction_type} for user {user_id} in chat {chat_id}: {e_api}")
-                        if "user not found" in str(e_api).lower() or "rights to restrict" in str(e_api).lower() or "not enough rights" in str(e_api).lower() or "member was kicked" in str(e_api).lower():
-                             logger.info(f"Removing expired restriction from DB for user {user_id} in chat {chat_id} due to API error indicating user state or bot permissions.")
-                             remove_restriction_from_db(chat_id, user_id, restriction_type)
-                    except Exception as e_lift_unexpected:
-                        logger.error(f"Unexpected error lifting {restriction_type} for user {user_id} in chat {chat_id}: {e_lift_unexpected}", exc_info=True)
-                else:
-                    logger.debug(f"Restriction for user {user_id} in chat {chat_id} NOT YET EXPIRED.")
-
-            except ValueError as e_val:
-                logger.error(f"Invalid timestamp format in DB, cannot parse: '{until_timestamp_iso_str}' for restriction (Chat: {chat_id}, User: {user_id}). Error: {e_val}")
-            except Exception as e_outer_loop:
-                 logger.error(f"Error processing one restriction (Chat: {chat_id}, User: {user_id}): {e_outer_loop}", exc_info=True)
-        else:
-            logger.debug(f"Restriction for UserID={user_id}, ChatID={chat_id}, Type='{restriction_type}' is permanent (no expiry timestamp). Skipping.")
+    async def check_and_lift_expired_restrictions(application: Application) -> None:
+        logger.info("Checking for expired restrictions...")
+        now_utc = datetime.now(timezone.utc)
+        restrictions_to_check = get_active_restrictions_from_db()
+        lifted_count = 0
     
-    logger.info(f"Finished checking {processed_count} active restrictions.")
-    if lifted_count > 0:
-        logger.info(f"Lifted {lifted_count} expired restrictions.")
-    else:
-        logger.info("No expired restrictions were lifted during this check.")
+        for chat_id, user_id, restriction_type, until_timestamp_iso in restrictions_to_check:
+            if until_timestamp_iso:
+                try:
+                    until_dt = datetime.fromisoformat(until_timestamp_iso)
+                    if now_utc >= until_dt:
+                        logger.info(f"Restriction '{restriction_type}' for user {user_id} in chat {chat_id} expired. Lifting...")
+                        try:
+                            if restriction_type == "ban":
+                                await application.bot.unban_chat_member(chat_id=chat_id, user_id=user_id, only_if_banned=True)
+                            elif restriction_type == "mute":
+                                perms_to_restore = ChatPermissions(
+                                    can_send_messages=True, can_send_audios=True, can_send_documents=True,
+                                    can_send_photos=True, can_send_videos=True, can_send_video_notes=True,
+                                    can_send_voice_notes=True, can_send_polls=True, can_send_other_messages=True,
+                                    can_add_web_page_previews=True, can_change_info=True, can_invite_users=True,
+                                    can_pin_messages=True, can_manage_topics=True 
+                                )
+                                await application.bot.restrict_chat_member(chat_id=chat_id, user_id=user_id, permissions=perms_to_restore)
+                            
+                            remove_restriction_from_db(chat_id, user_id, restriction_type)
+                            lifted_count += 1
+                            
+                        except TelegramError as e:
+                            logger.error(f"Failed to lift expired {restriction_type} for user {user_id} in chat {chat_id}: {e}")
+                            if "user not found" in str(e).lower() or "rights to restrict" in str(e).lower():
+                                 remove_restriction_from_db(chat_id, user_id, restriction_type)
+                        except Exception as e_lift:
+                            logger.error(f"Unexpected error lifting {restriction_type} for user {user_id} in chat {chat_id}: {e_lift}", exc_info=True)
+                except ValueError:
+                    logger.error(f"Invalid timestamp format in DB for restriction: chat {chat_id}, user {user_id}, ts: {until_timestamp_iso}")
+        
+        if lifted_count > 0:
+            logger.info(f"Lifted {lifted_count} expired restrictions.")
+        else:
+            logger.info("No expired restrictions found to lift or process.")
 
     logger.info(f"Bot starting polling... Owner ID configured: {OWNER_ID}")
     print(f"Bot starting polling... Owner ID: {OWNER_ID}")
