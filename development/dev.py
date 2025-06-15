@@ -4323,8 +4323,7 @@ async def send_simple_startup_message(app: Application) -> None:
 def main() -> None:
     init_db()
     logger.info("Initializing bot application...")
-    application = Application.builder().token(BOT_TOKEN).build()
-
+    
     connect_timeout_val = 20.0
     read_timeout_val = 80.0
     write_timeout_val = 80.0
@@ -4337,12 +4336,14 @@ def main() -> None:
         pool_timeout=pool_timeout_val
     )
     application = Application.builder().token(BOT_TOKEN).request(custom_request_settings).build()
+    
     logger.info(f"Custom request timeouts set for HTTPXRequest: "
                 f"Connect={connect_timeout_val}, Read={read_timeout_val}, "
                 f"Write={write_timeout_val}, Pool={pool_timeout_val}")
     
-    logger.info("Registering blacklist check handler...")
-    application.add_handler(MessageHandler(filters.COMMAND, check_blacklist_handler), group=-1)
+    logger.info("Registering global pre-handlers...")
+    application.add_handler(MessageHandler(filters.COMMAND & (~filters.UpdateType.EDITED_MESSAGE), check_blacklist_handler), group=-2)
+    application.add_handler(MessageHandler(filters.TEXT & (~filters.UpdateType.EDITED_MESSAGE), mban_monitor_handler), group=-1)
 
     logger.info("Registering user interaction logging handler...")
     application.add_handler(MessageHandler(
@@ -4390,27 +4391,51 @@ def main() -> None:
     application.add_handler(CommandHandler("speedtest", speedtest_command))
     application.add_handler(CommandHandler("blist", blacklist_user_command))
     application.add_handler(CommandHandler("unblist", unblacklist_user_command))
+    application.add_handler(CommandHandler("mban", mban_command))
+    application.add_handler(CommandHandler("unmban", unmban_command))
     application.add_handler(CommandHandler("listsudo", list_sudo_users_command))
     application.add_handler(CommandHandler("addsudo", add_sudo_command))
     application.add_handler(CommandHandler("delsudo", del_sudo_command))
+    application.add_handler(CommandHandler("update", update_bot_command))
 
-    logger.info("Registering message handlers for group joins...")
+
+    logger.info("Registering other message handlers...")
     application.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS & filters.ChatType.GROUPS, handle_new_group_members))
 
-    async def post_init_tasks(app: Application):
-        await send_simple_startup_message(app)
-        await check_and_lift_expired_restrictions(app)
 
+    async def post_init_tasks(app: Application):
+        if 'send_simple_startup_message' in globals() and callable(globals()['send_simple_startup_message']):
+            await send_simple_startup_message(app)
+        else:
+            logger.error("send_simple_startup_message function not found for post_init!")
+
+        if 'check_and_lift_expired_restrictions' in globals() and callable(globals()['check_and_lift_expired_restrictions']):
+            await check_and_lift_expired_restrictions(app)
+        else:
+            logger.error("check_and_lift_expired_restrictions function not found for post_init!")
+    
     application.post_init = post_init_tasks
 
     logger.info(f"Bot starting polling... Owner ID configured: {OWNER_ID}")
     print(f"Bot starting polling... Owner ID: {OWNER_ID}")
-    try: application.run_polling(allowed_updates=Update.ALL_TYPES)
-    except KeyboardInterrupt: logger.info("Bot stopped by user (Ctrl+C)."); print("\nBot stopped by user.")
-    except TelegramError as te: logger.critical(f"CRITICAL: TelegramError during polling: {te}"); print(f"\n--- FATAL TELEGRAM ERROR ---\n{te}"); exit(1)
-    except Exception as e: logger.critical(f"CRITICAL: Bot crashed unexpectedly: {e}", exc_info=True); print(f"\n--- FATAL ERROR ---\nBot crashed: {e}"); exit(1)
-    finally: logger.info("Bot shutdown process initiated."); print("Bot shutting down...")
-    logger.info("Bot stopped."); print("Bot stopped.")
+    try: 
+        application.run_polling(allowed_updates=Update.ALL_TYPES)
+    except KeyboardInterrupt: 
+        logger.info("Bot stopped by user (Ctrl+C).")
+        print("\nBot stopped by user.")
+    except TelegramError as te: 
+        logger.critical(f"CRITICAL: TelegramError during polling: {te}")
+        print(f"\n--- FATAL TELEGRAM ERROR ---\n{te}")
+        exit(1)
+    except Exception as e: 
+        logger.critical(f"CRITICAL: Bot crashed unexpectedly: {e}", exc_info=True)
+        print(f"\n--- FATAL ERROR ---\nBot crashed: {e}")
+        exit(1)
+    finally: 
+        logger.info("Bot shutdown process initiated.")
+        print("Bot shutting down...")
+    logger.info("Bot stopped.")
+    print("Bot stopped.")
 
 # --- Script Execution ---
 if __name__ == "__main__":
