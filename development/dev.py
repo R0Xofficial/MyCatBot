@@ -4270,91 +4270,108 @@ async def debug_purge_messages_command(update: Update, context: ContextTypes.DEF
     end_message_id = command_message.message_id 
     
     message_ids_to_delete = list(range(start_message_id, end_message_id + 1))
-    logger.info(f"DEBUG_PURGE_SINGLE: Generated message_ids_to_delete (count: {len(message_ids_to_delete)}): {message_ids_to_delete}")
-
-    if not message_ids_to_delete or len(message_ids_to_delete) < 2 :
-        logger.info("DEBUG_PURGE_SINGLE: No messages in range or only the command message itself.")
-        if not is_silent_purge:
-            await command_message.reply_text("Mrow? No messages found between your reply and this command to delete.")
-        elif bot_member and getattr(bot_member, 'can_delete_messages', False) and command_message.message_id in message_ids_to_delete:
-             try: 
-                 logger.info(f"DEBUG_PURGE_SINGLE: Silently deleting only the command message: {command_message.message_id}")
-                 await context.bot.delete_messages(chat.id, [command_message.message_id])
-             except Exception as e_del_cmd:
-                 logger.warning(f"DEBUG_PURGE_SINGLE: Failed to delete silent command message: {e_del_cmd}")
-        return
+    logger.info(f"PURGE_BATCH_MODE: Generated message_ids_to_delete (count: {len(message_ids_to_delete)}): {message_ids_to_delete}")
 
     deleted_count_total = 0
     errors_occurred = False
-    failed_to_delete_ids = []
+    failed_ids_in_batches = [] # Lista na ID, które API oznaczyło jako nieudane
     start_time = datetime.now()
-    logger.info(f"DEBUG_PURGE_SINGLE: Starting single message deletion loop. Total IDs to try: {len(message_ids_to_delete)}")
 
-    for msg_id_to_del in message_ids_to_delete:
-        logger.info(f"DEBUG_PURGE_SINGLE: Attempting to delete single ID: {msg_id_to_del}")
+    for i in range(0, len(message_ids_to_delete), 100):
+        batch_ids = message_ids_to_delete[i:i + 100]
+        logger.info(f"PURGE_BATCH_MODE: Processing batch_ids: {batch_ids}")
         try:
-            success_flags = await context.bot.delete_messages(chat_id=chat.id, message_ids=[msg_id_to_del])
-            logger.info(f"DEBUG_PURGE_SINGLE: Result for single ID {msg_id_to_del}: {success_flags}")
-
-            if isinstance(success_flags, list) and len(success_flags) > 0 and success_flags[0] is True:
-                deleted_count_total += 1
-                logger.info(f"DEBUG_PURGE_SINGLE: Successfully deleted message ID: {msg_id_to_del}")
-            elif isinstance(success_flags, bool) and success_flags:
-                deleted_count_total +=1
-                logger.info(f"DEBUG_PURGE_SINGLE: Successfully deleted message ID: {msg_id_to_del} (API returned single bool)")
-            else:
-                errors_occurred = True
-                failed_to_delete_ids.append(msg_id_to_del)
-                logger.warning(f"DEBUG_PURGE_SINGLE: Failed to delete message ID: {msg_id_to_del}, API result: {success_flags}")
+            # To jest kluczowe wywołanie
+            success_flags = await context.bot.delete_messages(chat_id=chat.id, message_ids=batch_ids)
             
-            await asyncio.sleep(0.3)
+            logger.info(f"PURGE_BATCH_MODE: Result for batch {batch_ids}: {success_flags} (type: {type(success_flags)})")
+
+            current_batch_deleted_count = 0
+            if isinstance(success_flags, bool) and success_flags:
+                # Jeśli API zwróciło pojedyncze True, zakładamy, że wszystkie w paczce się udały
+                current_batch_deleted_count = len(batch_ids)
+                logger.info(f"PURGE_BATCH_MODE: API returned single True for batch. Assuming all {len(batch_ids)} deleted.")
+            elif isinstance(success_flags, list):
+                # Jeśli API zwróciło listę, iterujemy po niej
+                for idx, succeeded in enumerate(success_flags):
+                    if succeeded:
+                        current_batch_deleted_count += 1
+                    else:
+                        # Ta wiadomość z paczki się nie udała
+                        failed_id = batch_ids[idx]
+                        failed_ids_in_batches.append(failed_id)
+                        logger.warning(f"PURGE_BATCH_MODE: API indicated failure for message ID: {failed_id} in batch.")
+                if current_batch_deleted_count < len(batch_ids):
+                    errors_occurred = True # Oznacz, że były błędy w tej paczce
+            else: # Nieoczekiwany typ wyniku
+                errors_occurred = True
+                logger.error(f"PURGE_BATCH_MODE: delete_messages returned unexpected type for batch {batch_ids}: {type(success_flags)}, value: {success_flags}")
+            
+            deleted_count_total += current_batch_deleted_count
+            
+            if current_batch_deleted_count < len(batch_ids) and not errors_occurred:
+                 # To się nie powinno zdarzyć, jeśli current_batch_deleted_count jest poprawnie zliczone z listy bool
+                 errors_occurred = True 
+                 logger.warning(f"PURGE_BATCH_MODE: Discrepancy in deleted count for batch. Expected {len(batch_ids)}, counted {current_batch_deleted_count}.")
+            
+            if errors_occurred and current_batch_deleted_count < len(batch_ids):
+                 logger.warning(f"PURGE_BATCH_MODE: Partially purged batch. Expected {len(batch_ids)}, successfully deleted {current_batch_deleted_count}.")
+
+            if len(message_ids_to_delete) > 100 and i + 100 < len(message_ids_to_delete):
+                await asyncio.sleep(1.1)
         except TelegramError as e:
-            logger.error(f"DEBUG_PURGE_SINGLE: TelegramError deleting single ID {msg_id_to_del}: {e}")
+            logger.error(f"PURGE_BATCH_MODE: TelegramError during purge batch {batch_ids}: {e}")
             errors_occurred = True
-            failed_to_delete_ids.append(msg_id_to_del)
+            failed_ids_in_batches.extend(batch_ids) # Załóż, że cała paczka zawiodła przy błędzie API
             if "message to delete not found" in str(e).lower() or "message can't be deleted" in str(e).lower():
-                logger.warning(f"DEBUG_PURGE_SINGLE: Message {msg_id_to_del} not found or can't be deleted.")
-            else: # Inny błąd API, może warto przerwać
+                logger.warning(f"PURGE_BATCH_MODE: Some messages in batch {batch_ids} not found or can't be deleted (e.g., too old, service message).")
+            else:
                 if not is_silent_purge:
-                    try: await context.bot.send_message(chat.id, f"Mrow! API error during single delete for {msg_id_to_del}: {html.escape(str(e))}. Stopping purge.")
-                    except Exception as e_send: logger.error(f"DEBUG_PURGE_SINGLE: Failed to send API error message to chat: {e_send}")
+                    try: await context.bot.send_message(chat_id=chat.id, text=f"Mrow! API error during batch delete: {html.escape(str(e))}. Purge might be incomplete.")
+                    except Exception as e_send: logger.error(f"PURGE_BATCH_MODE: Failed to send API error message to chat: {e_send}")
                 break 
         except Exception as e:
-            logger.error(f"DEBUG_PURGE_SINGLE: Unexpected error deleting single ID {msg_id_to_del}: {e}", exc_info=True)
+            logger.error(f"PURGE_BATCH_MODE: Unexpected error during purge batch {batch_ids}: {e}", exc_info=True)
             errors_occurred = True
-            failed_to_delete_ids.append(msg_id_to_del)
+            failed_ids_in_batches.extend(batch_ids) # Załóż, że cała paczka zawiodła
             if not is_silent_purge:
-                try: await context.bot.send_message(chat.id, "Mrow! An unexpected error occurred during single deletion. Stopping purge.")
-                except Exception as e_send: logger.error(f"DEBUG_PURGE_SINGLE: Failed to send unexpected error message to chat: {e_send}")
+                try: await context.bot.send_message(chat_id=chat.id, text="Mrow! An unexpected error occurred during deletion. Purge might be incomplete.")
+                except Exception as e_send: logger.error(f"PURGE_BATCH_MODE: Failed to send unexpected error message to chat: {e_send}")
             break 
     
     end_time = datetime.now()
     duration_secs = (end_time - start_time).total_seconds()
-    logger.info(f"DEBUG_PURGE_SINGLE: Purge loop finished. Total deleted: {deleted_count_total} out of {len(message_ids_to_delete)}. Errors: {errors_occurred}. Duration: {duration_secs:.2f}s")
-    if failed_to_delete_ids:
-        logger.warning(f"DEBUG_PURGE_SINGLE: IDs failed to delete: {failed_to_delete_ids}")
+    logger.info(f"PURGE_BATCH_MODE: Purge loop finished. Total reported as deleted by API: {deleted_count_total}. Errors occurred: {errors_occurred}. Duration: {duration_secs:.2f}s")
+    if failed_ids_in_batches:
+        logger.warning(f"PURGE_BATCH_MODE: Message IDs reported as FAILED by API or in errored batches: {list(set(failed_ids_in_batches))}") # Pokaż unikalne ID
 
+    # ... (reszta logiki wyświetlania wiadomości o sukcesie/błędzie, używając deleted_count_total i errors_occurred)
     if not is_silent_purge:
         display_deleted_count = deleted_count_total
-        if command_message.message_id in message_ids_to_delete and command_message.message_id not in failed_to_delete_ids:
-             display_deleted_count = max(0, deleted_count_total -1 )
+        # Spróbuj odjąć komendę purge, jeśli była na liście i nie było błędu przy jej usuwaniu
+        if command_message.message_id in message_ids_to_delete and command_message.message_id not in failed_ids_in_batches and display_deleted_count > 0:
+             display_deleted_count = max(0, deleted_count_total - 1)
 
         final_message_text = ""
-        if display_deleted_count > 0:
-            final_message_text = f"✅ Meow! Purged <code>{display_deleted_count}</code> messages (up to/incl. replied) in <code>{duration_secs:.2f}s</code>."
-            if errors_occurred:
-                final_message_text += f"\nSome messages (<code>{len(failed_to_delete_ids)}</code>) could not be deleted (e.g., too old, service, or from other bots)."
-        elif errors_occurred:
-            final_message_text = f"Mrow! Could not delete messages. They might be older than 48h or from other bots. Failed IDs: <code>{len(failed_to_delete_ids)}</code>. Purge attempt took <code>{duration_secs:.2f}s</code>."
+        if display_deleted_count > 0 or (deleted_count_total > 0 and command_message.message_id in message_ids_to_delete and command_message.message_id not in failed_ids_in_batches) : # Jeśli cokolwiek usunięto (nawet jeśli to tylko komenda purge)
+            final_message_text = f"✅ Meow! Purged approx. <code>{display_deleted_count}</code> messages (up to/incl. replied) in <code>{duration_secs:.2f}s</code>."
+            if errors_occurred or len(failed_ids_in_batches) > 0:
+                final_message_text += f"\nSome messages (<code>{len(set(failed_ids_in_batches))}</code>) might not have been deleted (e.g., too old, service, or protected bot messages)."
+        elif errors_occurred or len(failed_ids_in_batches) > 0 :
+            final_message_text = f"Mrow! Could not delete messages or some failed. Failed/unconfirmed count: <code>{len(set(failed_ids_in_batches))}</code>. Purge attempt took <code>{duration_secs:.2f}s</code>."
         else: 
              final_message_text = f"Mrow? No messages were found to purge in the specified range (or only the command itself)."
         
         try:
-            await context.bot.send_message(chat_id=chat.id, text=final_message_text, parse_mode=ParseMode.HTML)
+            response_msg = await context.bot.send_message(chat_id=chat.id, text=final_message_text, parse_mode=ParseMode.HTML)
+            # Usunięcie tej wiadomości o sukcesie (jeśli chcesz)
+            # if response_msg:
+            #     await asyncio.sleep(10)
+            #     try: await response_msg.delete()
+            #     except Exception: pass
         except Exception as e_send_final:
-            logger.error(f"DEBUG_PURGE_SINGLE: Failed to send final purge status message: {e_send_final}")
-            
-    else:
+            logger.error(f"PURGE_BATCH_MODE: Failed to send final purge status message: {e_send_final}")
+    else: # Silent purge
         total_targeted_for_user = len(message_ids_to_delete) -1 if command_message.message_id in message_ids_to_delete else len(message_ids_to_delete)
         logger.info(f"DEBUG_PURGE_SINGLE: Silent purge completed. Targeted: {total_targeted_for_user}, Actually deleted (incl. command): {deleted_count_total}. Duration: {duration_secs:.2f}s. Errors: {errors_occurred}. Failed IDs: {failed_to_delete_ids}")
 
