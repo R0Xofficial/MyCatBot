@@ -1708,7 +1708,7 @@ def format_entity_info(entity: Chat | User,
 
 
 async def entity_info_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    target_entity_obj: Chat | User | None = None
+    target_entity_obj: "Chat | User | None" = None
     initial_user_obj_from_update: User | None = None
     target_chat_obj_from_api: Chat | None = None
     initial_entity_id_for_refresh: int | None = None
@@ -1807,7 +1807,7 @@ async def entity_info_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         fresh_data_chat_obj = await context.bot.get_chat(chat_id=initial_entity_id_for_refresh)
         
         if fresh_data_chat_obj.type == ChatType.PRIVATE:
-            base_user_for_refresh = initial_user_obj_from_update if initial_user_obj_from_update and initial_user_obj_from_update.id == fresh_data_chat_obj.id else User(id=fresh_data_chat_obj.id, first_name="",is_bot=False)
+            base_user_for_refresh = initial_user_obj_from_update if initial_user_obj_from_update and initial_user_obj_from_update.id == fresh_data_chat_obj.id else User(id=fresh_data_chat_obj.id, first_name="",is_bot=False) # Provide defaults
             refreshed_user_obj = User(
                 id=fresh_data_chat_obj.id,
                 first_name=fresh_data_chat_obj.first_name or base_user_for_refresh.first_name or "",
