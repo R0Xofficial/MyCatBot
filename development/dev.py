@@ -2488,12 +2488,12 @@ async def promote_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     
     can_promote_others_flag_for_target = False
     if actor_chat_member and actor_chat_member.status == "creator":
-        can_promote_others_flag_for_target = True
+        can_promote_others_flag_for_target = False
         
     try:
         await context.bot.promote_chat_member(
             chat_id=chat.id, user_id=target_user.id,
-            can_manage_chat=True, can_delete_messages=True, can_manage_video_chats=True,
+            can_manage_chat=True, can_delete_messages=True, can_manage_video_chats=False,
             can_restrict_members=True, can_change_info=True, can_invite_users=True,
             can_pin_messages=True, can_manage_topics=(chat.is_forum if hasattr(chat, 'is_forum') else None),
             can_promote_members=can_promote_others_flag_for_target,
