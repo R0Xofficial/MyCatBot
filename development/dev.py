@@ -2729,7 +2729,7 @@ async def unpin_message_command(update: Update, context: ContextTypes.DEFAULT_TY
             return
 
         if current_pinned_message.message_id != message_to_unpin_candidate.message_id:
-            await update.message.reply_text("Mrow? The message you replied to is not the one currently pinned in this chat. To unpin the current one, use /unpin without replying, or reply directly to the pinned message.")
+            await update.message.reply_text("Mrow? The message you replied to is not the one currently pinned in this chat. To unpin the current one, use /unpin to the pinned message.")
             return
             
     except TelegramError as e:
