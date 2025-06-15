@@ -1975,14 +1975,21 @@ async def ban_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     
     try:
         await context.bot.ban_chat_member(chat_id=chat.id, user_id=target_user.id, until_date=until_date_dt)
-        add_restriction_to_db(chat.id, target_user.id, user_who_bans.id, until_date_dt, reason) 
+        add_restriction_to_db(
+            chat_id=chat.id, 
+            user_id=target_user.id, 
+            restriction_type="ban",
+            restricted_by_id=user_who_bans.id, 
+            until_datetime_utc=until_date_dt,
+            reason=reason
+        )
         user_display_name = target_user.mention_html() if target_user.username else html.escape(target_user.first_name or str(target_user.id))
         
         response_lines = ["Meow! User Banned:"]
         response_lines.append(f"<b>• User:</b> {user_display_name} (<code>{target_user.id}</code>)")
         response_lines.append(f"<b>• Reason:</b> {html.escape(reason)}")
-        if duration_str: response_lines.append(f"<b>• Duration:</b> <code>{time_str_display.replace('for ', '')}</code> (until <code>{until_date_dt.strftime('%Y-%m-%d %H:%M:%S %Z') if until_date_dt else 'Permanent'}</code>)")
-        else: response_lines.append(f"<b>• Duration:</b> <code>Permanent</code>")
+        if duration_str: response_lines.append(f"  <b>• Duration:</b> <code>{time_str_display.replace('for ', '')}</code> (until <code>{until_date_dt.strftime('%Y-%m-%d %H:%M:%S %Z') if until_date_dt else 'Permanent'}</code>)")
+        else: response_lines.append(f"  <b>• Duration:</b> <code>Permanent</code>")
         await update.message.reply_html("\n".join(response_lines))
     except TelegramError as e: await update.message.reply_text(f"Failed to ban user: {html.escape(str(e))}")
     except Exception as e: logger.error(f"Unexpected error in /ban: {e}", exc_info=True); await update.message.reply_text("An unexpected error occurred.")
