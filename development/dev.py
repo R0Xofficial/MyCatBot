@@ -4210,6 +4210,36 @@ async def list_sudo_users_command(update: Update, context: ContextTypes.DEFAULT_
 
     await update.message.reply_html(message_text)
 
+async def test_delete_bot_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not is_privileged_user(update.effective_user.id): return
+
+    test_chat_id = update.effective_chat.id
+    if not context.args:
+        await update.message.reply_text("Podaj message_id do usunięcia: /testdel <message_id>")
+        return
+    try:
+        message_id_to_test_delete = int(context.args[0])
+    except ValueError:
+        await update.message.reply_text("Podaj poprawne message_id.")
+        return
+
+    logger.info(f"Attempting to delete single message ID: {message_id_to_test_delete} in chat {test_chat_id}")
+    try:
+        success = await context.bot.delete_messages(chat_id=test_chat_id, message_ids=[message_id_to_test_delete])
+        
+        if success is True or (isinstance(success, list) and success[0] is True):
+            await update.message.reply_text(f"SUCCESS deleting message {message_id_to_test_delete}.")
+            logger.info(f"Successfully deleted message {message_id_to_test_delete}.")
+        else:
+            await update.message.reply_text(f"FAILED to delete message {message_id_to_test_delete}. Result: {success}")
+            logger.warning(f"Failed to delete message {message_id_to_test_delete}. Result: {success}")
+    except TelegramError as e:
+        await update.message.reply_text(f"TelegramError deleting message {message_id_to_test_delete}: {e}")
+        logger.error(f"TelegramError deleting message {message_id_to_test_delete}: {e}", exc_info=True)
+    except Exception as e:
+        await update.message.reply_text(f"Unexpected error deleting message {message_id_to_test_delete}: {e}")
+        logger.error(f"Unexpected error deleting message {message_id_to_test_delete}: {e}", exc_info=True)
+
 # --- Main Function ---
 def main() -> None:
     init_db()
@@ -4284,6 +4314,7 @@ def main() -> None:
     application.add_handler(CommandHandler("listsudo", list_sudo_users_command))
     application.add_handler(CommandHandler("addsudo", add_sudo_command))
     application.add_handler(CommandHandler("delsudo", del_sudo_command))
+    application.add_handler(CommandHandler("testdel", test_delete_bot_message))
 
     logger.info("Registering message handlers for group joins...")
     application.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS & filters.ChatType.GROUPS, handle_new_group_members))
