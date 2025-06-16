@@ -2809,7 +2809,7 @@ async def purge_messages_command(update: Update, context: ContextTypes.DEFAULT_T
             elif isinstance(success_flags, list): current_batch_deleted_count = sum(1 for s in success_flags if s is True)
             deleted_count_total += current_batch_deleted_count
             if current_batch_deleted_count < len(batch_ids): errors_occurred = True; logger.warning(f"Partially purged batch in chat {chat.id}. Expected {len(batch_ids)}, deleted {current_batch_deleted_count}.")
-            else: logger.info(f"Purged batch of {current_batch_deleted_count} messages in chat {chat.id}")
+            else: logger.info(f"Purged messages in chat {chat.id}")
             if len(message_ids_to_delete) > 100 and i + 100 < len(message_ids_to_delete): await asyncio.sleep(1.1)
         except TelegramError as e:
             logger.error(f"TelegramError during purge batch in chat {chat.id}: {e}")
@@ -2829,21 +2829,24 @@ async def purge_messages_command(update: Update, context: ContextTypes.DEFAULT_T
     duration_secs = (end_time - start_time).total_seconds()
     
     if not is_silent_purge:
-        display_deleted_count = deleted_count_total
-        if command_message.message_id in message_ids_to_delete and display_deleted_count > 0:
-             display_deleted_count = max(0, deleted_count_total -1 )
-
-        if display_deleted_count > 0:
-            msg = f"✅ Meow! Purged <code>{display_deleted_count}</code> messages in <code>{duration_secs:.2f}s</code>."
-            if errors_occurred: msg += "\nSome messages could not be deleted (e.g., older than 48h or service messages)."
-            await context.bot.send_message(chat_id=chat.id, text=msg, parse_mode=ParseMode.HTML)
+        final_message_text = ""
+        if deleted_count_total > 0 : 
+            final_message_text = f"✅ Meow! Purged messages in <code>{duration_secs:.2f}s</code>."
+            if errors_occurred:
+                final_message_text += "\nSome messages might not have been deleted (e.g., older than 48h or service messages)."
         elif errors_occurred:
-            await context.bot.send_message(chat_id=chat.id, text=f"Mrow! Could not delete messages. They might be older than 48 hours or service messages. Purge took <code>{duration_secs:.2f}s</code>.", parse_mode=ParseMode.HTML)
+            final_message_text = f"Mrow! Could not delete messages due to an error. Purge attempt took <code>{duration_secs:.2f}s</code>."
         else: 
-             await context.bot.send_message(chat_id=chat.id, text=f"Mrow? No messages were found to purge in the specified range (or only the command itself).")
+             final_message_text = f"Mrow? No messages were found to purge in the specified range (or only the command itself)."
+        
+        if final_message_text:
+            try:
+                await context.bot.send_message(chat_id=chat.id, text=final_message_text, parse_mode=ParseMode.HTML)
+            except Exception as e_send_final:
+                logger.error(f"Purge: Failed to send final purge status message: {e_send_final}")
     else:
-        total_targeted_for_user = len(message_ids_to_delete) -1 if command_message.message_id in message_ids_to_delete else len(message_ids_to_delete)
-        logger.info(f"Silent purge completed in chat {chat.id}. Attempted to delete up to {total_targeted_for_user} messages. Actual deleted (incl. command): {deleted_count_total}. Duration: {duration_secs:.2f}s")
+        total_messages_in_range = len(message_ids_to_delete)
+        logger.info(f"Silent purge completed in chat {chat.id}. Duration: {duration_secs:.2f}s. Errors occurred during API calls: {errors_occurred}")
         
 # --- Simple Text Command Definitions ---
 async def send_random_text(update: Update, context: ContextTypes.DEFAULT_TYPE, text_list: list[str], list_name: str) -> None:
