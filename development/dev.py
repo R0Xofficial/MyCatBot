@@ -377,6 +377,20 @@ def parse_promote_args(args: list[str]) -> tuple[str | None, str | None]:
         
     return target_arg, custom_title_full
 
+def is_user_zombie(user_obj: User | Chat | None) -> bool: # Może przyjąć Chat lub User
+    if not user_obj:
+        return False
+    
+    if isinstance(user_obj, User) and getattr(user_obj, 'is_deleted', False):
+        return True
+    
+    first_name_check = getattr(user_obj, 'first_name', None)
+    if first_name_check and ("deleted" in first_name_check.lower() and "account" in first_name_check.lower()):
+        if not getattr(user_obj, 'username', None) and not getattr(user_obj, 'last_name', None):
+            return True
+            
+    return False
+
 # --- CAT TEXTS SECTION ---
 # /meow texts - General cat noises and behaviors
 MEOW_TEXTS = [
