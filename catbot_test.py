@@ -15,6 +15,7 @@ import sqlite3
 import speedtest
 import asyncio
 import re
+import io
 from typing import List, Tuple
 from telegram import Update, User, Chat, constants, ChatPermissions
 from telegram.constants import ChatType, ParseMode, ChatMemberStatus
@@ -1497,6 +1498,8 @@ HELP_TEXT = """
 /info [ID/reply/@user] - Get info about a user. 👤
 /chatstat - Get basic stats about the current chat. 📈
 /kickme - Kick yourself from chat. 👋
+/listadmins - Show the list of administrators in the current chat.
+<i>Note: /admins works too</i>
 
 <b>Management Commands:</b>
 /ban [ID/reply/@user] [Time] [Reason] - Ban user in chat. ⛔️
@@ -1788,6 +1791,85 @@ async def entity_info_command(update: Update, context: ContextTypes.DEFAULT_TYPE
             await update.message.reply_text("Mrow? Could not obtain entity details to display.")
     else:
         await update.message.reply_text("Mrow? Couldn't determine what to get info for.")
+
+async def list_admins_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    chat = update.effective_chat
+
+    if chat.type not in [ChatType.GROUP, ChatType.SUPERGROUP, ChatType.CHANNEL]:
+        await update.message.reply_text("Meeeow! I can only list admins for groups, supergroups, or channels.")
+        return
+
+    try:
+        administrators = await context.bot.get_chat_administrators(chat_id=chat.id)
+    except TelegramError as e:
+        logger.error(f"Failed to get admin list for chat {chat.id} ('{chat.title}'): {e}")
+        await update.message.reply_text(f"Mrow! Couldn't fetch the admin list for this chat. Error: {html.escape(str(e))}")
+        return
+    except Exception as e:
+        logger.error(f"Unexpected error getting admin list for chat {chat.id}: {e}", exc_info=True)
+        await update.message.reply_text("Mrow! An unexpected error occurred while fetching the admin list.")
+        return
+
+    if not administrators:
+        await update.message.reply_text("Meeeow! It seems there are no administrators in this chat (or I can't see them).")
+        return
+
+    chat_title_display = html.escape(chat.title or chat.first_name or f"Chat ID {chat.id}")
+    response_lines = [f"<b>🛡️ Admin list in {chat_title_display}:</b>\n"]
+
+    creator_line: str | None = None
+
+    for admin_member in administrators:
+        admin_user = admin_member.user
+        
+        user_display_name = ""
+        if admin_user.username:
+            user_display_name = f"<a href=\"tg://user?id={admin_user.id}\">@{html.escape(admin_user.username)}</a>"
+        elif admin_user.full_name:
+            user_display_name = f"<a href=\"tg://user?id={admin_user.id}\">{html.escape(admin_user.full_name)}</a>"
+        elif admin_user.first_name:
+            user_display_name = f"<a href=\"tg://user?id={admin_user.id}\">{html.escape(admin_user.first_name)}</a>"
+        else:
+            user_display_name = f"<a href=\"tg://user?id={admin_user.id}\">User {admin_user.id}</a>"
+
+        admin_info_line = f"• {user_display_name}"
+
+        custom_title = getattr(admin_member, 'custom_title', None)
+        is_anonymous = getattr(admin_member, 'is_anonymous', False)
+
+        if is_anonymous:
+            admin_info_line += " <i>(Anonymous Admin)</i>"
+        
+        if custom_title:
+            admin_info_line += f" (<code>{html.escape(custom_title)}</code>)"
+        
+        if admin_member.status == "creator":
+            admin_info_line += " 👑"
+            creator_line = admin_info_line
+        else:
+            response_lines.append(admin_info_line)
+
+    if creator_line:
+        response_lines.insert(1, creator_line)
+
+    message_text = "\n".join(response_lines)
+    
+    if len(message_text) > 4090:
+        logger.info(f"Admin list for chat {chat.id} is too long, attempting to send as a file.")
+        try:
+            import io
+            file_content = "\n".join(response_lines).replace("<b>", "").replace("</b>", "").replace("<code>", "").replace("</code>", "").replace("<i>", "").replace("</i>", "")
+            file_content = file_content.replace("</a>", "").replace("✨", "").replace("🛡️", "")
+            file_content = re.sub(r'<a href="[^"]*">', '', file_content)
+
+            bio = io.BytesIO(file_content.encode('utf-8'))
+            bio.name = f"admin_list_{chat.id}.txt"
+            await update.message.reply_document(document=bio, caption=f"🛡️ Admin list for {chat_title_display} is too long to display directly. See the attached file.")
+        except Exception as e_file:
+            logger.error(f"Failed to send long admin list as file: {e_file}")
+            await update.message.reply_text("Mrow! The admin list is too long to display, and I couldn't send it as a file. 😿")
+    else:
+        await update.message.reply_html(message_text, disable_web_page_preview=True)
 
 async def ban_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     chat = update.effective_chat
@@ -3307,7 +3389,7 @@ async def chat_info_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             detail_line = f"    • {admin_name_display}"
             current_admin_status_str = getattr(admin_member, 'status', None)
             if current_admin_status_str == "creator":
-                detail_line += " (Creator ✨)"
+                detail_line += " (Creator 👑)"
             admin_details_list.append(detail_line)
         if admin_details_list:
             admin_list_str_parts.append("  <b>• List:</b>")
@@ -4211,6 +4293,8 @@ def main() -> None:
     application.add_handler(CommandHandler("pin", pin_message_command))
     application.add_handler(CommandHandler("unpin", unpin_message_command))
     application.add_handler(CommandHandler("purge", purge_messages_command))
+    application.add_handler(CommandHandler("listadmins", list_admins_command))
+    application.add_handler(CommandHandler("admins", list_admins_command))
     application.add_handler(CommandHandler("gif", gif))
     application.add_handler(CommandHandler("photo", photo))
     application.add_handler(CommandHandler("meow", meow))
