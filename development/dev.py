@@ -1825,7 +1825,7 @@ async def list_admins_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         
         user_display_name = ""
         if admin_user.username:
-            user_display_name = f"<a href=\"https://t.me/{admin_user.username}\">@{html.escape(admin_user.username)}</a>"
+            user_display_name = f"<a href=\"tg://user?id={admin_user.id}\">@{html.escape(admin_user.username)}</a>"
         elif admin_user.full_name:
             user_display_name = f"<a href=\"tg://user?id={admin_user.id}\">{html.escape(admin_user.full_name)}</a>"
         elif admin_user.first_name:
