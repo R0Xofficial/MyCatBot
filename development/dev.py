@@ -1845,7 +1845,7 @@ async def list_admins_command(update: Update, context: ContextTypes.DEFAULT_TYPE
             admin_info_line += f" (<code>{html.escape(custom_title)}</code>)"
         
         if admin_member.status == "creator":
-            admin_info_line += " (Creator ✨)"
+            admin_info_line += " 👑"
             creator_line = admin_info_line
         else:
             response_lines.append(admin_info_line)
@@ -3390,7 +3390,7 @@ async def chat_info_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             detail_line = f"    • {admin_name_display}"
             current_admin_status_str = getattr(admin_member, 'status', None)
             if current_admin_status_str == "creator":
-                detail_line += " (Creator ✨)"
+                detail_line += " (Creator 👑)"
             admin_details_list.append(detail_line)
         if admin_details_list:
             admin_list_str_parts.append("  <b>• List:</b>")
