@@ -1498,6 +1498,8 @@ HELP_TEXT = """
 /info [ID/reply/@user] - Get info about a user. 👤
 /chatstat - Get basic stats about the current chat. 📈
 /kickme - Kick yourself from chat. 👋
+/listadmins - Show the list of administrators in the current chat.
+<i>/admins works too</i>
 
 <b>Management Commands:</b>
 /ban [ID/reply/@user] [Time] [Reason] - Ban user in chat. ⛔️
