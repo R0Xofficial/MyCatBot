@@ -3188,7 +3188,7 @@ async def chat_info_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
                 chat_object_for_details = await context.bot.get_chat(chat_id=target_chat_id)
             except TelegramError as e:
                 logger.error(f"Failed to get chat info for ID {target_chat_id}: {e}")
-                await update.message.reply_html(f"😿 Mrow! Couldn't fetch info for chat ID <code>{target_chat_id}</code>. Reason: {html.escape(str(e))}. Make sure I am a member or it's public.")
+                await update.message.reply_html(f"😿 Mrow! Couldn't fetch info for chat ID <code>{target_chat_id}</code>. Reason: {html.escape(str(e))}.")
                 return
             except Exception as e:
                 logger.error(f"Unexpected error fetching chat info for ID {target_chat_id}: {e}", exc_info=True)
