@@ -2810,7 +2810,7 @@ async def purge_messages_command(update: Update, context: ContextTypes.DEFAULT_T
             elif isinstance(success_flags, list): current_batch_deleted_count = sum(1 for s in success_flags if s is True)
             deleted_count_total += current_batch_deleted_count
             if current_batch_deleted_count < len(batch_ids): errors_occurred = True; logger.warning(f"Partially purged batch in chat {chat.id}. Expected {len(batch_ids)}, deleted {current_batch_deleted_count}.")
-            else: logger.info(f"Purged batch of {current_batch_deleted_count} messages in chat {chat.id}")
+            else: logger.info(f"Purged messages in chat {chat.id}")
             if len(message_ids_to_delete) > 100 and i + 100 < len(message_ids_to_delete): await asyncio.sleep(1.1)
         except TelegramError as e:
             logger.error(f"TelegramError during purge batch in chat {chat.id}: {e}")
@@ -2847,7 +2847,7 @@ async def purge_messages_command(update: Update, context: ContextTypes.DEFAULT_T
                 logger.error(f"Purge: Failed to send final purge status message: {e_send_final}")
     else:
         total_messages_in_range = len(message_ids_to_delete)
-        logger.info(f"Silent purge completed in chat {chat.id}. Total messages in defined range (incl. command): {total_messages_in_range}. Duration: {duration_secs:.2f}s. Errors occurred during API calls: {errors_occurred}")
+        logger.info(f"Silent purge completed in chat {chat.id}. Duration: {duration_secs:.2f}s. Errors occurred during API calls: {errors_occurred}")
         
 # --- Simple Text Command Definitions ---
 async def send_random_text(update: Update, context: ContextTypes.DEFAULT_TYPE, text_list: list[str], list_name: str) -> None:
