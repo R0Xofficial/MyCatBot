@@ -4291,6 +4291,8 @@ def main() -> None:
     application.add_handler(CommandHandler("pin", pin_message_command))
     application.add_handler(CommandHandler("unpin", unpin_message_command))
     application.add_handler(CommandHandler("purge", purge_messages_command))
+    application.add_handler(CommandHandler("listadmins", list_admins_command))
+    application.add_handler(CommandHandler("admins", list_admins_command))
     application.add_handler(CommandHandler("gif", gif))
     application.add_handler(CommandHandler("photo", photo))
     application.add_handler(CommandHandler("meow", meow))
