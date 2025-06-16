@@ -4151,7 +4151,7 @@ async def list_sudo_users_command(update: Update, context: ContextTypes.DEFAULT_
             logger.warning(f"Could not parse timestamp '{timestamp_str}' for sudo user {user_id}")
             pass
 
-        response_lines.append(f"  • {user_display_name} - Added: <code>{formatted_added_time}</code>")
+        response_lines.append(f"• {user_display_name}\n<b>Added:</b> <code>{formatted_added_time}</code>\n")
 
     message_text = "\n".join(response_lines)
     if len(message_text) > 4000:
