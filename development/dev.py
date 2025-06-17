@@ -1971,6 +1971,7 @@ async def status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     known_users_count = "N/A"
     blacklisted_count = "N/A"
     sudo_users_count = "N/A"
+    gban_count = "N/A"
 
     conn = None
     try:
@@ -1991,17 +1992,24 @@ async def status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         count_result_sudo = cursor.fetchone()
         if count_result_sudo:
             sudo_users_count = str(count_result_sudo[0])
+
+        cursor.execute("SELECT COUNT(*) FROM global_bans")
+        count_result_gban = cursor.fetchone()
+        if count_result_gban:
+            gban_count = str(count_result_gban[0])
             
     except sqlite3.Error as e:
         logger.error(f"SQLite error fetching counts for /status: {e}", exc_info=True)
         known_users_count = "DB Error"
         blacklisted_count = "DB Error"
         sudo_users_count = "DB Error"
+        gban_count = "DB Error"
     except Exception as e:
         logger.error(f"Unexpected error fetching counts for /status: {e}", exc_info=True)
         known_users_count = "Error"
         blacklisted_count = "Error"
         sudo_users_count = "Error"
+        gban_count = "Error"
     finally:
         if conn:
             conn.close()
@@ -2013,7 +2021,8 @@ async def status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "<b>📊 Database Stats:</b>",
         f" <b>• 👀 Known Users:</b> <code>{known_users_count}</code>",
         f" <b>• 🛡 Sudo Users:</b> <code>{sudo_users_count}</code>",
-        f" <b>• 🚫 Blacklisted Users:</b> <code>{blacklisted_count}</code>"
+        f" <b>• 🚫 Blacklisted Users:</b> <code>{blacklisted_count}</code>",
+        f" <b>• 🌍 Globally Banned:</b> <code>{gban_count}</code>"
     ]
 
     status_msg = "\n".join(status_lines)
