@@ -384,12 +384,6 @@ async def _can_user_perform_action(
     failure_message: str,
     allow_bot_privileged_override: bool = True
 ) -> bool:
-    """
-    Checks if a user can perform a specific admin action.
-    - permission: The permission string to check (e.g., 'can_restrict_members').
-    - failure_message: The message to send if the user lacks permission.
-    - allow_bot_privileged_override: If True, bot owner/sudo can perform the action regardless of chat perms.
-    """
     user = update.effective_user
     chat = update.effective_chat
 
@@ -399,10 +393,10 @@ async def _can_user_perform_action(
     try:
         actor_chat_member = await context.bot.get_chat_member(chat.id, user.id)
         
-        if actor_chat_member.status == ChatMemberStatus.CREATOR:
+        if actor_chat_member.status == "creator":
             return True
 
-        if actor_chat_member.status == ChatMemberStatus.ADMINISTRATOR and getattr(actor_chat_member, permission, False):
+        if actor_chat_member.status == "administrator" and getattr(actor_chat_member, permission, False):
             return True
             
     except TelegramError as e:
