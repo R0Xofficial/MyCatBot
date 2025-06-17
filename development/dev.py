@@ -2244,6 +2244,88 @@ async def unmute_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     except TelegramError as e: await update.message.reply_text(f"Failed to unmute user: {html.escape(str(e))}")
     except Exception as e: logger.error(f"Unexpected error in /unmute: {e}", exc_info=True); await update.message.reply_text("An unexpected error occurred.")
 
+async def kick_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    chat = update.effective_chat
+    user_who_kicks = update.effective_user
+
+    if chat.type == ChatType.PRIVATE:
+        await update.message.reply_text("Mrow? Cannot kick users from a private chat.")
+        return
+
+    try:
+        bot_member = await context.bot.get_chat_member(chat.id, context.bot.id)
+        if not (bot_member.status == ChatMemberStatus.ADMINISTRATOR and getattr(bot_member, 'can_restrict_members', False)):
+            await update.message.reply_text("Meeeow! I need to be an admin with rights to kick users in this chat. 😿")
+            return
+    except TelegramError as e:
+        logger.error(f"Error checking bot's own permissions in /kick for chat {chat.id}: {e}")
+        await update.message.reply_text("Mrow? Couldn't verify my own permissions in this chat.")
+        return
+
+    if not await _can_user_perform_action(update, context, 'can_restrict_members', "Meeeow! You need to be an admin with rights to kick users in this chat."):
+        return
+
+    target_user: User | None = None
+    reason_list: list[str] = []
+    reason: str = "No reason provided."
+    args_to_parse_for_reason = list(context.args)
+
+    if update.message.reply_to_message:
+        target_user = update.message.reply_to_message.from_user
+        if context.args: reason_list = list(context.args)
+    elif context.args:
+        target_arg = context.args[0]
+        args_to_parse_for_reason = list(context.args[1:])
+        if target_arg.startswith("@"):
+            username_to_find = target_arg[1:]
+            target_user = get_user_from_db_by_username(username_to_find)
+            if not target_user:
+                try:
+                    chat_info = await context.bot.get_chat(target_arg)
+                    if chat_info.type == ChatType.PRIVATE: target_user = User(id=chat_info.id, first_name=chat_info.first_name or "",is_bot=getattr(chat_info, 'is_bot', False),username=chat_info.username, last_name=chat_info.last_name)
+                except: pass
+            if not target_user: await update.message.reply_text(f"User @{html.escape(username_to_find)} not found."); return
+        else:
+            try:
+                target_id = int(target_arg)
+                try:
+                    chat_info = await context.bot.get_chat(target_id)
+                    if chat_info.type == ChatType.PRIVATE: target_user = User(id=chat_info.id, first_name=chat_info.first_name or f"User {target_id}", is_bot=getattr(chat_info, 'is_bot',False), username=chat_info.username, last_name=chat_info.last_name)
+                    else: await update.message.reply_text("Target ID does not seem to be a user."); return
+                except: target_user = User(id=target_id, first_name=f"User {target_id}", is_bot=False)
+            except ValueError: await update.message.reply_text("Invalid user ID."); return
+    else:
+        await update.message.reply_text("Usage: /kick <ID/@username/reply> [reason]")
+        return
+
+    if args_to_parse_for_reason: reason = " ".join(args_to_parse_for_reason)
+
+    if not target_user: await update.message.reply_text("Could not identify user to kick."); return
+    if not isinstance(target_user, User): await update.message.reply_text("Kick can only be applied to users."); return
+    if target_user.id == context.bot.id: await update.message.reply_text("I can't kick myself!"); return
+    if target_user.id == user_who_kicks.id: await update.message.reply_text("Mrow? You can't kick yourself."); return
+
+    try:
+        target_chat_member = await context.bot.get_chat_member(chat.id, target_user.id)
+        if target_chat_member.status == "creator":
+            await update.message.reply_text("Meeeow! The chat Creator is sacred and cannot be kicked by this bot! 😼👑")
+            return
+    except TelegramError as e:
+        if "user not found" in str(e).lower():
+             await update.message.reply_text(f"User {target_user.mention_html()} is not in this chat, cannot be kicked.")
+             return
+        logger.warning(f"Could not get target's chat member status for /kick: {e}")
+
+    try:
+        await context.bot.ban_chat_member(chat_id=chat.id, user_id=target_user.id)
+        await context.bot.unban_chat_member(chat_id=chat.id, user_id=target_user.id, only_if_banned=True)
+
+        user_display_name = target_user.mention_html() if target_user.username else html.escape(target_user.first_name or str(target_user.id))
+        response_lines = ["Meow! User Kicked:", f"<b>• User:</b> {user_display_name} (<code>{target_user.id}</code>)", f"<b>• Reason:</b> {html.escape(reason)}"]
+        await update.message.reply_html("\n".join(response_lines))
+    except TelegramError as e: await update.message.reply_text(f"Failed to kick user: {html.escape(str(e))}")
+    except Exception as e: logger.error(f"Unexpected error in /kick: {e}", exc_info=True); await update.message.reply_text("An unexpected error occurred.")
+
 async def kickme_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     chat = update.effective_chat
     user_to_kick = update.effective_user
