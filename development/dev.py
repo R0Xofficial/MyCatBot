@@ -2281,9 +2281,10 @@ async def kick_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         return
         
     is_caller_privileged_for_bot = is_privileged_user(user_who_kicks.id)
+    actor_chat_member: ChatMember | None = None
     if not is_caller_privileged_for_bot:
         try:
-            actor_chat_member = await context.bot.get_chat_member(chat.id, user_who_kicks.id)
+            actor_chat_member = await context.bot.get_chat_member(chat.id, user_who_bans.id)
             if not (actor_chat_member.status in ["administrator", "creator"] and \
                     getattr(actor_chat_member, 'can_restrict_members', False)):
                 await update.message.reply_text("Meeeow! You need to be an admin with rights to kick users in this chat.")
