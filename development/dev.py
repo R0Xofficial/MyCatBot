@@ -24,6 +24,13 @@ from telegram.ext import Application, CommandHandler, MessageHandler, filters, C
 from telegram.error import TelegramError
 from telegram.request import HTTPXRequest
 from datetime import datetime, timezone, timedelta
+from texts import (
+    MEOW_TEXTS, NAP_TEXTS, PLAY_TEXTS, TREAT_TEXTS, ZOOMIES_TEXTS, 
+    JUDGE_TEXTS, ATTACK_TEXTS, KILL_TEXTS, PUNCH_TEXTS, SLAP_TEXTS, 
+    BITE_TEXTS, HUG_TEXTS, FED_TEXTS, OWNER_WELCOME_TEXTS, LEAVE_TEXTS,
+    CANT_TARGET_OWNER_TEXTS, CANT_TARGET_SELF_TEXTS,
+    CANT_TARGET_OWNER_HUG_TEXTS, CANT_TARGET_SELF_HUG_TEXTS
+)
 
 # --- Logging Configuration ---
 logging.basicConfig(
