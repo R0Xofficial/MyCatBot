@@ -331,6 +331,24 @@ async def log_user_from_interaction(update: Update, context: ContextTypes.DEFAUL
     if update.message and update.message.reply_to_message and update.message.reply_to_message.from_user:
         update_user_in_db(update.message.reply_to_message.from_user)
 
+    chat = update.effective_chat
+    if chat and chat.type in [ChatType.GROUP, ChatType.SUPERGROUP]:
+        if 'known_chats' not in context.bot_data:
+            context.bot_data['known_chats'] = set()
+            try:
+                with sqlite3.connect(DB_NAME) as conn:
+                    cursor = conn.cursor()
+                    known_ids = {row[0] for row in cursor.execute("SELECT chat_id FROM bot_chats")}
+                    context.bot_data['known_chats'] = known_ids
+                    logger.info(f"Loaded {len(known_ids)} known chats into cache.")
+            except sqlite3.Error as e:
+                logger.error(f"Could not preload known chats into cache: {e}")
+
+        if chat.id not in context.bot_data['known_chats']:
+            logger.info(f"Passively discovered and adding new chat to DB: {chat.title} ({chat.id})")
+            add_chat_to_db(chat.id, chat.title or f"Untitled Chat {chat.id}")
+            context.bot_data['known_chats'].add(chat.id)
+
 def get_all_sudo_users_from_db() -> List[Tuple[int, str]]:
     conn = None
     sudo_list = []
@@ -3063,7 +3081,7 @@ async def propagate_unban(context: ContextTypes.DEFAULT_TYPE) -> None:
     """Job to scan all chats and unban a user."""
     job_data = context.job.data
     target_user_id = job_data['target_user_id']
-    command_chat_id = job_data['chat_id']
+    command_chat_id = job_data['command_chat_id']
 
     chats_to_scan = []
     try:
@@ -3072,20 +3090,36 @@ async def propagate_unban(context: ContextTypes.DEFAULT_TYPE) -> None:
             chats_to_scan = [row[0] for row in cursor.execute("SELECT chat_id FROM bot_chats")]
     except sqlite3.Error as e:
         logger.error(f"Failed to get chat list for unban propagation: {e}")
+        await context.bot.send_message(chat_id=command_chat_id, text="Error fetching chat list from database.")
         return
 
-    unbanned_in = 0
+    if not chats_to_scan:
+        logger.warning("Propagate unban: bot_chats table is empty. No chats to process.")
+        await context.bot.send_message(chat_id=command_chat_id, text="I don't seem to be in any chats to propagate the unban.")
+        return
+
+    unbanned_in_count = 0
+    logger.info(f"Starting unban propagation for {target_user_id} across {len(chats_to_scan)} chats.")
+    
     for chat_id in chats_to_scan:
         try:
-            await context.bot.unban_chat_member(chat_id=chat_id, user_id=target_user_id, only_if_banned=True)
-            unbanned_in += 1
-        except Exception:
-            pass
+            success = await context.bot.unban_chat_member(chat_id=chat_id, user_id=target_user_id, only_if_banned=True)
+            if success:
+                unbanned_in_count += 1
+        except telegram.error.BadRequest as e:
+            if "user not found" not in str(e).lower():
+                logger.warning(f"Could not unban {target_user_id} in {chat_id}: {e}")
+        except Exception as e:
+            logger.error(f"Unexpected error during unban in {chat_id}: {e}")
         await asyncio.sleep(0.1)
 
+    logger.info(f"Unban propagation finished for {target_user_id}. Unbanned in {unbanned_in_count} chats.")
+    
+    final_message = f"✅ Correctly unbanned <code>{target_user_id}</code> on {unbanned_in_count} chats."
+    
     await context.bot.send_message(
         chat_id=command_chat_id,
-        text=f"Unban propagation complete for <code>{target_user_id}</code>. Attempted to unban in {unbanned_in}/{len(chats_to_scan)} known chats.",
+        text=final_message,
         parse_mode=ParseMode.HTML
     )
 
