@@ -2978,7 +2978,7 @@ async def gban_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     try:
         if chat.type != ChatType.PRIVATE:
             await context.bot.ban_chat_member(chat_id=chat.id, user_id=target_user.id)
-            ban_success_message = "\nThey have also been banned from this chat."
+            ban_success_message = "\nBanned from this chat."
     except Exception as e:
         logger.warning(f"Could not ban g-banned user in the current chat ({chat.id}): {e}")
         ban_success_message = "\nI couldn't ban them from this chat, I might be missing permissions."
@@ -2995,7 +2995,7 @@ async def gban_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         log_message = (
             f"<b>#GBANNED</b>\n\n"
             f"<b>User:</b> {user_display} (<code>{target_user.id}</code>)\n"
-            f"<b>Username:</b> <code>{html.escape(target_username)}</code>\n"
+            f"<b>Username:</b> {html.escape(target_username)}</code>\n"
             f"<b>Reason:</b> {html.escape(reason)}\n"
             f"<b>Admin:</b> {user_who_gbans.mention_html()}\n"
             f"<b>Date:</b> <code>{current_time}</code>"
@@ -3051,7 +3051,7 @@ async def ungban_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         log_message = (
             f"<b>#UNGBANNED</b>\n\n"
             f"<b>User:</b> {user_display} (<code>{target_user.id}</code>)\n"
-            f"<b>Username:</b> <code>{html.escape(target_username)}</code>\n"
+            f"<b>Username:</b> {html.escape(target_username)}\n"
             f"<b>Admin:</b> {user_who_ungbans.mention_html()}\n"
             f"<b>Date:</b> <code>{current_time}</code>"
         )
