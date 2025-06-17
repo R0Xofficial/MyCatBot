@@ -2886,28 +2886,58 @@ async def check_gban_on_message(update: Update, context: ContextTypes.DEFAULT_TY
     gban_reason = get_gban_reason(user.id)
     if gban_reason:
         chat = update.effective_chat
-        logger.info(f"G-banned user {user.id} sent a message in {chat.id}. Taking action.")
+        message = update.effective_message
+        logger.info(f"G-banned user {user.id} sent a message in {chat.id}. Taking action (ban first).")
+        
         try:
             bot_member = await context.bot.get_chat_member(chat.id, context.bot.id)
-            if bot_member.status == "administrator" and bot_member.can_restrict_members:
-                await context.bot.ban_chat_member(chat.id, user.id)
-                await context.bot.send_message(
-                    chat.id,
-                    f"{user.mention_html()} has been removed from this chat because they are on the global ban list.\n<b>Reason:</b> {html.escape(gban_reason)}",
-                    parse_mode=ParseMode.HTML
-                )
+            if bot_member.status == "administrator":
+                
+                user_id = user.id
+                reason = html.escape(gban_reason)
+                
+                if bot_member.can_restrict_members:
+                    await context.bot.ban_chat_member(chat.id, user.id)
+                    
+                    if bot_member.can_delete_messages:
+                        try:
+                            await message.delete()
+                        except Exception as e:
+                            logger.warning(f"Could not delete message from g-banned user {user.id} in {chat.id} (user was banned): {e}")
+                    
+                    message_text = (
+                        f"<b>System Alert:</b> User is Globally Banned.\n"
+                        f"<i>Enforcing ban in this chat.</i>\n\n"
+                        f"<b>User ID:</b> <code>{user_id}</code>\n"
+                        f"<b>Reason:</b> {reason}"
+                    )
+                    await context.bot.send_message(chat.id, text=message_text, parse_mode=ParseMode.HTML)
+                else:
+                    message_text = (
+                        f"⚠️ <b>Admin Alert: Globally Banned User Detected</b> ⚠️\n\n"
+                        f"<i>The following user is on the global ban list and requires administrative action.</i>\n\n"
+                        f"<b>User ID:</b> <code>{user_id}</code>\n"
+                        f"<b>Reason:</b> {reason}"
+                    )
+                    await context.bot.send_message(chat.id, text=message_text, parse_mode=ParseMode.HTML)
             else:
-                await context.bot.send_message(
-                    chat.id,
-                    f"⚠️ <b>Warning!</b>\nUser {user.mention_html()} is on the global ban list and should be removed.\n<b>Reason:</b> {html.escape(gban_reason)}",
-                    parse_mode=ParseMode.HTML
+                user_id = user.id
+                reason = html.escape(gban_reason)
+                message_text = (
+                    f"⚠️ <b>Admin Alert: Globally Banned User Detected</b> ⚠️\n\n"
+                    f"<i>The following user is on the global ban list and requires administrative action.</i>\n\n"
+                    f"<b>User ID:</b> <code>{user_id}</code>\n"
+                    f"<b>Reason:</b> {reason}"
                 )
+                await context.bot.send_message(chat.id, text=message_text, parse_mode=ParseMode.HTML)
         except Exception as e:
             logger.error(f"Failed to take gban action on message for user {user.id} in chat {chat.id}: {e}")
+        
         raise ApplicationHandlerStop
 
 async def gban_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_who_gbans = update.effective_user
+    chat = update.effective_chat
     if not is_privileged_user(user_who_gbans.id):
         logger.warning(f"Unauthorized /gban attempt by user {user_who_gbans.id}.")
         return
@@ -2943,17 +2973,25 @@ async def gban_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     add_to_gban(target_user.id, user_who_gbans.id, reason)
     
     user_display = target_user.mention_html() if hasattr(target_user, 'mention_html') else f"User <code>{target_user.id}</code>"
-    
+
+    ban_success_message = ""
+    try:
+        if chat.type != ChatType.PRIVATE:
+            await context.bot.ban_chat_member(chat_id=chat.id, user_id=target_user.id)
+            ban_success_message = "\nThey have also been banned from this chat."
+    except Exception as e:
+        logger.warning(f"Could not ban g-banned user in the current chat ({chat.id}): {e}")
+        ban_success_message = "\nI couldn't ban them from this chat, I might be missing permissions."
+
     await update.message.reply_html(
         f"✅ User {user_display} has been added to the global ban list.\n"
-        f"<b>Reason:</b> {html.escape(reason)}\n\n"
-        f"They will now be banned from any chat they try to join or speak in."
+        f"<b>Reason:</b> {html.escape(reason)}"
+        f"{ban_success_message}"
     )
     
     try:
         current_time = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
         target_username = f"@{target_user.username}" if target_user.username else "N/A"
-        
         log_message = (
             f"<b>#GBANNED</b>\n\n"
             f"<b>User:</b> {user_display} (<code>{target_user.id}</code>)\n"
@@ -2995,13 +3033,21 @@ async def ungban_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
     remove_from_gban(target_user.id)
     user_display = target_user.mention_html() if hasattr(target_user, 'mention_html') else f"User <code>{target_user.id}</code>"
-    await update.message.reply_html(f"✅ User {user_display} has been removed from the global ban list.")
     
-    # --- NOWA SEKCJA: WYSYŁANIE LOGU ---
+    await update.message.reply_html(
+        f"✅ User {user_display} has been removed from the global ban list.\n\n"
+        f"Propagating unban across all known chats..."
+    )
+
+    context.job_queue.run_once(
+        propagate_unban,
+        when=1,
+        data={'target_user_id': target_user.id, 'chat_id': update.effective_chat.id}
+    )
+
     try:
         current_time = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
         target_username = f"@{target_user.username}" if target_user.username else "N/A"
-
         log_message = (
             f"<b>#UNGBANNED</b>\n\n"
             f"<b>User:</b> {user_display} (<code>{target_user.id}</code>)\n"
@@ -3012,6 +3058,36 @@ async def ungban_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await send_operational_log(context, log_message)
     except Exception as e:
         logger.error(f"Error preparing/sending #UNGBANNED operational log: {e}", exc_info=True)
+
+async def propagate_unban(context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Job to scan all chats and unban a user."""
+    job_data = context.job.data
+    target_user_id = job_data['target_user_id']
+    command_chat_id = job_data['chat_id']
+
+    chats_to_scan = []
+    try:
+        with sqlite3.connect(DB_NAME) as conn:
+            cursor = conn.cursor()
+            chats_to_scan = [row[0] for row in cursor.execute("SELECT chat_id FROM bot_chats")]
+    except sqlite3.Error as e:
+        logger.error(f"Failed to get chat list for unban propagation: {e}")
+        return
+
+    unbanned_in = 0
+    for chat_id in chats_to_scan:
+        try:
+            await context.bot.unban_chat_member(chat_id=chat_id, user_id=target_user_id, only_if_banned=True)
+            unbanned_in += 1
+        except Exception:
+            pass
+        await asyncio.sleep(0.1)
+
+    await context.bot.send_message(
+        chat_id=command_chat_id,
+        text=f"Unban propagation complete for <code>{target_user_id}</code>. Attempted to unban in {unbanned_in}/{len(chats_to_scan)} known chats.",
+        parse_mode=ParseMode.HTML
+    )
 
 # --- Sudo commands ---
 async def add_sudo_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
