@@ -20,7 +20,7 @@ import io
 from typing import List, Tuple
 from telegram import Update, User, Chat, constants, ChatPermissions
 from telegram.constants import ChatType, ParseMode, ChatMemberStatus
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, ApplicationHandlerStop
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, ApplicationHandlerStop, JobQueue
 from telegram.error import TelegramError
 from telegram.request import HTTPXRequest
 from datetime import datetime, timezone, timedelta
@@ -2995,7 +2995,7 @@ async def gban_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         log_message = (
             f"<b>#GBANNED</b>\n\n"
             f"<b>User:</b> {user_display} (<code>{target_user.id}</code>)\n"
-            f"<b>Username:</b> {html.escape(target_username)}</code>\n"
+            f"<b>Username:</b> {html.escape(target_username)}\n"
             f"<b>Reason:</b> {html.escape(reason)}\n"
             f"<b>Admin:</b> {user_who_gbans.mention_html()}\n"
             f"<b>Date:</b> <code>{current_time}</code>"
@@ -3368,10 +3368,22 @@ def main() -> None:
         write_timeout=write_timeout_val,
         pool_timeout=pool_timeout_val
     )
+
+    job_queue = JobQueue()
+    
+    application = (
+        Application.builder()
+        .token(BOT_TOKEN)
+        .request(custom_request_settings)
+        .job_queue(job_queue)
+        .build()
+    )
+    
     application = Application.builder().token(BOT_TOKEN).request(custom_request_settings).build()
     logger.info(f"Custom request timeouts set for HTTPXRequest: "
                 f"Connect={connect_timeout_val}, Read={read_timeout_val}, "
                 f"Write={write_timeout_val}, Pool={pool_timeout_val}")
+    logger.info("JobQueue has been enabled.")
     
     logger.info("Registering blacklist check handler...")
     application.add_handler(MessageHandler(filters.COMMAND, check_blacklist_handler), group=-1)
