@@ -2384,7 +2384,7 @@ async def kickme_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             await update.message.reply_text("Meeeow! As the chat Creator, you have ultimate power here! If you wish to leave, you might need to use Telegram's native 'Leave group' option or transfer ownership. This command is for regular members. 😉")
             return
         if user_chat_member.status == "administrator":
-            await update.message.reply_text("Meeeow! As a chat Administrator, you can't use /kickme. If you wish to leave, please use Telegram's 'Leave group' option or have another admin remove you. This helps prevent accidental self-removal by admins! 🛡️")
+            await update.message.reply_text("Meeeow! As a chat Administrator, you can't use /kickme. If you wish to leave, please use Telegram's 'Leave group' option or have another admin remove you. This helps prevent accidental self-remove! 🛡️")
             return
             
     except TelegramError as e:
