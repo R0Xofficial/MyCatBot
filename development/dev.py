@@ -2214,9 +2214,9 @@ async def chat_stat_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
                 if bot_member.status == "administrator" and bot_member.can_restrict_members:
                     status_line += "<code>Enabled</code>"
                 else:
-                    status_line += "<code>Disabled</code> (Reason: Bot needs 'Ban Users' permission)"
+                    status_line += "<code>Disabled</code>\n<i>Reason: Bot needs 'Ban Users' permission</i>"
             except Exception:
-                status_line += "<code>Disabled</code> (Reason: Could not verify bot permissions)"
+                status_line += "<code>Disabled</code>\n<i>Reason: Could not verify bot permissions</i>"
         
         info_lines.append(status_line)
 
