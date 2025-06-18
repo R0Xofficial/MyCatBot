@@ -3240,12 +3240,12 @@ async def enforce_gban_command(update: Update, context: ContextTypes.DEFAULT_TYP
 
     if setting:
         await update.message.reply_html(
-            "✅ Meow! <b>Global Ban enforcement is now ENABLED for this chat.</b>\n\n"
+            "✅ <b>Global Ban enforcement is now ENABLED for this chat.</b>\n\n"
             "I will now automatically remove any user from the global ban list who tries to join or speak here."
         )
     else:
         await update.message.reply_html(
-            "❌ Meow! <b>Global Ban enforcement is now DISABLED for this chat.</b>\n\n"
+            "❌ <b>Global Ban enforcement is now DISABLED for this chat.</b>\n\n"
             "<b>Notice:</b> This means users on the global ban list will be able to join and participate here. "
             "This may expose your community to users banned for severe offenses like spam, harassment, or illegal activities."
         )
