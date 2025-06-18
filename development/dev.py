@@ -2204,7 +2204,7 @@ async def chat_stat_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         info_lines.append(f"<b>• Total Members:</b> N/A (Unexpected error)")
 
     if chat.type in [ChatType.GROUP, ChatType.SUPERGROUP]:
-        status_line = "<b>• Global Ban Enforcement:</b> "
+        status_line = "<b>• Gban Enforcement:</b> "
         
         if not is_gban_enforced(chat.id):
             status_line += "<code>Disabled</code>"
