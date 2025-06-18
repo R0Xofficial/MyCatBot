@@ -1,6 +1,6 @@
-![MyCatbot](https://github.com/R0Xofficial/MyCatbot/blob/main/banner.png)
+![MyCatBot](https://github.com/R0Xofficial/MyCatbot/blob/main/banner.png)
 
-# MyCatbot - Your Fun, Furry Assistant
+# MyCatBot - Your Fun, Furry Assistant
 
 Meet **MyCatbot**, the playful and quirky cat-themed Telegram bot that will make your chats more fun! Whether you want to hear a random meow, trigger a zoomie attack, or just get some cuddles, this bot is here to make your day better — one paw at a time!
 
