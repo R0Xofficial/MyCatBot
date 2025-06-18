@@ -2165,7 +2165,6 @@ async def chat_stat_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         await update.message.reply_html(f"💥 An unexpected error occurred while fetching chat stats.")
         return
 
-
     chat_title_display = full_chat_object.title or full_chat_object.first_name or f"Chat ID {full_chat_object.id}"
     info_lines = [f"🔎 <b>Chat stats for: {html.escape(chat_title_display)}</b>\n"]
 
@@ -2188,11 +2187,6 @@ async def chat_stat_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         info_lines.append(f"<b>• Slow Mode:</b> Enabled ({slow_mode_delay_val}s)")
     else:
         info_lines.append(f"<b>• Slow Mode:</b> Disabled")
-
-    if chat.type in [ChatType.GROUP, ChatType.SUPERGROUP]:
-        enforced_status = is_gban_enforced(chat.id)
-        status_text = "<code>Enabled</code>" if enforced_status else "<code>Disabled</code>"
-        info_lines.append(f"<b>• GBans Enforcement:</b> {status_text}")
     
     try:
         member_count = await context.bot.get_chat_member_count(chat_id=full_chat_object.id)
@@ -2204,6 +2198,22 @@ async def chat_stat_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         logger.error(f"Unexpected error in get_chat_member_count for /chatstats in {full_chat_object.id}: {e}", exc_info=True)
         info_lines.append(f"<b>• Total Members:</b> N/A (Unexpected error)")
 
+    if chat.type in [ChatType.GROUP, ChatType.SUPERGROUP]:
+        status_line = "<b>• Global Ban Enforcement:</b> "
+        
+        if not is_gban_enforced(chat.id):
+            status_line += "<code>Disabled</code>"
+        else:
+            try:
+                bot_member = await context.bot.get_chat_member(chat.id, context.bot.id)
+                if bot_member.status == "administrator" and bot_member.can_restrict_members:
+                    status_line += "<code>Enabled</code>"
+                else:
+                    status_line += "<code>Disabled</code> (Reason: Bot needs 'Ban Users' permission)"
+            except Exception:
+                status_line += "<code>Disabled</code> (Reason: Could not verify bot permissions)"
+        
+        info_lines.append(status_line)
 
     message_text = "\n".join(info_lines)
     await update.message.reply_html(message_text, disable_web_page_preview=True)
