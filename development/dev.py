@@ -2186,19 +2186,19 @@ async def chat_stat_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         info_lines.append(f"<b>• Description:</b> Not set")
     
     if getattr(full_chat_object, 'photo', None):
-        info_lines.append(f"<b>• Chat Photo:</b> Yes")
+        info_lines.append(f"<b>• Chat Photo:</b> <code>Yes</code>")
     else:
-        info_lines.append(f"<b>• Chat Photo:</b> No")
+        info_lines.append(f"<b>• Chat Photo:</b> <code>No</code>")
 
     slow_mode_delay_val = getattr(full_chat_object, 'slow_mode_delay', None)
     if slow_mode_delay_val and slow_mode_delay_val > 0:
-        info_lines.append(f"<b>• Slow Mode:</b> Enabled ({slow_mode_delay_val}s)")
+        info_lines.append(f"<b>• Slow Mode:</b> <code>Enabled</code> ({slow_mode_delay_val}s)")
     else:
-        info_lines.append(f"<b>• Slow Mode:</b> Disabled")
+        info_lines.append(f"<b>• Slow Mode:</b> <code>Disabled</code>")
     
     try:
         member_count = await context.bot.get_chat_member_count(chat_id=full_chat_object.id)
-        info_lines.append(f"<b>• Total Members:</b> {member_count}")
+        info_lines.append(f"<b>• Total Members:</b> <code>{member_count}</code>")
     except TelegramError as e:
         logger.warning(f"Could not get member count for /chatstats in chat {full_chat_object.id}: {e}")
         info_lines.append(f"<b>• Total Members:</b> N/A (Error fetching)")
@@ -3204,58 +3204,66 @@ async def enforce_gban_command(update: Update, context: ContextTypes.DEFAULT_TYP
     if not context.args or len(context.args) != 1 or context.args[0].lower() not in ['yes', 'no']:
         await update.message.reply_text("Usage: /enforcegban <yes|no>")
         return
-
-    current_status = is_gban_enforced(chat.id)
-    choice = context.args[0].lower()
     
+    choice = context.args[0].lower()
+    current_status_bool = is_gban_enforced(chat.id)
+
     if choice == 'yes':
-        if current_status:
-            await update.message.reply_html("ℹ️ Global Ban enforcement is already <b>ENABLED</b> for this chat.")
-            return
-        setting = 1
-    else:
-        if not current_status:
-            await update.message.reply_html("ℹ️ Global Ban enforcement is already <b>DISABLED</b> for this chat.")
-            return
-        setting = 0
-
-    try:
-        with sqlite3.connect(DB_NAME) as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                "UPDATE bot_chats SET enforce_gban = ? WHERE chat_id = ?",
-                (setting, chat.id)
-            )
-            if cursor.rowcount == 0:
-                add_chat_to_db(chat.id, chat.title or f"Chat {chat.id}")
-                cursor.execute(
-                    "UPDATE bot_chats SET enforce_gban = ? WHERE chat_id = ?",
-                    (setting, chat.id)
-                )
-            conn.commit()
-    except sqlite3.Error as e:
-        logger.error(f"Failed to update gban enforcement for chat {chat.id}: {e}")
-        await update.message.reply_text("An error occurred while updating the setting.")
-        return
-
-    if setting:
         permission_notice = ""
         try:
             bot_member = await context.bot.get_chat_member(chat.id, context.bot.id)
             if not (bot_member.status == "administrator" and bot_member.can_restrict_members):
                 permission_notice = (
                     "\n\n<b>⚠️ Notice:</b> I do not have the 'Ban Users' permission in this chat. "
-                    "The feature is enabled, but I won't be able to enforce it until I'm granted this right."
+                    "The feature is enabled in settings, but I cannot enforce it until I'm granted this right."
                 )
         except Exception:
             permission_notice = "\n\n<b>⚠️ Notice:</b> Could not verify my own permissions in this chat."
+
+        if current_status_bool:
+            await update.message.reply_html(
+                f"ℹ️ Global Ban enforcement is already <b>ENABLED</b> for this chat."
+                f"{permission_notice}"
+            )
+            return
+        
+        setting = 1
+        try:
+            with sqlite3.connect(DB_NAME) as conn:
+                cursor = conn.cursor()
+                cursor.execute("UPDATE bot_chats SET enforce_gban = ? WHERE chat_id = ?", (setting, chat.id))
+                if cursor.rowcount == 0:
+                    add_chat_to_db(chat.id, chat.title or f"Chat {chat.id}")
+                    cursor.execute("UPDATE bot_chats SET enforce_gban = ? WHERE chat_id = ?", (setting, chat.id))
+                conn.commit()
+        except sqlite3.Error as e:
+            logger.error(f"Failed to update gban enforcement for chat {chat.id}: {e}")
+            await update.message.reply_text("An error occurred while updating the setting.")
+            return
 
         await update.message.reply_html(
             f"✅ <b>Global Ban enforcement is now ENABLED for this chat.</b>\n\n"
             f"I will now automatically remove any user from the global ban list who tries to join or speak here."
             f"{permission_notice}"
         )
-    else:
+        return
+
+    if choice == 'no':
+        if not current_status_bool:
+            await update.message.reply_html("ℹ️ Global Ban enforcement is already <b>DISABLED</b> for this chat.")
+            return
+        
+        setting = 0
+        try:
+            with sqlite3.connect(DB_NAME) as conn:
+                cursor = conn.cursor()
+                cursor.execute("UPDATE bot_chats SET enforce_gban = ? WHERE chat_id = ?", (setting, chat.id))
+                conn.commit()
+        except sqlite3.Error as e:
+            logger.error(f"Failed to update gban enforcement for chat {chat.id}: {e}")
+            await update.message.reply_text("An error occurred while updating the setting.")
+            return
+        
         await update.message.reply_html(
             "❌ <b>Global Ban enforcement is now DISABLED for this chat.</b>\n\n"
             "<b>Notice:</b> This means users on the global ban list will be able to join and participate here. "
