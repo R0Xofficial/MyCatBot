@@ -626,6 +626,9 @@ HELP_TEXT = """
 /unpin - Unpin the replied message. 📍
 /purge [silent] - Deletes user messages up to the replied-to message.
 
+<b>Security:</b>
+/enforcegban [yes/no] - Enable/disable Global Ban enforcement in this chat. 🛡️ (Chat Creator only) 
+
 <b>4FUN Commands:</b>
 /gif - Get a random cat GIF! 🖼️
 /photo - Get a random cat photo! 📷
@@ -3199,7 +3202,7 @@ async def enforce_gban_command(update: Update, context: ContextTypes.DEFAULT_TYP
         return
 
     if not context.args or len(context.args) != 1 or context.args[0].lower() not in ['yes', 'no']:
-        await update.message.reply_text("Usage: /enforcegban <yes|no>")
+        await update.message.reply_text("Usage: /enforcegban [yes/no]")
         return
         
     current_status = is_gban_enforced(chat.id)
