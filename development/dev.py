@@ -2975,7 +2975,7 @@ async def check_gban_on_message(update: Update, context: ContextTypes.DEFAULT_TY
                     except Exception: pass
                 
                 message_text = (
-                    f"<b>Meow! Alert: ⚠️</b> This user is globally banned.\n"
+                    f"<b>⚠️ Meow! Alert: </b> This user is globally banned.\n"
                     f"<i>Enforcing ban in this chat.</i>\n\n"
                     f"<b>User ID:</b> <code>{user.id}</code>\n"
                     f"<b>Reason:</b> {html.escape(gban_reason)}"
@@ -3113,7 +3113,7 @@ async def ungban_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
     await update.message.reply_html(
         f"✅ User {user_display} has been removed from the global ban list.\n\n"
-        f"Propagating unban across all known chats..."
+        f"<i>Propagating ungban across all known chats...</i>"
     )
     
     context.job_queue.run_once(
@@ -3173,7 +3173,7 @@ async def propagate_unban(context: ContextTypes.DEFAULT_TYPE) -> None:
 
     logger.info(f"Unban propagation finished for {target_user_id}. Unbanned in {unbanned_in_count} chats.")
     
-    final_message = f"✅ Meow! Correctly unbanned <code>{target_user_id}</code> on {unbanned_in_count} chats."
+    final_message = f"✅ Meow! Correctly ungbanned <code>{target_user_id}</code> on {unbanned_in_count} chats."
     
     await context.bot.send_message(
         chat_id=command_chat_id,
@@ -3201,10 +3201,21 @@ async def enforce_gban_command(update: Update, context: ContextTypes.DEFAULT_TYP
     if not context.args or len(context.args) != 1 or context.args[0].lower() not in ['yes', 'no']:
         await update.message.reply_text("Usage: /enforcegban <yes|no>")
         return
-
+        
+    current_status = is_gban_enforced(chat.id)
     choice = context.args[0].lower()
-    setting = 1 if choice == 'yes' else 0
     
+    if choice == 'yes':
+        if current_status:
+            await update.message.reply_html("ℹ️ Meow! Global Ban enforcement is already <b>ENABLED</b> for this chat.")
+            return
+        setting = 1
+    else:
+        if not current_status:
+            await update.message.reply_html("ℹ️ Meow! Global Ban enforcement is already <b>DISABLED</b> for this chat.")
+            return
+        setting = 0
+
     try:
         with sqlite3.connect(DB_NAME) as conn:
             cursor = conn.cursor()
@@ -3212,6 +3223,12 @@ async def enforce_gban_command(update: Update, context: ContextTypes.DEFAULT_TYP
                 "UPDATE bot_chats SET enforce_gban = ? WHERE chat_id = ?",
                 (setting, chat.id)
             )
+            if cursor.rowcount == 0:
+                add_chat_to_db(chat.id, chat.title or f"Chat {chat.id}")
+                cursor.execute(
+                    "UPDATE bot_chats SET enforce_gban = ? WHERE chat_id = ?",
+                    (setting, chat.id)
+                )
             conn.commit()
     except sqlite3.Error as e:
         logger.error(f"Failed to update gban enforcement for chat {chat.id}: {e}")
@@ -3220,12 +3237,12 @@ async def enforce_gban_command(update: Update, context: ContextTypes.DEFAULT_TYP
 
     if setting:
         await update.message.reply_html(
-            "✅ <b>Global Ban enforcement is now ENABLED for this chat.</b>\n\n"
+            "✅ Meow! <b>Global Ban enforcement is now ENABLED for this chat.</b>\n\n"
             "I will now automatically remove any user from the global ban list who tries to join or speak here."
         )
     else:
         await update.message.reply_html(
-            "❌ <b>Global Ban enforcement is now DISABLED for this chat.</b>\n\n"
+            "❌ Meow! <b>Global Ban enforcement is now DISABLED for this chat.</b>\n\n"
             "<b>Notice:</b> This means users on the global ban list will be able to join and participate here. "
             "This may expose your community to users banned for severe offenses like spam, harassment, or illegal activities."
         )
@@ -3237,98 +3254,78 @@ async def add_sudo_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         logger.warning(f"Unauthorized /addsudo attempt by user {user.id}.")
         return
 
-    target_user_obj: User | None = None
-    target_input_str: str | None = None
+    target_user: User | None = None
 
     if update.message.reply_to_message:
-        replied_user = update.message.reply_to_message.from_user
-        if replied_user:
-            target_user_obj = replied_user
+        if update.message.reply_to_message.from_user:
+            target_user = update.message.reply_to_message.from_user
         else:
-            await update.message.reply_text("Mrow? Please reply to a user's message to add them to sudo.")
+            await update.message.reply_text("Mrow? You must reply to a user's message.")
             return
     elif context.args:
-        target_input_str = context.args[0]
-        
-        if target_input_str.startswith("@"):
-            username_to_find = target_input_str[1:]
-            target_user_obj = get_user_from_db_by_username(username_to_find)
-            if not target_user_obj:
-                logger.info(f"Sudo target @{username_to_find} not in DB, trying API to confirm user.")
-                try: 
-                    chat_info = await context.bot.get_chat(target_input_str)
-                    if chat_info.type == ChatType.PRIVATE:
-                        target_user_obj = User(id=chat_info.id, first_name=chat_info.first_name or f"User? ({target_input_str})", is_bot=getattr(chat_info, 'is_bot', False), username=chat_info.username, last_name=chat_info.last_name)
-                        if target_user_obj: update_user_in_db(target_user_obj)
+        target_id_str = context.args[0]
+        try:
+            if target_id_str.startswith('@'):
+                target_user = get_user_from_db_by_username(target_id_str)
+                if not target_user:
+                    chat_info = await context.bot.get_chat(target_id_str)
+                    if chat_info.type == 'private':
+                        target_user = User(id=chat_info.id, first_name=chat_info.first_name, is_bot=False, username=chat_info.username, last_name=chat_info.last_name)
                     else:
-                        await update.message.reply_text(f"Mrow? @{username_to_find} resolved to a {chat_info.type}. Sudo can only be granted to users.")
+                        await update.message.reply_text("Sudo can only be granted to users, not channels or groups.")
                         return
-                except TelegramError:
-                    await update.message.reply_text(f"Mrow? Could not find user @{html.escape(username_to_find)} via API. Try ID or reply.")
+            else:
+                chat_info = await context.bot.get_chat(int(target_id_str))
+                if chat_info.type == 'private':
+                    target_user = User(id=chat_info.id, first_name=chat_info.first_name, is_bot=False, username=chat_info.username, last_name=chat_info.last_name)
+                else:
+                    await update.message.reply_text("Sudo can only be granted to users, not channels or groups.")
                     return
-                except Exception as e:
-                    logger.error(f"Unexpected error for @{username_to_find} in addsudo: {e}", exc_info=True)
-                    await update.message.reply_text("Mrow? An error occurred while trying to find the user.")
-                    return
-        else:
-            try:
-                target_id = int(target_input_str)
-                try: 
-                    chat_info = await context.bot.get_chat(target_id)
-                    if chat_info.type == ChatType.PRIVATE:
-                        target_user_obj = User(id=chat_info.id, first_name=chat_info.first_name or f"User {target_id}", is_bot=getattr(chat_info, 'is_bot', False), username=chat_info.username, last_name=chat_info.last_name)
-                        if target_user_obj: update_user_in_db(target_user_obj)
-                    else:
-                         await update.message.reply_text(f"Mrow? ID {target_id} does not seem to be a user (type: {chat_info.type}). Sudo can only be granted to users.")
-                         return
-                except TelegramError: 
-                    logger.warning(f"Couldn't fully verify user ID {target_id} for addsudo. Creating minimal User object.")
-                    target_user_obj = User(id=target_id, first_name=f"User {target_id}", is_bot=False)
-            except ValueError:
-                await update.message.reply_text("Mrow? Invalid format. Use /addsudo <ID/@username> or reply.")
-                return
+        except (ValueError, TelegramError):
+            await update.message.reply_text("Could not find that user.")
+            return
     else:
-        await update.message.reply_text("Mrow? Specify a user ID/@username (or reply to a message) to add to sudo.")
+        await update.message.reply_text("Usage: /addsudo <ID/@username/reply>")
         return
 
-    if not target_user_obj:
+    if not target_user:
         await update.message.reply_text("Mrow? Could not identify the user to add to sudo.")
         return
     
-    if not isinstance(target_user_obj, User) or getattr(target_user_obj, 'type', ChatType.PRIVATE) != ChatType.PRIVATE :
-        await update.message.reply_text("Mrow? Sudo privileges can only be granted to individual users, not channels or groups.")
+    if not isinstance(target_user, User):
+        await update.message.reply_text("Internal error: Target is not a valid User object.")
         return
 
-    if target_user_obj.id == OWNER_ID:
+    if target_user.id == OWNER_ID:
         await update.message.reply_text("Meow! My Owner already has ultimate power and is implicitly sudo! 😼")
         return
-    if target_user_obj.id == context.bot.id:
-        await update.message.reply_text("Purr... I can't sudo myself, that's a paradox I'm not programmed for!")
+    if target_user.id == context.bot.id:
+        await update.message.reply_text("Purr... I can't sudo myself, that's a paradox!")
         return
-    if target_user_obj.is_bot:
-        await update.message.reply_text("Meeeow, I don't think other bots need sudo access. Let's keep it for humans. 🤖")
+    if target_user.is_bot:
+        await update.message.reply_text("Meeeow, I don't think other bots need sudo access.")
+        return
+    if is_sudo_user(target_user.id):
+        user_display = target_user.mention_html()
+        await update.message.reply_html(f"User {user_display} already has sudo powers.")
         return
 
-    if is_sudo_user(target_user_obj.id):
-        user_display = target_user_obj.mention_html() if target_user_obj.username else html.escape(target_user_obj.first_name or str(target_user_obj.id))
-        await update.message.reply_html(f"User {user_display} (<code>{target_user_obj.id}</code>) already has sudo powers.")
-        return
-
-    if add_sudo_user(target_user_obj.id, user.id):
-        logger.info(f"Owner {user.id} added sudo user {target_user_obj.id} (@{target_user_obj.username})")
-        user_display = target_user_obj.mention_html() if target_user_obj.username else html.escape(target_user_obj.first_name or str(target_user_obj.id))
-        await update.message.reply_html(f"✅ User {user_display} (<code>{target_user_obj.id}</code>) has been granted sudo powers!")
+    if add_sudo_user(target_user.id, user.id):
+        logger.info(f"Owner {user.id} added sudo user {target_user.id} (@{target_user.username})")
+        user_display = target_user.mention_html()
+        await update.message.reply_html(f"✅ User {user_display} has been granted sudo powers!")
         
-        if target_user_obj.id != OWNER_ID:
-             try: await context.bot.send_message(target_user_obj.id, "Meeeow! You have been granted sudo privileges by my Owner! Use them wisely. 🐾")
-             except Exception as e: logger.warning(f"Failed to send PM to new sudo user {target_user_obj.id}: {e}")
+        try:
+            await context.bot.send_message(target_user.id, "Meeeow! You have been granted sudo privileges by my Owner! Use them wisely. 🐾")
+        except Exception as e:
+            logger.warning(f"Failed to send PM to new sudo user {target_user.id}: {e}")
         
         try:
             current_time = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
             log_message_to_send = (
                 f"<b>#SUDO</b>\n\n"
-                f"<b>User:</b> {user_display} (<code>{target_user_obj.id}</code>)\n"
-                f"<b>Username:</b> @{html.escape(target_user_obj.username) if target_user_obj.username else 'N/A'}\n"
+                f"<b>User:</b> {user_display} (<code>{target_user.id}</code>)\n"
+                f"<b>Username:</b> @{html.escape(target_user.username) if target_user.username else 'N/A'}\n"
                 f"<b>Date:</b> <code>{current_time}</code>"
             )
             await send_operational_log(context, log_message_to_send)
@@ -3337,94 +3334,82 @@ async def add_sudo_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     else:
         await update.message.reply_text("Mrow? Failed to add user to sudo list. Check logs.")
 
-
 async def del_sudo_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
     if user.id != OWNER_ID:
         logger.warning(f"Unauthorized /delsudo attempt by user {user.id}.")
         return
 
-    target_user_obj: User | None = None
-    target_input_str: str | None = None
+    target_user: User | None = None
 
     if update.message.reply_to_message:
-        replied_user = update.message.reply_to_message.from_user
-        if replied_user:
-            target_user_obj = replied_user
+        if update.message.reply_to_message.from_user:
+            target_user = update.message.reply_to_message.from_user
         else:
-            await update.message.reply_text("Mrow? Please reply to a user's message to remove their sudo.")
+            await update.message.reply_text("Mrow? You must reply to a user's message.")
             return
     elif context.args:
-        target_input_str = context.args[0]
-        if target_input_str.startswith("@"):
-            username_to_find = target_input_str[1:]
-            target_user_obj = get_user_from_db_by_username(username_to_find)
-            if not target_user_obj:
-                try: 
-                    chat_info = await context.bot.get_chat(target_input_str)
-                    if chat_info.type == ChatType.PRIVATE:
-                        target_user_obj = User(id=chat_info.id, first_name=chat_info.first_name or f"User? ({target_input_str})", is_bot=getattr(chat_info, 'is_bot', False), username=chat_info.username, last_name=chat_info.last_name)
-                    else:
-                        await update.message.reply_text(f"Mrow? @{username_to_find} resolved to a {chat_info.type}. Sudo can only be managed for users.")
-                        return
-                except TelegramError:
-                    await update.message.reply_text(f"Mrow? Could not find user @{html.escape(username_to_find)} via API. Try ID or reply.")
+        target_id_str = context.args[0]
+        try:
+            if target_id_str.startswith('@'):
+                target_user = get_user_from_db_by_username(target_id_str)
+                if not target_user:
+                    await update.message.reply_text(f"User {html.escape(target_id_str)} not found in my database. Please use their ID.")
                     return
-                except Exception as e:
-                    logger.error(f"Unexpected error for @{username_to_find} in delsudo: {e}", exc_info=True)
-                    await update.message.reply_text("Mrow? An error occurred while trying to find the user.")
-                    return
-        else:
-            try:
-                target_id = int(target_input_str)
-                try: 
-                    chat_info = await context.bot.get_chat(target_id)
-                    if chat_info.type == ChatType.PRIVATE:
-                        target_user_obj = User(id=chat_info.id, first_name=chat_info.first_name or f"User {target_id}", is_bot=getattr(chat_info, 'is_bot', False), username=chat_info.username, last_name=chat_info.last_name)
-                    else:
-                         await update.message.reply_text(f"Mrow? ID {target_id} does not seem to be a user (type: {chat_info.type}). Sudo can only be managed for users.")
-                         return
-                except TelegramError: 
-                    logger.warning(f"Couldn't fully verify user ID {target_id} for delsudo. Using minimal User object.")
-                    target_user_obj = User(id=target_id, first_name=f"User {target_id}", is_bot=False)
-            except ValueError:
-                await update.message.reply_text("Mrow? Invalid format. Use /delsudo <ID/@username> or reply.")
-                return
+            else:
+                target_user = User(id=int(target_id_str), first_name=f"User {target_id_str}", is_bot=False)
+        except (ValueError, IndexError):
+            await update.message.reply_text("Invalid User ID or format.")
+            return
     else:
-        await update.message.reply_text("Mrow? Specify a user ID/@username (or reply) to remove from sudo.")
+        await update.message.reply_text("Usage: /delsudo <ID/@username/reply>")
         return
         
-    if not target_user_obj:
+    if not target_user:
         await update.message.reply_text("Mrow? Could not identify the user to remove from sudo.")
         return
-    
-    if not isinstance(target_user_obj, User) or getattr(target_user_obj, 'type', ChatType.PRIVATE) != ChatType.PRIVATE :
-        await update.message.reply_text("Mrow? Sudo privileges can only be managed for individual users.")
+
+    if not isinstance(target_user, User):
+        await update.message.reply_text("Internal error: Target is not a valid User object.")
         return
 
-    if target_user_obj.id == OWNER_ID:
-        await update.message.reply_text("Meow! The Owner's powers are inherent and cannot be revoked this way! 😉")
+    if target_user.id == OWNER_ID:
+        await update.message.reply_text("Meow! The Owner's powers are inherent and cannot be revoked! 😉")
         return
     
-    if not is_sudo_user(target_user_obj.id):
-        user_display = target_user_obj.mention_html() if target_user_obj.username else html.escape(target_user_obj.first_name or str(target_user_obj.id))
-        await update.message.reply_html(f"User {user_display} (<code>{target_user_obj.id}</code>) does not have sudo powers.")
+    if not is_sudo_user(target_user.id):
+        try:
+            full_user = await context.bot.get_chat(target_user.id)
+            user_display = full_user.mention_html()
+        except:
+            user_display = f"User <code>{target_user.id}</code>"
+        await update.message.reply_html(f"User {user_display} does not have sudo powers.")
         return
 
-    if remove_sudo_user(target_user_obj.id):
-        logger.info(f"Owner {user.id} removed sudo for user {target_user_obj.id} (@{target_user_obj.username})")
-        user_display = target_user_obj.mention_html() if target_user_obj.username else html.escape(target_user_obj.first_name or str(target_user_obj.id))
-        await update.message.reply_html(f"✅ Sudo powers for user {user_display} (<code>{target_user_obj.id}</code>) have been revoked.")
+    if remove_sudo_user(target_user.id):
+        logger.info(f"Owner {user.id} removed sudo for user {target_user.id} (@{target_user.username})")
         
-        try: await context.bot.send_message(target_user_obj.id, "Meeeow... Your sudo privileges have been revoked by my Owner.")
-        except Exception as e: logger.warning(f"Failed to send PM to revoked sudo user {target_user_obj.id}: {e}")
+        try:
+            full_user = await context.bot.get_chat(target_user.id)
+            user_display = full_user.mention_html()
+            username_for_log = f"@{html.escape(full_user.username)}" if full_user.username else "N/A"
+        except:
+            user_display = f"User <code>{target_user.id}</code>"
+            username_for_log = "N/A"
+
+        await update.message.reply_html(f"✅ Sudo powers for user {user_display} have been revoked.")
+        
+        try:
+            await context.bot.send_message(target_user.id, "Meeeow... Your sudo privileges have been revoked by my Owner.")
+        except Exception as e:
+            logger.warning(f"Failed to send PM to revoked sudo user {target_user.id}: {e}")
 
         try:
             current_time = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
             log_message_to_send = (
                 f"<b>#UNSUDO</b>\n\n"
-                f"<b>User:</b> {user_display} (<code>{target_user_obj.id}</code>)\n"
-                f"<b>Username:</b> @{html.escape(target_user_obj.username) if target_user_obj.username else 'N/A'}\n"
+                f"<b>User:</b> {user_display} (<code>{target_user.id}</code>)\n"
+                f"<b>Username:</b> {username_for_log}\n"
                 f"<b>Date:</b> <code>{current_time}</code>"
             )
             await send_operational_log(context, log_message_to_send)
