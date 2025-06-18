@@ -17,6 +17,7 @@ import speedtest
 import asyncio
 import re
 import io
+import telegram
 from typing import List, Tuple
 from telegram import Update, User, Chat, constants, ChatPermissions
 from telegram.constants import ChatType, ParseMode, ChatMemberStatus
