@@ -3201,20 +3201,20 @@ async def enforce_gban_command(update: Update, context: ContextTypes.DEFAULT_TYP
         return
 
     if not context.args or len(context.args) != 1 or context.args[0].lower() not in ['yes', 'no']:
-        await update.message.reply_text("Usage: /enforcegban [yes/no]")
+        await update.message.reply_text("Usage: /enforcegban <yes|no>")
         return
-        
+
     current_status = is_gban_enforced(chat.id)
     choice = context.args[0].lower()
     
     if choice == 'yes':
         if current_status:
-            await update.message.reply_html("ℹ️ Meow! Global Ban enforcement is already <b>ENABLED</b> for this chat.")
+            await update.message.reply_html("ℹ️ Global Ban enforcement is already <b>ENABLED</b> for this chat.")
             return
         setting = 1
     else:
         if not current_status:
-            await update.message.reply_html("ℹ️ Meow! Global Ban enforcement is already <b>DISABLED</b> for this chat.")
+            await update.message.reply_html("ℹ️ Global Ban enforcement is already <b>DISABLED</b> for this chat.")
             return
         setting = 0
 
@@ -3238,9 +3238,21 @@ async def enforce_gban_command(update: Update, context: ContextTypes.DEFAULT_TYP
         return
 
     if setting:
+        permission_notice = ""
+        try:
+            bot_member = await context.bot.get_chat_member(chat.id, context.bot.id)
+            if not (bot_member.status == "administrator" and bot_member.can_restrict_members):
+                permission_notice = (
+                    "\n\n<b>⚠️ Notice:</b> I do not have the 'Ban Users' permission in this chat. "
+                    "The feature is enabled, but I won't be able to enforce it until I'm granted this right."
+                )
+        except Exception:
+            permission_notice = "\n\n<b>⚠️ Notice:</b> Could not verify my own permissions in this chat."
+
         await update.message.reply_html(
-            "✅ <b>Global Ban enforcement is now ENABLED for this chat.</b>\n\n"
-            "I will now automatically remove any user from the global ban list who tries to join or speak here."
+            f"✅ <b>Global Ban enforcement is now ENABLED for this chat.</b>\n\n"
+            f"I will now automatically remove any user from the global ban list who tries to join or speak here."
+            f"{permission_notice}"
         )
     else:
         await update.message.reply_html(
