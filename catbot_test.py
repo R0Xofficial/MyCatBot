@@ -3049,7 +3049,7 @@ async def gban_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             ban_success_message = "\n<i>They have also been banned from this chat.</i>"
     except Exception as e:
         logger.warning(f"Could not ban g-banned user in the current chat ({chat.id}): {e}")
-        ban_success_message = "\n<i>I couldn't ban them from this chat, I might be missing permissions.</i>"
+        ban_success_message = "\n<i>I couldn't ban them from this chat, I might be missing permissions or I can't find user.</i>"
 
     await update.message.reply_html(
         f"✅ User {user_display} has been added to the global ban list.\n"
