@@ -124,14 +124,6 @@ def init_db():
             CREATE TABLE IF NOT EXISTS bot_chats (
                 chat_id INTEGER PRIMARY KEY,
                 chat_title TEXT,
-                added_at TEXT NOT NULL
-            )
-        """)
-
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS bot_chats (
-                chat_id INTEGER PRIMARY KEY,
-                chat_title TEXT,
                 added_at TEXT NOT NULL,
                 enforce_gban INTEGER DEFAULT 1 NOT NULL 
             )
@@ -144,6 +136,18 @@ def init_db():
     finally:
         if conn:
             conn.close()
+
+def migrate_db_add_enforce_gban_column():
+    try:
+        with sqlite3.connect(DB_NAME) as conn:
+            cursor = conn.cursor()
+            cursor.execute("ALTER TABLE bot_chats ADD COLUMN enforce_gban INTEGER DEFAULT 1 NOT NULL;")
+            logger.info("Successfully added 'enforce_gban' column to 'bot_chats' table.")
+    except sqlite3.OperationalError as e:
+        if "duplicate column name" in str(e):
+            logger.info("'enforce_gban' column already exists in 'bot_chats'. No migration needed.")
+        else:
+            raise e
 
 # --- Blacklist Helper Functions ---
 def add_to_blacklist(user_id: int, banned_by_id: int, reason: str | None = "No reason provided.") -> bool:
@@ -3472,6 +3476,7 @@ async def list_sudo_users_command(update: Update, context: ContextTypes.DEFAULT_
 # --- Main Function ---
 def main() -> None:
     init_db()
+    migrate_db_add_enforce_gban_column()
     logger.info("Initializing bot application...")
     application = Application.builder().token(BOT_TOKEN).build()
 
@@ -3597,18 +3602,6 @@ def main() -> None:
                 logger.warning("No target (LOG_CHAT_ID or OWNER_ID) to send simple startup message.")
 
     application.post_init = send_simple_startup_message
-
-    def migrate_db_add_enforce_gban_column():
-        try:
-            with sqlite3.connect(DB_NAME) as conn:
-                cursor = conn.cursor()
-                cursor.execute("ALTER TABLE bot_chats ADD COLUMN enforce_gban INTEGER DEFAULT 1 NOT NULL;")
-                logger.info("Successfully added 'enforce_gban' column to 'bot_chats' table.")
-        except sqlite3.OperationalError as e:
-            if "duplicate column name" in str(e):
-                logger.info("'enforce_gban' column already exists in 'bot_chats'. No migration needed.")
-            else:
-                raise e
 
     logger.info(f"Bot starting polling... Owner ID configured: {OWNER_ID}")
     print(f"Bot starting polling... Owner ID: {OWNER_ID}")
