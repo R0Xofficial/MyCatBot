@@ -2998,21 +2998,36 @@ async def gban_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         if context.args: reason = " ".join(context.args)
     elif context.args:
         target_id_str = context.args[0]
-        try:
-            if target_id_str.startswith('@'):
-                target_user = await context.bot.get_chat(target_id_str)
-            else:
-                target_user = await context.bot.get_chat(int(target_id_str))
-        except (ValueError, IndexError, telegram.error.TelegramError):
-            await update.message.reply_text("Could not find that user. Please provide a valid ID or reply to a message.")
-            return
+        
+        if target_id_str.startswith('@'):
+            target_user = get_user_from_db_by_username(target_id_str)
+            if not target_user:
+                await update.message.reply_text(f"User {html.escape(target_id_str)} not found in my database. Please use their ID or reply to a message.")
+                return
+        else:
+            try:
+                user_id = int(target_id_str)
+                try:
+                    target_user = await context.bot.get_chat(user_id)
+                except TelegramError:
+                    target_user = User(id=user_id, first_name=f"User {user_id}", is_bot=False)
+            except ValueError:
+                await update.message.reply_text("Invalid User ID format.")
+                return
+        
         if len(context.args) > 1: reason = " ".join(context.args[1:])
     else:
         await update.message.reply_text("Usage: /gban <ID/@username/reply> [reason]"); return
 
     if not target_user:
         await update.message.reply_text("Could not identify the user to gban."); return
-
+        
+    if isinstance(target_user, Chat):
+        if target_user.type == 'private':
+            target_user = User(id=target_user.id, first_name=target_user.first_name, is_bot=False, username=target_user.username, last_name=target_user.last_name)
+        else:
+            await update.message.reply_text("Global bans can only be applied to users."); return
+            
     if is_privileged_user(target_user.id) or target_user.id == context.bot.id:
         await update.message.reply_text("This user cannot be globally banned."); return
     if get_gban_reason(target_user.id):
@@ -3020,16 +3035,16 @@ async def gban_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
     add_to_gban(target_user.id, user_who_gbans.id, reason)
     
-    user_display = target_user.mention_html() if hasattr(target_user, 'mention_html') else f"User <code>{target_user.id}</code>"
-
+    user_display = target_user.mention_html()
+    
     ban_success_message = ""
     try:
         if chat.type != ChatType.PRIVATE:
             await context.bot.ban_chat_member(chat_id=chat.id, user_id=target_user.id)
-            ban_success_message = "\nBanned from this chat."
+            ban_success_message = "\n<i>They have also been banned from this chat.</i>"
     except Exception as e:
         logger.warning(f"Could not ban g-banned user in the current chat ({chat.id}): {e}")
-        ban_success_message = "\nI couldn't ban them from this chat, I might be missing permissions."
+        ban_success_message = "\n<i>I couldn't ban them from this chat, I might be missing permissions.</i>"
 
     await update.message.reply_html(
         f"✅ User {user_display} has been added to the global ban list.\n"
@@ -3039,11 +3054,11 @@ async def gban_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     
     try:
         current_time = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
-        target_username = f"@{target_user.username}" if target_user.username else "N/A"
+        target_username = f"@{html.escape(target_user.username)}" if target_user.username else "N/A"
         log_message = (
             f"<b>#GBANNED</b>\n\n"
             f"<b>User:</b> {user_display} (<code>{target_user.id}</code>)\n"
-            f"<b>Username:</b> {html.escape(target_username)}\n"
+            f"<b>Username:</b> {target_username}\n"
             f"<b>Reason:</b> {html.escape(reason)}\n"
             f"<b>Admin:</b> {user_who_gbans.mention_html()}\n"
             f"<b>Date:</b> <code>{current_time}</code>"
