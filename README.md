@@ -33,8 +33,7 @@ If you want run test bot version use command:
 
 **cd ~/catbot && . ./env.sh && python catbot_test.py**
 
-## User Commands:
-
+# Bot Commands:
 /start - Shows the welcome message. ✨
 
 /help - Shows this help message. ❓
@@ -43,10 +42,36 @@ If you want run test bot version use command:
 
 /owner - Info about my designated human! ❤️
 
+# User Commands:
 /info [ID/reply/@user] - Get info about a user. 👤
 
 /chatstat - Get basic stats about the current chat. 📈
 
+/kickme - Kick yourself from chat. 👋
+
+/listadmins - Show the list of administrators in the current chat.
+Note: /admins works too
+
+# Management Commands:
+/ban [ID/reply/@user] [Time] [Reason] - Ban user in chat. ⛔️
+
+/mute [ID/reply/@user] [Time] [Reason] - Mute user in chat. 🚫
+Note: [Time] is optional
+
+/kick [ID/reply/@user] [Reason] - Kick user from chat. ⚠️
+
+/promote [ID/reply/@user] [admin_title] - Promote a user to administrator. 👷‍♂️
+Note: [admin_title] is optional
+
+/demote [ID/reply/@user] - Demote an administrator to a regular member. 🙍‍♂️
+
+/pin [silent] - Pin the replied message. 📌
+
+/unpin - Unpin the replied message. 📍
+
+/purge [silent] - Deletes user messages up to the replied-to message.
+
+# 4FUN Commands:
 /gif - Get a random cat GIF! 🖼️
 
 /photo - Get a random cat photo! 📷
