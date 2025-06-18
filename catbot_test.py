@@ -2185,19 +2185,19 @@ async def chat_stat_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         info_lines.append(f"<b>• Description:</b> Not set")
     
     if getattr(full_chat_object, 'photo', None):
-        info_lines.append(f"<b>• Chat Photo:</b> Yes")
+        info_lines.append(f"<b>• Chat Photo:</b> <code>Yes</code>")
     else:
-        info_lines.append(f"<b>• Chat Photo:</b> No")
+        info_lines.append(f"<b>• Chat Photo:</b> <code>No</code>")
 
     slow_mode_delay_val = getattr(full_chat_object, 'slow_mode_delay', None)
     if slow_mode_delay_val and slow_mode_delay_val > 0:
-        info_lines.append(f"<b>• Slow Mode:</b> Enabled ({slow_mode_delay_val}s)")
+        info_lines.append(f"<b>• Slow Mode:</b> <code>Enabled</code> ({slow_mode_delay_val}s)")
     else:
-        info_lines.append(f"<b>• Slow Mode:</b> Disabled")
+        info_lines.append(f"<b>• Slow Mode:</b> <code>Disabled</code>")
     
     try:
         member_count = await context.bot.get_chat_member_count(chat_id=full_chat_object.id)
-        info_lines.append(f"<b>• Total Members:</b> {member_count}")
+        info_lines.append(f"<b>• Total Members:</b> <code>{member_count}</code>")
     except TelegramError as e:
         logger.warning(f"Could not get member count for /chatstats in chat {full_chat_object.id}: {e}")
         info_lines.append(f"<b>• Total Members:</b> N/A (Error fetching)")
