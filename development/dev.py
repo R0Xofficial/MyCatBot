@@ -127,6 +127,15 @@ def init_db():
                 added_at TEXT NOT NULL
             )
         """)
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS bot_chats (
+                chat_id INTEGER PRIMARY KEY,
+                chat_title TEXT,
+                added_at TEXT NOT NULL,
+                enforce_gban INTEGER DEFAULT 1 NOT NULL 
+            )
+        """)
         
         conn.commit()
         logger.info(f"Database '{DB_NAME}' initialized successfully (tables users, blacklist, sudo_users ensured).")
@@ -539,6 +548,21 @@ def remove_chat_from_db(chat_id: int):
             cursor.execute("DELETE FROM bot_chats WHERE chat_id = ?", (chat_id,))
     except sqlite3.Error as e:
         logger.error(f"Failed to remove chat {chat_id} from DB: {e}")
+
+def is_gban_enforced(chat_id: int) -> bool:
+    """Checks if gban enforcement is enabled for a specific chat."""
+    try:
+        with sqlite3.connect(DB_NAME) as conn:
+            cursor = conn.cursor()
+            res = cursor.execute(
+                "SELECT enforce_gban FROM bot_chats WHERE chat_id = ?", (chat_id,)
+            ).fetchone()
+            if res is None:
+                return True 
+            return bool(res[0])
+    except sqlite3.Error as e:
+        logger.error(f"Could not check gban enforcement status for chat {chat_id}: {e}")
+        return True
 
 # --- Helper Functions (Check Targets, Get GIF) ---
 async def check_target_protection(target_user_id: int, context: ContextTypes.DEFAULT_TYPE) -> bool:
@@ -2621,7 +2645,8 @@ async def leave_chat(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
 
 # Handler for welcoming the owner when they join a group and send log to pm
 async def handle_new_group_members(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    if not update.message or not update.message.new_chat_members: return
+    if not update.message or not update.message.new_chat_members:
+        return
     chat = update.effective_chat
     
     if any(member.id == context.bot.id for member in update.message.new_chat_members):
@@ -2637,15 +2662,21 @@ async def handle_new_group_members(update: Update, context: ContextTypes.DEFAULT
             except Exception as e:
                 logger.error(f"Failed to send join notification to owner for group {chat.id}: {e}")
 
+    if not is_gban_enforced(chat.id):
+        return
+
     for member in update.message.new_chat_members:
-        if member.id == context.bot.id: continue
+        if member.id == context.bot.id:
+            continue
         
         if OWNER_ID and member.id == OWNER_ID:
             owner_mention = member.mention_html()
             if OWNER_WELCOME_TEXTS:
                  welcome_text = random.choice(OWNER_WELCOME_TEXTS).format(owner_mention=owner_mention)
-                 try: await update.message.reply_html(welcome_text)
-                 except Exception as e: logger.error(f"Failed to send owner welcome message: {e}")
+                 try:
+                     await update.message.reply_html(welcome_text)
+                 except Exception as e:
+                     logger.error(f"Failed to send owner welcome message: {e}")
             continue
 
         gban_reason = get_gban_reason(member.id)
@@ -2899,13 +2930,18 @@ async def unblacklist_user_command(update: Update, context: ContextTypes.DEFAULT
 async def check_gban_on_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not update.effective_chat or update.effective_chat.type == ChatType.PRIVATE:
         return
+    
+    chat = update.effective_chat
+    
+    if not is_gban_enforced(chat.id):
+        return
+
     user = update.effective_user
     if not user or is_privileged_user(user.id):
         return
         
     gban_reason = get_gban_reason(user.id)
     if gban_reason:
-        chat = update.effective_chat
         message = update.effective_message
         
         try:
@@ -2916,25 +2952,22 @@ async def check_gban_on_message(update: Update, context: ContextTypes.DEFAULT_TY
                 return
 
             if bot_member.status == "administrator" and bot_member.can_restrict_members:
-                
-                logger.info(f"G-banned user {user.id} detected in {chat.id}. Bot has ban rights, enforcing.")
+                logger.info(f"G-banned user {user.id} detected in {chat.id}. Bot has permissions, enforcing.")
                 
                 await context.bot.ban_chat_member(chat.id, user.id)
                 
                 if bot_member.can_delete_messages:
                     try:
                         await message.delete()
-                    except Exception as e:
-                        logger.warning(f"Could not delete message from g-banned user {user.id} (they were banned): {e}")
+                    except Exception: pass
                 
                 message_text = (
-                    f"<b>System Alert:</b> User is globally banned.\n"
+                    f"<b>System Alert:</b> User is on the global ban list.\n"
                     f"Enforcing ban in this chat.\n\n"
                     f"<b>User ID:</b> <code>{user.id}</code>\n"
                     f"<b>Reason:</b> {html.escape(gban_reason)}"
                 )
                 await context.bot.send_message(chat.id, text=message_text, parse_mode=ParseMode.HTML)
-
         except Exception as e:
             logger.error(f"Failed to take gban action on message for user {user.id} in chat {chat.id}: {e}")
         
@@ -3119,6 +3152,55 @@ async def propagate_unban(context: ContextTypes.DEFAULT_TYPE) -> None:
         text=final_message,
         parse_mode=ParseMode.HTML
     )
+
+async def enforce_gban_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    chat = update.effective_chat
+    user = update.effective_user
+    
+    if not chat or chat.type not in [ChatType.GROUP, ChatType.SUPERGROUP]:
+        await update.message.reply_text("This command can only be used in groups.")
+        return
+
+    try:
+        member = await chat.get_member(user.id)
+        if member.status != "creator":
+            await update.message.reply_text("Meeeow! Only the chat Creator can use this command.")
+            return
+    except Exception as e:
+        logger.error(f"Could not verify creator status for /enforcegban: {e}")
+        return
+
+    if not context.args or len(context.args) != 1 or context.args[0].lower() not in ['yes', 'no']:
+        await update.message.reply_text("Usage: /enforcegban <yes|no>")
+        return
+
+    choice = context.args[0].lower()
+    setting = 1 if choice == 'yes' else 0
+    
+    try:
+        with sqlite3.connect(DB_NAME) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "UPDATE bot_chats SET enforce_gban = ? WHERE chat_id = ?",
+                (setting, chat.id)
+            )
+            conn.commit()
+    except sqlite3.Error as e:
+        logger.error(f"Failed to update gban enforcement for chat {chat.id}: {e}")
+        await update.message.reply_text("An error occurred while updating the setting.")
+        return
+
+    if setting:
+        await update.message.reply_html(
+            "✅ <b>Global Ban enforcement is now ENABLED for this chat.</b>\n\n"
+            "I will now automatically remove any user from the global ban list who tries to join or speak here."
+        )
+    else:
+        await update.message.reply_html(
+            "❌ <b>Global Ban enforcement is now DISABLED for this chat.</b>\n\n"
+            "<b>Notice:</b> This means users on the global ban list will be able to join and participate here. "
+            "This may expose your community to users banned for severe offenses like spam, harassment, or illegal activities."
+        )
 
 # --- Sudo commands ---
 async def add_sudo_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -3475,6 +3557,7 @@ def main() -> None:
     application.add_handler(CommandHandler("unblist", unblacklist_user_command))
     application.add_handler(CommandHandler("gban", gban_command))
     application.add_handler(CommandHandler("ungban", ungban_command))
+    application.add_handler(CommandHandler("enforcegban", enforce_gban_command))
     application.add_handler(CommandHandler("listsudo", list_sudo_users_command))
     application.add_handler(CommandHandler("addsudo", add_sudo_command))
     application.add_handler(CommandHandler("delsudo", del_sudo_command))
@@ -3509,6 +3592,18 @@ def main() -> None:
                 logger.warning("No target (LOG_CHAT_ID or OWNER_ID) to send simple startup message.")
 
     application.post_init = send_simple_startup_message
+
+    def migrate_db_add_enforce_gban_column():
+        try:
+            with sqlite3.connect(DB_NAME) as conn:
+                cursor = conn.cursor()
+                cursor.execute("ALTER TABLE bot_chats ADD COLUMN enforce_gban INTEGER DEFAULT 1 NOT NULL;")
+                logger.info("Successfully added 'enforce_gban' column to 'bot_chats' table.")
+        except sqlite3.OperationalError as e:
+            if "duplicate column name" in str(e):
+                logger.info("'enforce_gban' column already exists in 'bot_chats'. No migration needed.")
+            else:
+                raise e
 
     logger.info(f"Bot starting polling... Owner ID configured: {OWNER_ID}")
     print(f"Bot starting polling... Owner ID: {OWNER_ID}")
