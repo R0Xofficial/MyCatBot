@@ -2007,31 +2007,36 @@ async def status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     blacklisted_count = "N/A"
     sudo_users_count = "N/A"
     gban_count = "N/A"
+    chat_count = "N/A"
 
-    conn = None
     try:
-        conn = sqlite3.connect(DB_NAME)
-        cursor = conn.cursor()
-        
-        cursor.execute("SELECT COUNT(*) FROM users")
-        count_result_users = cursor.fetchone()
-        if count_result_users:
-            known_users_count = str(count_result_users[0])
-
-        cursor.execute("SELECT COUNT(*) FROM blacklist")
-        count_result_blacklist = cursor.fetchone()
-        if count_result_blacklist:
-            blacklisted_count = str(count_result_blacklist[0])
+        with sqlite3.connect(DB_NAME) as conn:
+            cursor = conn.cursor()
             
-        cursor.execute("SELECT COUNT(*) FROM sudo_users")
-        count_result_sudo = cursor.fetchone()
-        if count_result_sudo:
-            sudo_users_count = str(count_result_sudo[0])
+            cursor.execute("SELECT COUNT(*) FROM users")
+            count_result_users = cursor.fetchone()
+            if count_result_users:
+                known_users_count = str(count_result_users[0])
 
-        cursor.execute("SELECT COUNT(*) FROM global_bans")
-        count_result_gban = cursor.fetchone()
-        if count_result_gban:
-            gban_count = str(count_result_gban[0])
+            cursor.execute("SELECT COUNT(*) FROM blacklist")
+            count_result_blacklist = cursor.fetchone()
+            if count_result_blacklist:
+                blacklisted_count = str(count_result_blacklist[0])
+                
+            cursor.execute("SELECT COUNT(*) FROM sudo_users")
+            count_result_sudo = cursor.fetchone()
+            if count_result_sudo:
+                sudo_users_count = str(count_result_sudo[0])
+
+            cursor.execute("SELECT COUNT(*) FROM global_bans")
+            count_result_gban = cursor.fetchone()
+            if count_result_gban:
+                gban_count = str(count_result_gban[0])
+                
+            cursor.execute("SELECT COUNT(*) FROM bot_chats")
+            count_result_chats = cursor.fetchone()
+            if count_result_chats:
+                chat_count = str(count_result_chats[0])
             
     except sqlite3.Error as e:
         logger.error(f"SQLite error fetching counts for /status: {e}", exc_info=True)
@@ -2039,25 +2044,25 @@ async def status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         blacklisted_count = "DB Error"
         sudo_users_count = "DB Error"
         gban_count = "DB Error"
+        chat_count = "DB Error"
     except Exception as e:
         logger.error(f"Unexpected error fetching counts for /status: {e}", exc_info=True)
         known_users_count = "Error"
         blacklisted_count = "Error"
         sudo_users_count = "Error"
         gban_count = "Error"
-    finally:
-        if conn:
-            conn.close()
+        chat_count = "Error"
 
     status_lines = [
         "<b>Purrrr! Bot Status:</b> ✨\n",
         f"<b>• State:</b> Ready & Purring! 🐾",
         f"<b>• Last Nap:</b> <code>{readable_uptime}</code> ago 😴\n",
-        "<b>📊 Database Stats:</b>",
+        "<b>📊 Stats:</b>",
+        f" <b>• 💬 Chats:</b> <code>{chat_count}</code>",
         f" <b>• 👀 Known Users:</b> <code>{known_users_count}</code>",
         f" <b>• 🛡 Sudo Users:</b> <code>{sudo_users_count}</code>",
         f" <b>• 🚫 Blacklisted Users:</b> <code>{blacklisted_count}</code>",
-        f" <b>• 🌍 Globally Banned:</b> <code>{gban_count}</code>"
+        f" <b>• 🌍 Globally Banned Users:</b> <code>{gban_count}</code>"
     ]
 
     status_msg = "\n".join(status_lines)
