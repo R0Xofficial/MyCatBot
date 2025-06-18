@@ -2196,6 +2196,11 @@ async def chat_stat_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     else:
         info_lines.append(f"<b>• Slow Mode:</b> Disabled")
 
+    if chat.type in [ChatType.GROUP, ChatType.SUPERGROUP]:
+        enforced_status = is_gban_enforced(chat.id)
+        status_text = "✅ Enabled" if enforced_status else "❌ Disabled"
+        info_lines.append(f"<b>• Global Ban Enforcement:</b> {status_text}")
+    
     try:
         member_count = await context.bot.get_chat_member_count(chat_id=full_chat_object.id)
         info_lines.append(f"<b>• Total Members:</b> {member_count}")
