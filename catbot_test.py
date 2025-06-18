@@ -3046,15 +3046,11 @@ async def gban_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     try:
         if chat.type != ChatType.PRIVATE:
             await context.bot.ban_chat_member(chat_id=chat.id, user_id=target_user.id)
-            ban_success_message = "\n<i>They have also been banned from this chat.</i>"
     except Exception as e:
         logger.warning(f"Could not ban g-banned user in the current chat ({chat.id}): {e}")
-        ban_success_message = "\n<i>I couldn't ban them from this chat, I might be missing permissions or I can't find user.</i>"
-
     await update.message.reply_html(
         f"✅ User {user_display} has been added to the global ban list.\n"
         f"<b>Reason:</b> {html.escape(reason)}"
-        f"{ban_success_message}"
     )
     
     try:
