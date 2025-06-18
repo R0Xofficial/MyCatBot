@@ -138,18 +138,6 @@ def init_db():
         if conn:
             conn.close()
 
-def migrate_db_add_enforce_gban_column():
-    try:
-        with sqlite3.connect(DB_NAME) as conn:
-            cursor = conn.cursor()
-            cursor.execute("ALTER TABLE bot_chats ADD COLUMN enforce_gban INTEGER DEFAULT 1 NOT NULL;")
-            logger.info("Successfully added 'enforce_gban' column to 'bot_chats' table.")
-    except sqlite3.OperationalError as e:
-        if "duplicate column name" in str(e):
-            logger.info("'enforce_gban' column already exists in 'bot_chats'. No migration needed.")
-        else:
-            raise e
-
 # --- Blacklist Helper Functions ---
 def add_to_blacklist(user_id: int, banned_by_id: int, reason: str | None = "No reason provided.") -> bool:
     conn = None
@@ -3492,7 +3480,6 @@ async def list_sudo_users_command(update: Update, context: ContextTypes.DEFAULT_
 # --- Main Function ---
 def main() -> None:
     init_db()
-    migrate_db_add_enforce_gban_column()
     logger.info("Initializing bot application...")
     application = Application.builder().token(BOT_TOKEN).build()
 
