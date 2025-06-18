@@ -55,12 +55,12 @@ Note: /admins works too
 # Management Commands:
 /ban [ID/reply/@user] [Time] [Reason] - Ban user in chat. ⛔️
 
-/mute [ID/reply/@user] [Time] [Reason] - Mute user in chat. 🚫\n
+/mute [ID/reply/@user] [Time] [Reason] - Mute user in chat. 🚫<br>
 Note: [Time] is optional
 
 /kick [ID/reply/@user] [Reason] - Kick user from chat. ⚠️
 
-/promote [ID/reply/@user] [admin_title] - Promote a user to administrator. 👷‍♂️\n
+/promote [ID/reply/@user] [admin_title] - Promote a user to administrator. 👷‍♂️<br>
 Note: [admin_title] is optional
 
 /demote [ID/reply/@user] - Demote an administrator to a regular member. 🙍‍♂️
