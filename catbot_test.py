@@ -3183,7 +3183,7 @@ async def enforce_gban_command(update: Update, context: ContextTypes.DEFAULT_TYP
     user = update.effective_user
     
     if not chat or chat.type not in [ChatType.GROUP, ChatType.SUPERGROUP]:
-        await update.message.reply_text("This command can only be used in groups.")
+        await update.message.reply_text("Meow. This command can only be used in groups.")
         return
 
     try:
