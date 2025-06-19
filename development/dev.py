@@ -557,9 +557,6 @@ def is_gban_enforced(chat_id: int) -> bool:
         logger.error(f"Could not check gban enforcement status for chat {chat_id}: {e}")
         return True
 
-async def ignore_edited_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    raise ApplicationHandlerStop
-
 # --- Helper Functions (Check Targets, Get GIF) ---
 async def check_target_protection(target_user_id: int, context: ContextTypes.DEFAULT_TYPE) -> bool:
     if target_user_id == OWNER_ID: return True
@@ -3643,8 +3640,6 @@ def main() -> None:
         filters.TEXT & (~filters.COMMAND) & filters.ChatType.GROUPS,
         check_gban_on_message
     ), group=-2)
-
-    application.add_handler(MessageHandler(filters.Update.EDITED_MESSAGE, ignore_edited_message), group=-5)
 
     logger.info("Registering command handlers...")
     application.add_handler(CommandHandler("start", start))
