@@ -611,7 +611,7 @@ HELP_TEXT = """
 /info &lt;ID/reply/@user&gt; - Get info about a user. 👤
 /chatstat - Get basic stats about the current chat. 📈
 /kickme - Kick yourself from chat. 👋
-/listadmins - Show the list of administrators in the current chat.
+/listadmins - Show the list of administrators in the current chat. 📃
 <i>Note: /admins works too</i>
 
 <b>Management Commands:</b>
@@ -624,10 +624,12 @@ HELP_TEXT = """
 /demote &lt;ID/reply/@user&gt; - Demote an administrator to a regular member. 🙍‍♂️
 /pin &lt;loud|notify&gt; - Pin the replied message. 📌
 /unpin - Unpin the replied message. 📍
-/purge &lt;silent&gt; - Deletes user messages up to the replied-to message.
+/purge &lt;silent&gt; - Deletes user messages up to the replied-to message. 🗑
+/report &lt;ID/@entity/reply&gt; [reason] - Report user. ⚠️
 
 <b>Security:</b>
-/enforcegban &lt;yes/no&gt; - Enable/disable Global Ban enforcement in this chat. 🛡️ (Chat Creator only) 
+/enforcegban &lt;yes/no&gt; - Enable/disable Global Ban enforcement in this chat. 🛡️
+<i>(Chat Creator only)</i>
 
 <b>4FUN Commands:</b>
 /gif - Get a random cat GIF! 🖼️
@@ -1901,6 +1903,71 @@ async def purge_messages_command(update: Update, context: ContextTypes.DEFAULT_T
             logger.error(f"Purge: Failed to send final purge status message: {e_send_final}")
     else:
         logger.info(f"Silent purge completed in chat {chat.id}. Duration: {duration_secs:.2f}s. Errors occurred: {errors_occurred}")
+
+async def resolve_target_entity(update: Update, context: ContextTypes.DEFAULT_TYPE) -> User | Chat | None:
+    """
+    Resolves the target entity (User or Channel) from a command message.
+    Handles replies, @usernames, and IDs.
+    """
+    message = update.effective_message
+    if not message: return None
+
+    if message.reply_to_message:
+        if message.reply_to_message.sender_chat:
+            return message.reply_to_message.sender_chat
+        if message.reply_to_message.from_user:
+            return message.reply_to_message.from_user
+        return None
+
+    if context.args:
+        target_id_str = context.args[0]
+        try:
+            if target_id_str.startswith('@'):
+                return await context.bot.get_chat(target_id_str)
+            else:
+                return await context.bot.get_chat(int(target_id_str))
+        except (ValueError, TelegramError):
+            await message.reply_text(f"😿 Could not find any user, channel, or group with the identifier: {html.escape(target_id_str)}")
+            return None
+
+    return None
+
+async def report_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    chat = update.effective_chat
+    reporter = update.effective_user
+    message = update.effective_message
+
+    if not message or chat.type == ChatType.PRIVATE:
+        await message.reply_text("Meow. This command can only be used in groups.")
+        return
+
+    target_entity = await resolve_target_entity(update, context)
+    
+    if not target_entity:
+        if not context.args:
+            await message.reply_text("Usage: /report <ID/@entity/reply> [reason]")
+        return
+        
+    reason_args = context.args[1:] if context.args and not message.reply_to_message else context.args
+    reason = " ".join(reason_args) if reason_args else "No specific reason provided."
+    
+    reporter_mention = reporter.mention_html()
+    
+    if isinstance(target_entity, User):
+        target_display = target_entity.mention_html()
+        entity_type_label = "User"
+    else:
+        target_display = html.escape(target_entity.title or f"Entity {target_entity.id}")
+        entity_type_label = target_entity.type.capitalize()
+
+    report_message = (
+        f"📢 <b>Report for Administrators</b>\n\n"
+        f"<b>Reported {entity_type_label}:</b> {target_display} (<code>{target_entity.id}</code>)\n"
+        f"<b>Reason:</b> {html.escape(reason)}\n"
+        f"<b>Reported by:</b> {reporter_mention}"
+    )
+
+    await send_safe_reply(update, context, text=report_message, parse_mode=ParseMode.HTML)
 
 # --- Simple Text Command Definitions ---
 async def send_random_text(update: Update, context: ContextTypes.DEFAULT_TYPE, text_list: list[str], list_name: str) -> None:
@@ -3575,53 +3642,54 @@ def main() -> None:
     ), group=-2)
 
     logger.info("Registering command handlers...")
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("help", help_command))
-    application.add_handler(CommandHandler("github", github))
-    application.add_handler(CommandHandler("owner", owner_info))
-    application.add_handler(CommandHandler("info", entity_info_command))
-    application.add_handler(CommandHandler("chatstat", chat_stat_command))
-    application.add_handler(CommandHandler("cinfo", chat_info_command))
-    application.add_handler(CommandHandler("ban", ban_command))
-    application.add_handler(CommandHandler("unban", unban_command))
-    application.add_handler(CommandHandler("mute", mute_command))
-    application.add_handler(CommandHandler("unmute", unmute_command))
-    application.add_handler(CommandHandler("kick", kick_command))
-    application.add_handler(CommandHandler("kickme", kickme_command))
-    application.add_handler(CommandHandler("promote", promote_command))
-    application.add_handler(CommandHandler("demote", demote_command))
-    application.add_handler(CommandHandler("pin", pin_message_command))
-    application.add_handler(CommandHandler("unpin", unpin_message_command))
-    application.add_handler(CommandHandler("purge", purge_messages_command))
-    application.add_handler(CommandHandler("listadmins", list_admins_command))
-    application.add_handler(CommandHandler("admins", list_admins_command))
-    application.add_handler(CommandHandler("gif", gif))
-    application.add_handler(CommandHandler("photo", photo))
-    application.add_handler(CommandHandler("meow", meow))
-    application.add_handler(CommandHandler("nap", nap))
-    application.add_handler(CommandHandler("play", play))
-    application.add_handler(CommandHandler("treat", treat))
-    application.add_handler(CommandHandler("zoomies", zoomies))
-    application.add_handler(CommandHandler("judge", judge))
-    application.add_handler(CommandHandler("fed", fed))
-    application.add_handler(CommandHandler("attack", attack))
-    application.add_handler(CommandHandler("kill", kill))
-    application.add_handler(CommandHandler("punch", punch))
-    application.add_handler(CommandHandler("slap", slap))
-    application.add_handler(CommandHandler("bite", bite))
-    application.add_handler(CommandHandler("hug", hug))
-    application.add_handler(CommandHandler("status", status))
-    application.add_handler(CommandHandler("say", say))
-    application.add_handler(CommandHandler("leave", leave_chat))
-    application.add_handler(CommandHandler("speedtest", speedtest_command))
-    application.add_handler(CommandHandler("blist", blacklist_user_command))
-    application.add_handler(CommandHandler("unblist", unblacklist_user_command))
-    application.add_handler(CommandHandler("gban", gban_command))
-    application.add_handler(CommandHandler("ungban", ungban_command))
-    application.add_handler(CommandHandler("enforcegban", enforce_gban_command))
-    application.add_handler(CommandHandler("listsudo", list_sudo_users_command))
-    application.add_handler(CommandHandler("addsudo", add_sudo_command))
-    application.add_handler(CommandHandler("delsudo", del_sudo_command))
+    application.add_handler(CommandHandler("start", start, filters=~filters.Update.EDITED_MESSAGE))
+    application.add_handler(CommandHandler("help", help_command, filters=~filters.Update.EDITED_MESSAGE))
+    application.add_handler(CommandHandler("github", github, filters=~filters.Update.EDITED_MESSAGE))
+    application.add_handler(CommandHandler("owner", owner_info, filters=~filters.Update.EDITED_MESSAGE))
+    application.add_handler(CommandHandler("info", entity_info_command, filters=~filters.Update.EDITED_MESSAGE))
+    application.add_handler(CommandHandler("chatstat", chat_stat_command, filters=~filters.Update.EDITED_MESSAGE))
+    application.add_handler(CommandHandler("cinfo", chat_info_command, filters=~filters.Update.EDITED_MESSAGE))
+    application.add_handler(CommandHandler("ban", ban_command, filters=~filters.Update.EDITED_MESSAGE))
+    application.add_handler(CommandHandler("unban", unban_command, filters=~filters.Update.EDITED_MESSAGE))
+    application.add_handler(CommandHandler("mute", mute_command, filters=~filters.Update.EDITED_MESSAGE))
+    application.add_handler(CommandHandler("unmute", unmute_command, filters=~filters.Update.EDITED_MESSAGE))
+    application.add_handler(CommandHandler("kick", kick_command, filters=~filters.Update.EDITED_MESSAGE))
+    application.add_handler(CommandHandler("kickme", kickme_command, filters=~filters.Update.EDITED_MESSAGE))
+    application.add_handler(CommandHandler("promote", promote_command, filters=~filters.Update.EDITED_MESSAGE))
+    application.add_handler(CommandHandler("demote", demote_command, filters=~filters.Update.EDITED_MESSAGE))
+    application.add_handler(CommandHandler("pin", pin_message_command, filters=~filters.Update.EDITED_MESSAGE))
+    application.add_handler(CommandHandler("unpin", unpin_message_command, filters=~filters.Update.EDITED_MESSAGE))
+    application.add_handler(CommandHandler("purge", purge_messages_command, filters=~filters.Update.EDITED_MESSAGE))
+    application.add_handler(CommandHandler("report", report_command, filters=~filters.Update.EDITED_MESSAGE))
+    application.add_handler(CommandHandler("listadmins", list_admins_command, filters=~filters.Update.EDITED_MESSAGE))
+    application.add_handler(CommandHandler("admins", list_admins_command, filters=~filters.Update.EDITED_MESSAGE))
+    application.add_handler(CommandHandler("gif", gif, filters=~filters.Update.EDITED_MESSAGE))
+    application.add_handler(CommandHandler("photo", photo, filters=~filters.Update.EDITED_MESSAGE))
+    application.add_handler(CommandHandler("meow", meow, filters=~filters.Update.EDITED_MESSAGE))
+    application.add_handler(CommandHandler("nap", nap, filters=~filters.Update.EDITED_MESSAGE))
+    application.add_handler(CommandHandler("play", play, filters=~filters.Update.EDITED_MESSAGE))
+    application.add_handler(CommandHandler("treat", treat, filters=~filters.Update.EDITED_MESSAGE))
+    application.add_handler(CommandHandler("zoomies", zoomies, filters=~filters.Update.EDITED_MESSAGE))
+    application.add_handler(CommandHandler("judge", judge, filters=~filters.Update.EDITED_MESSAGE))
+    application.add_handler(CommandHandler("fed", fed, filters=~filters.Update.EDITED_MESSAGE))
+    application.add_handler(CommandHandler("attack", attack, filters=~filters.Update.EDITED_MESSAGE))
+    application.add_handler(CommandHandler("kill", kill, filters=~filters.Update.EDITED_MESSAGE))
+    application.add_handler(CommandHandler("punch", punch, filters=~filters.Update.EDITED_MESSAGE))
+    application.add_handler(CommandHandler("slap", slap, filters=~filters.Update.EDITED_MESSAGE))
+    application.add_handler(CommandHandler("bite", bite, filters=~filters.Update.EDITED_MESSAGE))
+    application.add_handler(CommandHandler("hug", hug, filters=~filters.Update.EDITED_MESSAGE))
+    application.add_handler(CommandHandler("status", status, filters=~filters.Update.EDITED_MESSAGE))
+    application.add_handler(CommandHandler("say", say, filters=~filters.Update.EDITED_MESSAGE))
+    application.add_handler(CommandHandler("leave", leave_chat, filters=~filters.Update.EDITED_MESSAGE))
+    application.add_handler(CommandHandler("speedtest", speedtest_command, filters=~filters.Update.EDITED_MESSAGE))
+    application.add_handler(CommandHandler("blist", blacklist_user_command, filters=~filters.Update.EDITED_MESSAGE))
+    application.add_handler(CommandHandler("unblist", unblacklist_user_command, filters=~filters.Update.EDITED_MESSAGE))
+    application.add_handler(CommandHandler("gban", gban_command, filters=~filters.Update.EDITED_MESSAGE))
+    application.add_handler(CommandHandler("ungban", ungban_command, filters=~filters.Update.EDITED_MESSAGE))
+    application.add_handler(CommandHandler("enforcegban", enforce_gban_command, filters=~filters.Update.EDITED_MESSAGE))
+    application.add_handler(CommandHandler("listsudo", list_sudo_users_command, filters=~filters.Update.EDITED_MESSAGE))
+    application.add_handler(CommandHandler("addsudo", add_sudo_command, filters=~filters.Update.EDITED_MESSAGE))
+    application.add_handler(CommandHandler("delsudo", del_sudo_command, filters=~filters.Update.EDITED_MESSAGE))
 
     logger.info("Registering message handlers for group joins and lefts...")
     application.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, handle_new_group_members))
