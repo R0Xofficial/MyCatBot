@@ -621,7 +621,7 @@ HELP_TEXT = """
 /promote [ID/reply/@user] [admin_title] - Promote a user to administrator. 👷‍♂️
 <i>Note: [admin_title] is optional</i>
 /demote [ID/reply/@user] - Demote an administrator to a regular member. 🙍‍♂️
-/pin [silent] - Pin the replied message. 📌
+/pin [loud|notify] - Pin the replied message. 📌
 /unpin - Unpin the replied message. 📍
 /purge [silent] - Deletes user messages up to the replied-to message.
 
@@ -1721,7 +1721,7 @@ async def pin_message_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         return
 
     disable_notification = True
-    pin_mode_text = "silently"
+    pin_mode_text = ""
 
     if context.args and context.args[0].lower() in ["loud", "notify"]:
         disable_notification = False
