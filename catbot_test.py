@@ -803,7 +803,7 @@ async def entity_info_command(update: Update, context: ContextTypes.DEFAULT_TYPE
                 initial_user_obj_from_update = resolved_user_from_db
                 initial_entity_id_for_refresh = resolved_user_from_db.id
             else:
-                logger.info(f"Entity @{username_to_find} not in local user DB, trying Telegram API.")
+                logger.info(f"Trying find entity @{username_to_find} by using Telegram API.")
                 try:
                     target_chat_obj_from_api = await context.bot.get_chat(target_input_str)
                     initial_entity_id_for_refresh = target_chat_obj_from_api.id
