@@ -3100,6 +3100,9 @@ async def check_gban_on_message(update: Update, context: ContextTypes.DEFAULT_TY
 async def gban_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_who_gbans = update.effective_user
     chat = update.effective_chat
+    message = update.effective_message
+    if not message: return
+
     if not is_privileged_user(user_who_gbans.id):
         logger.warning(f"Unauthorized /gban attempt by user {user_who_gbans.id}.")
         return
@@ -3107,17 +3110,19 @@ async def gban_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     target_user: User | None = None
     reason: str = "No reason provided."
     
-    if update.message.reply_to_message:
-        target_user = update.message.reply_to_message.from_user
+    if message.reply_to_message:
+        target_user = message.reply_to_message.from_user
         if context.args: reason = " ".join(context.args)
     elif context.args:
         target_id_str = context.args[0]
-        
         if target_id_str.startswith('@'):
             target_user = get_user_from_db_by_username(target_id_str)
             if not target_user:
-                await update.message.reply_text(f"😿 User not found in my database. Please use their ID or reply to a message.")
-                return
+                try:
+                    target_user = await context.bot.get_chat(target_id_str)
+                except TelegramError:
+                    await message.reply_text(f"😿 User not found in my database. Please use their ID or reply to a message.")
+                    return
         else:
             try:
                 user_id = int(target_id_str)
@@ -3126,37 +3131,38 @@ async def gban_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                 except TelegramError:
                     target_user = User(id=user_id, first_name=f"{user_id}", is_bot=False)
             except ValueError:
-                await update.message.reply_text("Mrow? Invalid User ID format.")
+                await message.reply_text("Mrow? Invalid User ID format.")
                 return
         
         if len(context.args) > 1: reason = " ".join(context.args[1:])
     else:
-        await update.message.reply_text("Usage: /gban <ID/@username/reply> [reason]"); return
+        await message.reply_text("Usage: /gban <ID/@username/reply> [reason]"); return
 
     if not target_user:
-        await update.message.reply_text("Mrow? Could not identify the user to gban."); return
+        await message.reply_text("Mrow? Could not identify the user to gban."); return
         
     if isinstance(target_user, Chat):
         if target_user.type == 'private':
             target_user = User(id=target_user.id, first_name=target_user.first_name, is_bot=False, username=target_user.username, last_name=target_user.last_name)
         else:
-            await update.message.reply_text("Mrow? Global bans can only be applied to users."); return
+            await message.reply_text("Mrow? Global bans can only be applied to users."); return
             
     if is_privileged_user(target_user.id) or target_user.id == context.bot.id:
-        await update.message.reply_text("Meow. This user cannot be globally banned."); return
+        await message.reply_text("Meow. This user cannot be globally banned."); return
     if get_gban_reason(target_user.id):
-        await update.message.reply_text("Meow. This user is already globally banned."); return
+        await message.reply_text("Meow. This user is already globally banned."); return
 
     add_to_gban(target_user.id, user_who_gbans.id, reason)
     
     user_display = target_user.mention_html()
     
-    try:
-        if chat.type != ChatType.PRIVATE:
+    if chat.type != ChatType.PRIVATE:
+        try:
             await context.bot.ban_chat_member(chat_id=chat.id, user_id=target_user.id)
-    except Exception as e:
-        logger.warning(f"Could not ban gbanned user in the current chat ({chat.id}): {e}")
-    await update.message.reply_html(
+        except Exception as e:
+            logger.warning(f"Could not ban gbanned user in the current chat ({chat.id}): {e}")
+
+    await message.reply_html(
         f"✅ User {user_display} has been globally banned.\n"
         f"<b>Reason:</b> {html.escape(reason)}"
     )
@@ -3164,11 +3170,18 @@ async def gban_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     try:
         current_time = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
         target_username = f"@{html.escape(target_user.username)}" if target_user.username else "N/A"
+        
+        reason_display = html.escape(reason)
+        if chat.username:
+            message_link = f"https://t.me/{chat.username}/{message.message_id}"
+            reason_display = f"<a href='{message_link}'>{html.escape(reason)}</a>"
+
         log_message = (
-            f"<b>#GBANNED</b>\n\n"
+            f"<b>#GBANNED</b>\n"
+            f"<b>From Chat:</b> {html.escape(chat.title)} (<code>{chat.id}</code>)\n\n"
             f"<b>User:</b> {user_display} (<code>{target_user.id}</code>)\n"
             f"<b>Username:</b> {target_username}\n"
-            f"<b>Reason:</b> {html.escape(reason)}\n"
+            f"<b>Reason:</b> {reason_display}\n"
             f"<b>Admin:</b> {user_who_gbans.mention_html()}\n"
             f"<b>Date:</b> <code>{current_time}</code>"
         )
@@ -3178,34 +3191,43 @@ async def gban_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
 async def ungban_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_who_ungbans = update.effective_user
+    chat = update.effective_chat
+    message = update.effective_message
+    if not message: return
+
     if not is_privileged_user(user_who_ungbans.id):
         logger.warning(f"Unauthorized /ungban attempt by user {user_who_ungbans.id}.")
         return
 
     target_user: User | None = None
-    if update.message.reply_to_message:
-        target_user = update.message.reply_to_message.from_user
+    if message.reply_to_message:
+        target_user = message.reply_to_message.from_user
     elif context.args:
         target_id_str = context.args[0]
         try:
             if target_id_str.startswith('@'):
-                target_user_obj_from_db = get_user_from_db_by_username(target_id_str)
-                if not target_user_obj_from_db:
-                    await update.message.reply_text("😿 User not found in my database. Please use their ID or reply to a message.")
+                target_user = get_user_from_db_by_username(target_id_str)
+                if not target_user:
+                    await message.reply_text(f"😿 User not found in my database. Please use their ID or reply to a message.")
                     return
-                target_user = target_user_obj_from_db
             else:
-                target_user = User(id=int(target_id_str), first_name=f"User {target_id_str}", is_bot=False)
+                target_user = User(id=int(target_id_str), first_name=f"{int(target_id_str)}", is_bot=False)
         except (ValueError, IndexError):
-            await update.message.reply_text("Invalid User ID or format."); return
+            await message.reply_text("Mrow? Invalid User ID or format."); return
     else:
-        await update.message.reply_text("Usage: /ungban <ID/@username/reply>"); return
+        await message.reply_text("Usage: /ungban <ID/@username/reply>"); return
         
     if not target_user:
-        await update.message.reply_text("Meow. Could not identify the user to ungban."); return
+        await message.reply_text("Meow. Could not identify the user to ungban."); return
 
     if not get_gban_reason(target_user.id):
-        await update.message.reply_text("Meow. This user is not globally banned."); return
+        try:
+            full_user = await context.bot.get_chat(target_user.id)
+            user_display = full_user.mention_html()
+        except:
+            user_display = f"User <code>{target_user.id}</code>"
+        await message.reply_html(f"User {user_display} is not globally banned.")
+        return
 
     remove_from_gban(target_user.id)
     
@@ -3213,25 +3235,26 @@ async def ungban_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         full_target_user = await context.bot.get_chat(target_user.id)
         user_display = full_target_user.mention_html()
         username_for_log = f"@{html.escape(full_target_user.username)}" if full_target_user.username else "N/A"
-    except Exception:
-        user_display = f"<code>{target_user.id}</code>"
+    except:
+        user_display = target_user.mention_html()
         username_for_log = "N/A"
 
-    await update.message.reply_html(
-        f"✅ User {user_display} has been globally unbanned.\n\n"
+    await message.reply_html(
+        f"✅ User {user_display} has been removed from the global ban list.\n\n"
         f"<i>Propagating unban across all known chats...</i>"
     )
     
     context.job_queue.run_once(
         propagate_unban,
         when=1,
-        data={'target_user_id': target_user.id, 'command_chat_id': update.effective_chat.id}
+        data={'target_user_id': target_user.id, 'command_chat_id': chat.id}
     )
 
     try:
         current_time = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
         log_message = (
-            f"<b>#UNGBANNED</b>\n\n"
+            f"<b>#UNGBANNED</b>\n"
+            f"<b>From Chat:</b> {html.escape(chat.title)} (<code>{chat.id}</code>)\n\n"
             f"<b>User:</b> {user_display} (<code>{target_user.id}</code>)\n"
             f"<b>Username:</b> {username_for_log}\n"
             f"<b>Admin:</b> {user_who_ungbans.mention_html()}\n"
