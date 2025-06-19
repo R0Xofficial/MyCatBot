@@ -3045,9 +3045,9 @@ async def gban_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         if chat.type != ChatType.PRIVATE:
             await context.bot.ban_chat_member(chat_id=chat.id, user_id=target_user.id)
     except Exception as e:
-        logger.warning(f"Could not ban g-banned user in the current chat ({chat.id}): {e}")
+        logger.warning(f"Could not ban gbanned user in the current chat ({chat.id}): {e}")
     await update.message.reply_html(
-        f"✅ User {user_display} has been added to the global ban list.\n"
+        f"✅ User {user_display} has been globally banned.\n"
         f"<b>Reason:</b> {html.escape(reason)}"
     )
     
@@ -3108,8 +3108,8 @@ async def ungban_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         username_for_log = "N/A"
 
     await update.message.reply_html(
-        f"✅ User {user_display} has been removed from the global ban list.\n\n"
-        f"<i>Propagating ungban across all known chats...</i>"
+        f"✅ User {user_display} has been globally unbanned.\n\n"
+        f"<i>Propagating unban across all known chats...</i>"
     )
     
     context.job_queue.run_once(
@@ -3169,7 +3169,7 @@ async def propagate_unban(context: ContextTypes.DEFAULT_TYPE) -> None:
 
     logger.info(f"Unban propagation finished for {target_user_id}. Unbanned in {unbanned_in_count} chats.")
     
-    final_message = f"✅ Meow! Correctly ungbanned <code>{target_user_id}</code> on {unbanned_in_count} chats."
+    final_message = f"✅ Meow! Correctly unbanned <code>{target_user_id}</code> on {unbanned_in_count} chats."
     
     await context.bot.send_message(
         chat_id=command_chat_id,
