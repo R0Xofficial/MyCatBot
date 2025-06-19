@@ -3160,7 +3160,7 @@ async def gban_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         try:
             await context.bot.ban_chat_member(chat_id=chat.id, user_id=target_user.id)
         except Exception as e:
-            logger.warning(f"Could not ban gbanned user in the current chat ({chat.id}): {e}")
+            logger.warning(f"Could not ban g-banned user in the current chat ({chat.id}): {e}")
 
     await message.reply_html(
         f"✅ User {user_display} has been globally banned.\n"
@@ -3172,13 +3172,18 @@ async def gban_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         target_username = f"@{html.escape(target_user.username)}" if target_user.username else "N/A"
         
         reason_display = html.escape(reason)
-        if chat.username:
+        if chat.type != ChatType.PRIVATE and chat.username:
             message_link = f"https://t.me/{chat.username}/{message.message_id}"
             reason_display = f"<a href='{message_link}'>{html.escape(reason)}</a>"
 
+        if chat.type == ChatType.PRIVATE:
+            chat_name = f"{user_who_gbans.first_name}"
+        else:
+            chat_name = chat.title or f"Group Chat {chat.id}"
+
         log_message = (
             f"<b>#GBANNED</b>\n"
-            f"<b>From Chat:</b> {html.escape(chat.title)} (<code>{chat.id}</code>)\n\n"
+            f"<b>From Chat:</b> {html.escape(chat_name)} (<code>{chat.id}</code>)\n\n"
             f"<b>User:</b> {user_display} (<code>{target_user.id}</code>)\n"
             f"<b>Username:</b> {target_username}\n"
             f"<b>Reason:</b> {reason_display}\n"
@@ -3226,7 +3231,7 @@ async def ungban_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             user_display = full_user.mention_html()
         except:
             user_display = f"User <code>{target_user.id}</code>"
-        await message.reply_html(f"User {user_display} is not globally banned.")
+        await message.reply_html(f"Meow. User {user_display} is not globally banned.")
         return
 
     remove_from_gban(target_user.id)
@@ -3240,7 +3245,7 @@ async def ungban_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         username_for_log = "N/A"
 
     await message.reply_html(
-        f"✅ User {user_display} has been removed from the global ban list.\n\n"
+        f"✅ User {user_display} has been globally unbanned.\n\n"
         f"<i>Propagating unban across all known chats...</i>"
     )
     
@@ -3252,9 +3257,12 @@ async def ungban_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
     try:
         current_time = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+        
+        chat_name = chat.title or f"{user_who_ungbans.first_name}"
+
         log_message = (
             f"<b>#UNGBANNED</b>\n"
-            f"<b>From Chat:</b> {html.escape(chat.title)} (<code>{chat.id}</code>)\n\n"
+            f"<b>From Chat:</b> {html.escape(chat_name)} (<code>{chat.id}</code>)\n\n"
             f"<b>User:</b> {user_display} (<code>{target_user.id}</code>)\n"
             f"<b>Username:</b> {username_for_log}\n"
             f"<b>Admin:</b> {user_who_ungbans.mention_html()}\n"
