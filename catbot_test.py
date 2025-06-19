@@ -1709,23 +1709,27 @@ async def pin_message_command(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     try:
         bot_member = await context.bot.get_chat_member(chat.id, context.bot.id)
-        if not (bot_member.status == ChatMemberStatus.ADMINISTRATOR and getattr(bot_member, 'can_pin_messages', False)):
+        if not (bot_member.status == "administrator" and getattr(bot_member, 'can_pin_messages', False)):
             await update.message.reply_text("Meeeow! I need to be an admin with the 'Pin Messages' permission in this chat to do that. 😿")
             return
     except TelegramError as e:
         logger.error(f"Error checking bot's own permissions in /pin for chat {chat.id}: {e}")
         await update.message.reply_text("Mrow? Couldn't verify my own permissions in this chat.")
         return
-
+        
     if not await _can_user_perform_action(update, context, 'can_pin_messages', "Meeeow! You need to be an admin with 'Pin Messages' permission in this chat to use this command."):
         return
 
-    disable_notification = False
-    pin_mode_text = "with notification"
-    if context.args and context.args[0].lower() in ["silent", "quiet"]:
-        disable_notification = True
-        pin_mode_text = "silently"
-        logger.info(f"User {user_who_pins.id} requested silent pin in chat {chat.id}")
+    disable_notification = True
+    pin_mode_text = "silently"
+
+    if context.args and context.args[0].lower() in ["loud", "notify"]:
+        disable_notification = False
+        pin_mode_text = "with notification"
+        logger.info(f"User {user_who_pins.id} requested loud pin in chat {chat.id}")
+    else:
+        logger.info(f"User {user_who_pins.id} requested silent pin (default) in chat {chat.id}")
+
 
     try:
         await context.bot.pin_chat_message(
@@ -1733,15 +1737,22 @@ async def pin_message_command(update: Update, context: ContextTypes.DEFAULT_TYPE
             message_id=message_to_pin.message_id,
             disable_notification=disable_notification
         )
-        success_message_text = f"📌 Meow! Message pinned {pin_mode_text}!"
-        await update.message.reply_text(success_message_text, quote=True)
+        logger.info(f"User {user_who_pins.id} pinned message {message_to_pin.message_id} in chat {chat.id}. Notification: {'Disabled' if disable_notification else 'Enabled'}")
+        
+        await send_safe_reply(update, context, text=f"📌 Meow! Message pinned {pin_mode_text}!")
 
     except TelegramError as e:
         logger.error(f"Failed to pin message in chat {chat.id}: {e}")
-        await update.message.reply_text(f"Failed to pin message: {html.escape(str(e))}")
+        error_message = str(e)
+        if "message to pin not found" in error_message.lower():
+            await send_safe_reply(update, context, text="Mrow? I can't find the message you replied to. Maybe it was deleted?")
+        elif "not enough rights" in error_message.lower() or "not admin" in error_message.lower():
+             await send_safe_reply(update, context, text="Meeeow! It seems I don't have enough rights to pin messages, or the target message cannot be pinned by me.")
+        else:
+            await send_safe_reply(update, context, text=f"Failed to pin message: {html.escape(error_message)}")
     except Exception as e:
         logger.error(f"Unexpected error in /pin: {e}", exc_info=True)
-        await update.message.reply_text("An unexpected error occurred while trying to pin the message.")
+        await send_safe_reply(update, context, text="An unexpected error occurred while trying to pin the message.")
 
 async def unpin_message_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     chat = update.effective_chat
