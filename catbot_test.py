@@ -607,26 +607,26 @@ HELP_TEXT = """
 /owner - Info about my designated human! ❤️
 
 <b>User Commands:</b>
-/info &ltID/reply/@user&gt - Get info about a user. 👤
+/info &lt;ID/reply/@user&gt; - Get info about a user. 👤
 /chatstat - Get basic stats about the current chat. 📈
 /kickme - Kick yourself from chat. 👋
 /listadmins - Show the list of administrators in the current chat.
 <i>Note: /admins works too</i>
 
 <b>Management Commands:</b>
-/ban &ltID/reply/@user&gt [Time] [Reason] - Ban user in chat. ⛔️
-/mute &ltID/reply/@user&gt [Time] [Reason] - Mute user in chat. 🚫
+/ban &lt;ID/reply/@user&gt; [Time] [Reason] - Ban user in chat. ⛔️
+/mute &lt;ID/reply/@user&gt; [Time] [Reason] - Mute user in chat. 🚫
 <i>Note: [Time] is optional</i>
-/kick &ltID/reply/@user&gt [Reason] - Kick user from chat. ⚠️
-/promote &ltID/reply/@user&gt [Title] - Promote a user to administrator. 👷‍♂️
+/kick &lt;ID/reply/@user&gt; [Reason] - Kick user from chat. ⚠️
+/promote &lt;ID/reply/@user&gt; [Title] - Promote a user to administrator. 👷‍♂️
 <i>Note: [Title] is optional</i>
-/demote &ltID/reply/@user&gt - Demote an administrator to a regular member. 🙍‍♂️
-/pin &ltloud|notify&gt - Pin the replied message. 📌
+/demote &lt;ID/reply/@user&gt; - Demote an administrator to a regular member. 🙍‍♂️
+/pin &lt;loud|notify&gt; - Pin the replied message. 📌
 /unpin - Unpin the replied message. 📍
-/purge &ltsilent&gt - Deletes user messages up to the replied-to message.
+/purge &lt;silent&gt; - Deletes user messages up to the replied-to message.
 
 <b>Security:</b>
-/enforcegban &ltyes/no&gt - Enable/disable Global Ban enforcement in this chat. 🛡️ (Chat Creator only) 
+/enforcegban &lt;yes/no&gt; - Enable/disable Global Ban enforcement in this chat. 🛡️ (Chat Creator only) 
 
 <b>4FUN Commands:</b>
 /gif - Get a random cat GIF! 🖼️
@@ -638,12 +638,12 @@ HELP_TEXT = """
 /zoomies - Witness sudden bursts of cat energy! 💥
 /judge - Get judged by a superior feline. 🧐
 /fed - I just ate, thank you! 😋
-/attack &ltreply/@user&gt - Launch a playful attack! ⚔️
-/kill &ltreply/@user&gt - Metaphorically eliminate someone! 💀
-/punch &ltreply/@user&gt - Deliver a textual punch! 👊
-/slap &ltreply/@user&gt - Administer a swift slap! 👋
-/bite &ltreply/@user&gt - Take a playful bite! 😬
-/hug &ltreply/@user&gt - Offer a comforting hug! 🤗
+/attack &lt;reply/@user&gt; - Launch a playful attack! ⚔️
+/kill &lt;reply/@user&gt; - Metaphorically eliminate someone! 💀
+/punch &lt;reply/@user&gt; - Deliver a textual punch! 👊
+/slap &lt;reply/@user&gt; - Administer a swift slap! 👋
+/bite &lt;reply/@user&gt; - Take a playful bite! 😬
+/hug &lt;reply/@user&gt; - Offer a comforting hug! 🤗
 """
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
