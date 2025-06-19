@@ -3160,7 +3160,7 @@ async def gban_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         try:
             await context.bot.ban_chat_member(chat_id=chat.id, user_id=target_user.id)
         except Exception as e:
-            logger.warning(f"Could not ban g-banned user in the current chat ({chat.id}): {e}")
+            logger.warning(f"Could not ban gbanned user in the current chat ({chat.id}): {e}")
 
     await message.reply_html(
         f"✅ User {user_display} has been globally banned.\n"
