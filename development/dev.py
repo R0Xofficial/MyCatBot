@@ -1928,7 +1928,7 @@ async def resolve_target_entity(update: Update, context: ContextTypes.DEFAULT_TY
                 return user_from_db
             
             try:
-                logger.info(f"User not in DB. Querying API for entity {target_id_str}.")
+                logger.info(f"Querying API for entity {target_id_str}.")
                 return await context.bot.get_chat(target_id_str)
             except TelegramError:
                 await message.reply_text(f"😿 Could not find any user or channel with the username: {html.escape(target_id_str)}")
@@ -1949,7 +1949,7 @@ async def report_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     message = update.effective_message
 
     if not message or chat.type == ChatType.PRIVATE:
-        await message.reply_text("This command can only be used in groups.")
+        await message.reply_text("Meow. This command can only be used in groups.")
         return
 
     target_entity = await resolve_target_entity(update, context)
@@ -1968,7 +1968,7 @@ async def report_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         target_display = target_entity.mention_html()
         entity_type_label = "User"
     else:
-        target_display = html.escape(target_entity.title or f"Entity {target_entity.id}")
+        target_display = html.escape(target_entity.title or f"User {target_entity.id}")
         entity_type_label = target_entity.type.capitalize()
 
     report_message = (
