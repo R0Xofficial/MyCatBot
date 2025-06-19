@@ -3297,12 +3297,21 @@ async def propagate_unban(context: ContextTypes.DEFAULT_TYPE) -> None:
     
     for chat_id in chats_to_scan:
         try:
-            success = await context.bot.unban_chat_member(chat_id=chat_id, user_id=target_user_id, only_if_banned=True)
-            if success:
-                successful_unbans += 1
-        except Exception:
-            pass
-        await asyncio.sleep(0.1)
+            chat_member = await context.bot.get_chat_member(chat_id=chat_id, user_id=target_user_id)
+            
+            if chat_member.status == 'kicked':
+                success = await context.bot.unban_chat_member(chat_id=chat_id, user_id=target_user_id)
+                if success:
+                    successful_unbans += 1
+                    logger.info(f"Successfully unbanned {target_user_id} from chat {chat_id}.")
+            
+        except telegram.error.BadRequest as e:
+            if "user not found" not in str(e).lower():
+                logger.warning(f"Could not process unban for {target_user_id} in {chat_id}: {e}")
+        except Exception as e:
+            logger.error(f"Unexpected error during unban propagation in {chat_id}: {e}")
+            
+        await asyncio.sleep(0.2)
 
     logger.info(f"Unban propagation finished for {target_user_id}. Succeeded in {successful_unbans} chats.")
     
