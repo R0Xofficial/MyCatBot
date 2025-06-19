@@ -3273,7 +3273,6 @@ async def ungban_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         logger.error(f"Error preparing/sending #UNGBANNED operational log: {e}", exc_info=True)
 
 async def propagate_unban(context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Job to scan all chats and unban a user."""
     job_data = context.job.data
     target_user_id = job_data['target_user_id']
     command_chat_id = job_data['command_chat_id']
@@ -3289,28 +3288,25 @@ async def propagate_unban(context: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     if not chats_to_scan:
-        logger.warning("Propagate unban: bot_chats table is empty. No chats to process.")
         await context.bot.send_message(chat_id=command_chat_id, text="I don't seem to be in any chats to propagate the unban.")
         return
 
-    unbanned_in_count = 0
+    successful_unbans = 0
+    
     logger.info(f"Starting unban propagation for {target_user_id} across {len(chats_to_scan)} chats.")
     
     for chat_id in chats_to_scan:
         try:
             success = await context.bot.unban_chat_member(chat_id=chat_id, user_id=target_user_id, only_if_banned=True)
             if success:
-                unbanned_in_count += 1
-        except telegram.error.BadRequest as e:
-            if "user not found" not in str(e).lower():
-                logger.warning(f"Could not unban {target_user_id} in {chat_id}: {e}")
-        except Exception as e:
-            logger.error(f"Unexpected error during unban in {chat_id}: {e}")
+                successful_unbans += 1
+        except Exception:
+            pass
         await asyncio.sleep(0.1)
 
-    logger.info(f"Unban propagation finished for {target_user_id}. Unbanned in {unbanned_in_count} chats.")
+    logger.info(f"Unban propagation finished for {target_user_id}. Succeeded in {successful_unbans} chats.")
     
-    final_message = f"✅ Meow! Correctly unbanned <code>{target_user_id}</code> on {unbanned_in_count} chats."
+    final_message = f"✅ Correctly unbanned <code>{target_user_id}</code> on {successful_unbans} chats."
     
     await context.bot.send_message(
         chat_id=command_chat_id,
