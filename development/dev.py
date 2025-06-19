@@ -19,7 +19,7 @@ import re
 import io
 import telegram
 from typing import List, Tuple
-from telegram import Update, User, Chat, constants, ChatPermissions
+from telegram import Update, User, Chat, constants, ChatPermissions, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import ChatType, ParseMode, ChatMemberStatus
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, ApplicationHandlerStop, JobQueue
 from telegram.error import TelegramError
@@ -608,26 +608,26 @@ HELP_TEXT = """
 /owner - Info about my designated human! ❤️
 
 <b>User Commands:</b>
-/info [ID/reply/@user] - Get info about a user. 👤
+/info &lt;ID/reply/@user&gt; - Get info about a user. 👤
 /chatstat - Get basic stats about the current chat. 📈
 /kickme - Kick yourself from chat. 👋
 /listadmins - Show the list of administrators in the current chat.
 <i>Note: /admins works too</i>
 
 <b>Management Commands:</b>
-/ban [ID/reply/@user] [Time] [Reason] - Ban user in chat. ⛔️
-/mute [ID/reply/@user] [Time] [Reason] - Mute user in chat. 🚫
+/ban &lt;ID/reply/@user&gt; [Time] [Reason] - Ban user in chat. ⛔️
+/mute &lt;ID/reply/@user&gt; [Time] [Reason] - Mute user in chat. 🚫
 <i>Note: [Time] is optional</i>
-/kick [ID/reply/@user] [Reason] - Kick user from chat. ⚠️
-/promote [ID/reply/@user] [admin_title] - Promote a user to administrator. 👷‍♂️
-<i>Note: [admin_title] is optional</i>
-/demote [ID/reply/@user] - Demote an administrator to a regular member. 🙍‍♂️
-/pin [silent] - Pin the replied message. 📌
+/kick &lt;ID/reply/@user&gt; [Reason] - Kick user from chat. ⚠️
+/promote &lt;ID/reply/@user&gt; [Title] - Promote a user to administrator. 👷‍♂️
+<i>Note: [Title] is optional</i>
+/demote &lt;ID/reply/@user&gt; - Demote an administrator to a regular member. 🙍‍♂️
+/pin &lt;loud|notify&gt; - Pin the replied message. 📌
 /unpin - Unpin the replied message. 📍
-/purge [silent] - Deletes user messages up to the replied-to message.
+/purge &lt;silent&gt; - Deletes user messages up to the replied-to message.
 
 <b>Security:</b>
-/enforcegban [yes/no] - Enable/disable Global Ban enforcement in this chat. 🛡️ (Chat Creator only) 
+/enforcegban &lt;yes/no&gt; - Enable/disable Global Ban enforcement in this chat. 🛡️ (Chat Creator only) 
 
 <b>4FUN Commands:</b>
 /gif - Get a random cat GIF! 🖼️
@@ -639,20 +639,41 @@ HELP_TEXT = """
 /zoomies - Witness sudden bursts of cat energy! 💥
 /judge - Get judged by a superior feline. 🧐
 /fed - I just ate, thank you! 😋
-/attack [reply/@user] - Launch a playful attack! ⚔️
-/kill [reply/@user] - Metaphorically eliminate someone! 💀
-/punch [reply/@user] - Deliver a textual punch! 👊
-/slap [reply/@user] - Administer a swift slap! 👋
-/bite [reply/@user] - Take a playful bite! 😬
-/hug [reply/@user] - Offer a comforting hug! 🤗
+/attack &lt;reply/@user&gt; - Launch a playful attack! ⚔️
+/kill &lt;reply/@user&gt; - Metaphorically eliminate someone! 💀
+/punch &lt;reply/@user&gt; - Deliver a textual punch! 👊
+/slap &lt;reply/@user&gt; - Administer a swift slap! 👋
+/bite &lt;reply/@user&gt; - Take a playful bite! 😬
+/hug &lt;reply/@user&gt; - Offer a comforting hug! 🤗
 """
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
-    await update.message.reply_html(f"Meow {user.mention_html()}! I'm the Meow Bot. 🐾\nUse /help to see available commands!")
+    
+    if context.args and context.args[0] == 'help':
+        await update.message.reply_html(HELP_TEXT, disable_web_page_preview=True)
+    else:
+        await update.message.reply_html(f"Meow {user.mention_html()}! I'm the Meow Bot. 🐾\nUse /help to see available commands!")
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    await update.message.reply_html(HELP_TEXT, disable_web_page_preview=True)
+    chat = update.effective_chat
+    
+    if chat.type == ChatType.PRIVATE:
+        await update.message.reply_html(HELP_TEXT, disable_web_page_preview=True)
+        return
+
+    bot_username = context.bot.username
+    deep_link_url = f"https://t.me/{bot_username}?start=help"
+    
+    keyboard = InlineKeyboardMarkup(
+        [
+            [InlineKeyboardButton(text="📬 Get Help (PM)", url=deep_link_url)]
+        ]
+    )
+    
+    message_text = "Meeeow! 🐾 I've sent the help message to your private chat. Please click the button below to see it."
+    
+    await send_safe_reply(update, context, text=message_text, reply_markup=keyboard)
 
 async def github(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     github_link = "https://github.com/R0Xofficial/MyCatbot"
@@ -1710,23 +1731,27 @@ async def pin_message_command(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     try:
         bot_member = await context.bot.get_chat_member(chat.id, context.bot.id)
-        if not (bot_member.status == ChatMemberStatus.ADMINISTRATOR and getattr(bot_member, 'can_pin_messages', False)):
+        if not (bot_member.status == "administrator" and getattr(bot_member, 'can_pin_messages', False)):
             await update.message.reply_text("Meeeow! I need to be an admin with the 'Pin Messages' permission in this chat to do that. 😿")
             return
     except TelegramError as e:
         logger.error(f"Error checking bot's own permissions in /pin for chat {chat.id}: {e}")
         await update.message.reply_text("Mrow? Couldn't verify my own permissions in this chat.")
         return
-
+        
     if not await _can_user_perform_action(update, context, 'can_pin_messages', "Meeeow! You need to be an admin with 'Pin Messages' permission in this chat to use this command."):
         return
 
-    disable_notification = False
-    pin_mode_text = "with notification"
-    if context.args and context.args[0].lower() in ["silent", "quiet"]:
-        disable_notification = True
-        pin_mode_text = "silently"
-        logger.info(f"User {user_who_pins.id} requested silent pin in chat {chat.id}")
+    disable_notification = True
+    pin_mode_text = ""
+
+    if context.args and context.args[0].lower() in ["loud", "notify"]:
+        disable_notification = False
+        pin_mode_text = " with notification"
+        logger.info(f"User {user_who_pins.id} requested loud pin in chat {chat.id}")
+    else:
+        logger.info(f"User {user_who_pins.id} requested silent pin (default) in chat {chat.id}")
+
 
     try:
         await context.bot.pin_chat_message(
@@ -1734,15 +1759,22 @@ async def pin_message_command(update: Update, context: ContextTypes.DEFAULT_TYPE
             message_id=message_to_pin.message_id,
             disable_notification=disable_notification
         )
-        success_message_text = f"📌 Meow! Message pinned {pin_mode_text}!"
-        await update.message.reply_text(success_message_text, quote=True)
+        logger.info(f"User {user_who_pins.id} pinned message {message_to_pin.message_id} in chat {chat.id}. Notification: {'Disabled' if disable_notification else 'Enabled'}")
+        
+        await send_safe_reply(update, context, text=f"📌 Meow! Message pinned{pin_mode_text}!")
 
     except TelegramError as e:
         logger.error(f"Failed to pin message in chat {chat.id}: {e}")
-        await update.message.reply_text(f"Failed to pin message: {html.escape(str(e))}")
+        error_message = str(e)
+        if "message to pin not found" in error_message.lower():
+            await send_safe_reply(update, context, text="Mrow? I can't find the message you replied to. Maybe it was deleted?")
+        elif "not enough rights" in error_message.lower() or "not admin" in error_message.lower():
+             await send_safe_reply(update, context, text="Meeeow! It seems I don't have enough rights to pin messages, or the target message cannot be pinned by me.")
+        else:
+            await send_safe_reply(update, context, text=f"Failed to pin message: {html.escape(error_message)}")
     except Exception as e:
         logger.error(f"Unexpected error in /pin: {e}", exc_info=True)
-        await update.message.reply_text("An unexpected error occurred while trying to pin the message.")
+        await send_safe_reply(update, context, text="An unexpected error occurred while trying to pin the message.")
 
 async def unpin_message_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     chat = update.effective_chat
@@ -3046,9 +3078,9 @@ async def gban_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         if chat.type != ChatType.PRIVATE:
             await context.bot.ban_chat_member(chat_id=chat.id, user_id=target_user.id)
     except Exception as e:
-        logger.warning(f"Could not ban g-banned user in the current chat ({chat.id}): {e}")
+        logger.warning(f"Could not ban gbanned user in the current chat ({chat.id}): {e}")
     await update.message.reply_html(
-        f"✅ User {user_display} has been added to the global ban list.\n"
+        f"✅ User {user_display} has been globally banned.\n"
         f"<b>Reason:</b> {html.escape(reason)}"
     )
     
@@ -3109,8 +3141,8 @@ async def ungban_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         username_for_log = "N/A"
 
     await update.message.reply_html(
-        f"✅ User {user_display} has been removed from the global ban list.\n\n"
-        f"<i>Propagating ungban across all known chats...</i>"
+        f"✅ User {user_display} has been globally unbanned.\n\n"
+        f"<i>Propagating unban across all known chats...</i>"
     )
     
     context.job_queue.run_once(
@@ -3170,7 +3202,7 @@ async def propagate_unban(context: ContextTypes.DEFAULT_TYPE) -> None:
 
     logger.info(f"Unban propagation finished for {target_user_id}. Unbanned in {unbanned_in_count} chats.")
     
-    final_message = f"✅ Meow! Correctly ungbanned <code>{target_user_id}</code> on {unbanned_in_count} chats."
+    final_message = f"✅ Meow! Correctly unbanned <code>{target_user_id}</code> on {unbanned_in_count} chats."
     
     await context.bot.send_message(
         chat_id=command_chat_id,
