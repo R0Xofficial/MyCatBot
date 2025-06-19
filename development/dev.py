@@ -608,24 +608,24 @@ HELP_TEXT = """
 /owner - Info about my designated human! ❤️
 
 <b>User Commands:</b>
-/info &lt;ID/reply/@user&gt; - Get info about a user. 👤
+/info &lt;ID/@user/reply&gt; - Get info about a user. 👤
 /chatstat - Get basic stats about the current chat. 📈
 /kickme - Kick yourself from chat. 👋
 /listadmins - Show the list of administrators in the current chat. 📃
 <i>Note: /admins works too</i>
 
 <b>Management Commands:</b>
-/ban &lt;ID/reply/@user&gt; [Time] [Reason] - Ban user in chat. ⛔️
-/mute &lt;ID/reply/@user&gt; [Time] [Reason] - Mute user in chat. 🚫
+/ban &lt;ID/@user/reply&gt; [Time] [Reason] - Ban user in chat. ⛔️
+/mute &lt;ID/@user/reply&gt; [Time] [Reason] - Mute user in chat. 🚫
 <i>Note: [Time] is optional</i>
-/kick &lt;ID/reply/@user&gt; [Reason] - Kick user from chat. ⚠️
-/promote &lt;ID/reply/@user&gt; [Title] - Promote a user to administrator. 👷‍♂️
+/kick &lt;ID/@user/reply&gt; [Reason] - Kick user from chat. ⚠️
+/promote &lt;ID/@user/reply&gt; [Title] - Promote a user to administrator. 👷‍♂️
 <i>Note: [Title] is optional</i>
-/demote &lt;ID/reply/@user&gt; - Demote an administrator to a regular member. 🙍‍♂️
+/demote &lt;ID/@user/reply&gt; - Demote an administrator to a regular member. 🙍‍♂️
 /pin &lt;loud|notify&gt; - Pin the replied message. 📌
 /unpin - Unpin the replied message. 📍
 /purge &lt;silent&gt; - Deletes user messages up to the replied-to message. 🗑
-/report &lt;ID/@entity/reply&gt; [reason] - Report user. ⚠️
+/report &lt;ID/@user/reply&gt; [reason] - Report user. ⚠️
 
 <b>Security:</b>
 /enforcegban &lt;yes/no&gt; - Enable/disable Global Ban enforcement in this chat. 🛡️
@@ -641,12 +641,12 @@ HELP_TEXT = """
 /zoomies - Witness sudden bursts of cat energy! 💥
 /judge - Get judged by a superior feline. 🧐
 /fed - I just ate, thank you! 😋
-/attack &lt;reply/@user&gt; - Launch a playful attack! ⚔️
-/kill &lt;reply/@user&gt; - Metaphorically eliminate someone! 💀
-/punch &lt;reply/@user&gt; - Deliver a textual punch! 👊
-/slap &lt;reply/@user&gt; - Administer a swift slap! 👋
-/bite &lt;reply/@user&gt; - Take a playful bite! 😬
-/hug &lt;reply/@user&gt; - Offer a comforting hug! 🤗
+/attack &lt;@user/reply&gt; - Launch a playful attack! ⚔️
+/kill &lt;@user/reply&gt; - Metaphorically eliminate someone! 💀
+/punch &lt;@user/reply&gt; - Deliver a textual punch! 👊
+/slap &lt;@user/reply&gt; - Administer a swift slap! 👋
+/bite &lt;@user/reply&gt; - Take a playful bite! 😬
+/hug &lt;@user/reply&gt; - Offer a comforting hug! 🤗
 """
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -1906,12 +1906,12 @@ async def purge_messages_command(update: Update, context: ContextTypes.DEFAULT_T
 
 async def resolve_target_entity(update: Update, context: ContextTypes.DEFAULT_TYPE) -> User | Chat | None:
     """
-    Resolves the target entity (User or Channel) from a command message.
-    Handles replies, @usernames, and IDs.
+    Intelligently resolves the target entity (User or Channel) from a command message.
+    Handles replies, @usernames (DB first for users), and IDs.
     """
     message = update.effective_message
     if not message: return None
-
+    
     if message.reply_to_message:
         if message.reply_to_message.sender_chat:
             return message.reply_to_message.sender_chat
@@ -1921,13 +1921,25 @@ async def resolve_target_entity(update: Update, context: ContextTypes.DEFAULT_TY
 
     if context.args:
         target_id_str = context.args[0]
-        try:
-            if target_id_str.startswith('@'):
+        
+        if target_id_str.startswith('@'):
+            user_from_db = get_user_from_db_by_username(target_id_str)
+            if user_from_db:
+                logger.info(f"Resolved user {target_id_str} from local DB.")
+                return user_from_db
+            
+            try:
+                logger.info(f"Querying API for entity {target_id_str}.")
                 return await context.bot.get_chat(target_id_str)
-            else:
-                return await context.bot.get_chat(int(target_id_str))
+            except TelegramError:
+                await message.reply_text(f"😿 Could not find any user or channel with the username: {html.escape(target_id_str)}")
+                return None
+        
+        try:
+            entity_id = int(target_id_str)
+            return await context.bot.get_chat(entity_id)
         except (ValueError, TelegramError):
-            await message.reply_text(f"😿 Could not find any user, channel, or group with the identifier: {html.escape(target_id_str)}")
+            await message.reply_text(f"😿 Could not find any entity with the ID: {html.escape(target_id_str)}")
             return None
 
     return None
@@ -1938,14 +1950,14 @@ async def report_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     message = update.effective_message
 
     if not message or chat.type == ChatType.PRIVATE:
-        await message.reply_text("Meow. This command can only be used in groups.")
+        await message.reply_text("This command can only be used in groups.")
         return
 
     target_entity = await resolve_target_entity(update, context)
     
     if not target_entity:
         if not context.args:
-            await message.reply_text("Usage: /report <ID/@entity/reply> [reason]")
+            await message.reply_text("Usage: /report <ID/@user/reply> [reason]")
         return
         
     reason_args = context.args[1:] if context.args and not message.reply_to_message else context.args
@@ -1956,9 +1968,12 @@ async def report_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     if isinstance(target_entity, User):
         target_display = target_entity.mention_html()
         entity_type_label = "User"
-    else:
-        target_display = html.escape(target_entity.title or f"Entity {target_entity.id}")
+    elif isinstance(target_entity, Chat):
+        target_display = html.escape(target_entity.title or f"User {target_entity.id}")
         entity_type_label = target_entity.type.capitalize()
+    else:
+        target_display = f"<code>{target_entity.id}</code>"
+        entity_type_label = "Entity"
 
     report_message = (
         f"📢 <b>Report for Administrators</b>\n\n"
