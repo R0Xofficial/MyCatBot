@@ -3196,7 +3196,7 @@ async def enforce_gban_command(update: Update, context: ContextTypes.DEFAULT_TYP
         return
 
     if not context.args or len(context.args) != 1 or context.args[0].lower() not in ['yes', 'no']:
-        await update.message.reply_text("Usage: /enforcegban <yes|no>")
+        await update.message.reply_text("Usage: /enforcegban [yes/no]")
         return
     
     choice = context.args[0].lower()
@@ -3216,7 +3216,7 @@ async def enforce_gban_command(update: Update, context: ContextTypes.DEFAULT_TYP
 
         if current_status_bool:
             await update.message.reply_html(
-                f"ℹ️ Global Ban enforcement is already <b>ENABLED</b> for this chat."
+                f"ℹ️ Mrow? Global Ban enforcement is already <b>ENABLED</b> for this chat."
                 f"{permission_notice}"
             )
             return
@@ -3236,7 +3236,7 @@ async def enforce_gban_command(update: Update, context: ContextTypes.DEFAULT_TYP
             return
 
         await update.message.reply_html(
-            f"✅ <b>Global Ban enforcement is now ENABLED for this chat.</b>\n\n"
+            f"✅ <b>Meow! Global Ban enforcement is now ENABLED for this chat.</b>\n\n"
             f"I will now automatically remove any user from the global ban list who tries to join or speak here."
             f"{permission_notice}"
         )
@@ -3244,7 +3244,7 @@ async def enforce_gban_command(update: Update, context: ContextTypes.DEFAULT_TYP
 
     if choice == 'no':
         if not current_status_bool:
-            await update.message.reply_html("ℹ️ Global Ban enforcement is already <b>DISABLED</b> for this chat.")
+            await update.message.reply_html("ℹ️ Mrow? Global Ban enforcement is already <b>DISABLED</b> for this chat.")
             return
         
         setting = 0
@@ -3259,7 +3259,7 @@ async def enforce_gban_command(update: Update, context: ContextTypes.DEFAULT_TYP
             return
         
         await update.message.reply_html(
-            "❌ <b>Global Ban enforcement is now DISABLED for this chat.</b>\n\n"
+            "❌ <b>Meow! Global Ban enforcement is now DISABLED for this chat.</b>\n\n"
             "<b>Notice:</b> This means users on the global ban list will be able to join and participate here. "
             "This may expose your community to users banned for severe offenses like spam, harassment, or illegal activities."
         )
