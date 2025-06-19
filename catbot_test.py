@@ -3196,7 +3196,7 @@ async def enforce_gban_command(update: Update, context: ContextTypes.DEFAULT_TYP
         return
 
     if not context.args or len(context.args) != 1 or context.args[0].lower() not in ['yes', 'no']:
-        await update.message.reply_text("Usage: /enforcegban [yes/no]")
+        await update.message.reply_text("Usage: /enforcegban <yes/no>")
         return
     
     choice = context.args[0].lower()
