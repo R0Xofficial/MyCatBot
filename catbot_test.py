@@ -317,7 +317,7 @@ def get_user_from_db_by_username(username_query: str) -> User | None:
                 id=row[0], username=row[1], first_name=row[2] or "",
                 last_name=row[3], language_code=row[4], is_bot=bool(row[5])
             )
-            logger.info(f"User {username_query} found in DB with ID {row[0]}.")
+            logger.info(f"User @{username_query} found in DB with ID {row[0]}.")
     except sqlite3.Error as e:
         logger.error(f"SQLite error fetching user by username '{username_query}': {e}", exc_info=True)
     finally:
