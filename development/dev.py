@@ -318,7 +318,7 @@ def get_user_from_db_by_username(username_query: str) -> User | None:
                 id=row[0], username=row[1], first_name=row[2] or "",
                 last_name=row[3], language_code=row[4], is_bot=bool(row[5])
             )
-            logger.info(f"User {username_query} found in DB with ID {row[0]}.")
+            logger.info(f"User @{username_query} found in DB with ID {row[0]}.")
     except sqlite3.Error as e:
         logger.error(f"SQLite error fetching user by username '{username_query}': {e}", exc_info=True)
     finally:
@@ -803,9 +803,8 @@ async def entity_info_command(update: Update, context: ContextTypes.DEFAULT_TYPE
             if resolved_user_from_db:
                 initial_user_obj_from_update = resolved_user_from_db
                 initial_entity_id_for_refresh = resolved_user_from_db.id
-                logger.info(f"User @{username_to_find} found in DB, ID: {initial_user_obj_from_update.id if initial_user_obj_from_update else 'N/A'}")
             else:
-                logger.info(f"Entity @{username_to_find} not in local user DB, trying Telegram API.")
+                logger.info(f"Trying find entity @{username_to_find} by using Telegram API.")
                 try:
                     target_chat_obj_from_api = await context.bot.get_chat(target_input_str)
                     initial_entity_id_for_refresh = target_chat_obj_from_api.id
