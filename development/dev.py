@@ -1906,8 +1906,8 @@ async def purge_messages_command(update: Update, context: ContextTypes.DEFAULT_T
 
 async def resolve_target_entity(update: Update, context: ContextTypes.DEFAULT_TYPE) -> User | Chat | None:
     """
-    Intelligently resolves the target entity (User or Channel) from a command message.
-    Handles replies, @usernames (DB first for users), and IDs.
+    Resolves the target entity (User or Channel) from a command message.
+    Handles replies, @usernames, and IDs by querying the API.
     """
     message = update.effective_message
     if not message: return None
@@ -1921,26 +1921,14 @@ async def resolve_target_entity(update: Update, context: ContextTypes.DEFAULT_TY
 
     if context.args:
         target_id_str = context.args[0]
-        
-        if target_id_str.startswith('@'):
-            user_from_db = get_user_from_db_by_username(target_id_str)
-            if user_from_db:
-                return user_from_db
-            
-            try:
-                logger.info(f"Querying API for entity {target_id_str}.")
-                return await context.bot.get_chat(target_id_str)
-            except TelegramError:
-                await message.reply_text(f"😿 Could not find any user or channel with the username: {html.escape(target_id_str)}")
-                return None
-        
         try:
-            entity_id = int(target_id_str)
-            return await context.bot.get_chat(entity_id)
+            return await context.bot.get_chat(target_id_str)
         except (ValueError, TelegramError):
-            await message.reply_text(f"😿 Could not find any entity with the ID: {html.escape(target_id_str)}")
-            return None
-
+            try:
+                return await context.bot.get_chat(int(target_id_str))
+            except (ValueError, TelegramError):
+                await message.reply_text(f"😿 Could not find any user, channel, or group with the identifier: {html.escape(target_id_str)}")
+                return None
     return None
 
 async def report_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -1964,15 +1952,12 @@ async def report_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     
     reporter_mention = reporter.mention_html()
     
-    if isinstance(target_entity, User):
+    if isinstance(target_entity, User) or target_entity.type == ChatType.PRIVATE:
         target_display = target_entity.mention_html()
         entity_type_label = "User"
-    elif isinstance(target_entity, Chat):
-        target_display = html.escape(target_entity.title or f"User {target_entity.id}")
-        entity_type_label = target_entity.type.capitalize()
     else:
-        target_display = f"<code>{target_entity.id}</code>"
-        entity_type_label = "Entity"
+        target_display = html.escape(target_entity.title or f"Entity {target_entity.id}")
+        entity_type_label = target_entity.type.capitalize()
 
     report_message = (
         f"📢 <b>Report for Administrators</b>\n\n"
