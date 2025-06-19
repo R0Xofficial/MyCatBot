@@ -1725,7 +1725,7 @@ async def pin_message_command(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     if context.args and context.args[0].lower() in ["loud", "notify"]:
         disable_notification = False
-        pin_mode_text = "with notification"
+        pin_mode_text = " with notification"
         logger.info(f"User {user_who_pins.id} requested loud pin in chat {chat.id}")
     else:
         logger.info(f"User {user_who_pins.id} requested silent pin (default) in chat {chat.id}")
@@ -1739,7 +1739,7 @@ async def pin_message_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         )
         logger.info(f"User {user_who_pins.id} pinned message {message_to_pin.message_id} in chat {chat.id}. Notification: {'Disabled' if disable_notification else 'Enabled'}")
         
-        await send_safe_reply(update, context, text=f"📌 Meow! Message pinned {pin_mode_text}!")
+        await send_safe_reply(update, context, text=f"📌 Meow! Message pinned{pin_mode_text}!")
 
     except TelegramError as e:
         logger.error(f"Failed to pin message in chat {chat.id}: {e}")
