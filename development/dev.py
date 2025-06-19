@@ -318,7 +318,7 @@ def get_user_from_db_by_username(username_query: str) -> User | None:
                 id=row[0], username=row[1], first_name=row[2] or "",
                 last_name=row[3], language_code=row[4], is_bot=bool(row[5])
             )
-            logger.info(f"User @{username_query} found in DB with ID {row[0]}.")
+            logger.info(f"User {username_query} found in DB with ID {row[0]}.")
     except sqlite3.Error as e:
         logger.error(f"SQLite error fetching user by username '{username_query}': {e}", exc_info=True)
     finally:
@@ -2903,7 +2903,7 @@ async def unblacklist_user_command(update: Update, context: ContextTypes.DEFAULT
                         target_user_obj = User(id=target_id, first_name=f"{target_id}", is_bot=False)
                 except TelegramError: 
                     logger.warning(f"Couldn't fully verify user ID {target_id} for unblacklist. Using minimal User object.")
-                    target_user_obj = User(id=target_id, first_name=f"{target_id}", is_bot=False)
+                    target_user_obj = User(id=target_id, first_name=f"User {target_id}", is_bot=False)
             except ValueError:
                 await update.message.reply_text("Mrow? Invalid format. Use /unblacklist <ID/@username> or reply.")
                 return
@@ -2978,7 +2978,7 @@ async def check_gban_on_message(update: Update, context: ContextTypes.DEFAULT_TY
                     except Exception: pass
                 
                 message_text = (
-                    f"<b>⚠️ Meow! Alert: </b> This user is globally banned.\n"
+                    f"⚠️ <b>Meow! Alert:</b> This user is globally banned.\n"
                     f"<i>Enforcing ban in this chat.</i>\n\n"
                     f"<b>User ID:</b> <code>{user.id}</code>\n"
                     f"<b>Reason:</b> {html.escape(gban_reason)}"
@@ -3184,7 +3184,7 @@ async def enforce_gban_command(update: Update, context: ContextTypes.DEFAULT_TYP
     user = update.effective_user
     
     if not chat or chat.type not in [ChatType.GROUP, ChatType.SUPERGROUP]:
-        await update.message.reply_text("This command can only be used in groups.")
+        await update.message.reply_text("Meow. This command can only be used in groups.")
         return
 
     try:
@@ -3197,7 +3197,7 @@ async def enforce_gban_command(update: Update, context: ContextTypes.DEFAULT_TYP
         return
 
     if not context.args or len(context.args) != 1 or context.args[0].lower() not in ['yes', 'no']:
-        await update.message.reply_text("Usage: /enforcegban <yes|no>")
+        await update.message.reply_text("Usage: /enforcegban <yes/no>")
         return
     
     choice = context.args[0].lower()
@@ -3217,7 +3217,7 @@ async def enforce_gban_command(update: Update, context: ContextTypes.DEFAULT_TYP
 
         if current_status_bool:
             await update.message.reply_html(
-                f"ℹ️ Global Ban enforcement is already <b>ENABLED</b> for this chat."
+                f"ℹ️ Mrow? Global Ban enforcement is already <b>ENABLED</b> for this chat."
                 f"{permission_notice}"
             )
             return
@@ -3237,7 +3237,7 @@ async def enforce_gban_command(update: Update, context: ContextTypes.DEFAULT_TYP
             return
 
         await update.message.reply_html(
-            f"✅ <b>Global Ban enforcement is now ENABLED for this chat.</b>\n\n"
+            f"✅ <b>Meow! Global Ban enforcement is now ENABLED for this chat.</b>\n\n"
             f"I will now automatically remove any user from the global ban list who tries to join or speak here."
             f"{permission_notice}"
         )
@@ -3245,7 +3245,7 @@ async def enforce_gban_command(update: Update, context: ContextTypes.DEFAULT_TYP
 
     if choice == 'no':
         if not current_status_bool:
-            await update.message.reply_html("ℹ️ Global Ban enforcement is already <b>DISABLED</b> for this chat.")
+            await update.message.reply_html("ℹ️ Mrow? Global Ban enforcement is already <b>DISABLED</b> for this chat.")
             return
         
         setting = 0
@@ -3260,7 +3260,7 @@ async def enforce_gban_command(update: Update, context: ContextTypes.DEFAULT_TYP
             return
         
         await update.message.reply_html(
-            "❌ <b>Global Ban enforcement is now DISABLED for this chat.</b>\n\n"
+            "❌ <b>Meow! Global Ban enforcement is now DISABLED for this chat.</b>\n\n"
             "<b>Notice:</b> This means users on the global ban list will be able to join and participate here. "
             "This may expose your community to users banned for severe offenses like spam, harassment, or illegal activities."
         )
