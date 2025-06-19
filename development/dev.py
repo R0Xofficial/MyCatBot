@@ -896,11 +896,11 @@ async def entity_info_command(update: Update, context: ContextTypes.DEFAULT_TYPE
             else:
                 final_entity_to_display = fresh_data_chat_obj
 
-            logger.info(f"Refreshed entity data for {final_entity_to_display.id} from API.")
+            logger.info(f"Loaded entity data for {final_entity_to_display.id} from API.")
         except TelegramError as e:
-            logger.warning(f"Could not refresh entity data for {initial_entity_id_for_refresh} from API: {e}. Using initially identified data.")
+            logger.warning(f"Could not load entity data for {initial_entity_id_for_refresh} from API: {e}. Using initially identified data.")
         except Exception as e:
-            logger.error(f"Unexpected error refreshing entity data for {initial_entity_id_for_refresh}: {e}", exc_info=True)
+            logger.error(f"Unexpected error loading entity data for {initial_entity_id_for_refresh}: {e}", exc_info=True)
 
         if final_entity_to_display:
             info_message = format_entity_info(
