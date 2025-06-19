@@ -2802,7 +2802,7 @@ async def blacklist_user_command(update: Update, context: ContextTypes.DEFAULT_T
                          return
                 except TelegramError: 
                     logger.warning(f"Couldn't fully verify user ID {target_id} for blacklist. Creating minimal User object.")
-                    target_user_obj = User(id=target_id, first_name=f"User {target_id}", is_bot=False)
+                    target_user_obj = User(id=target_id, first_name=f"{target_id}", is_bot=False)
                 
                 if len(context.args) > 1:
                     reason = " ".join(context.args[1:])
@@ -2900,7 +2900,7 @@ async def unblacklist_user_command(update: Update, context: ContextTypes.DEFAULT
                         target_user_obj = User(id=chat_info.id, first_name=chat_info.first_name or f"User {target_id}", is_bot=getattr(chat_info, 'is_bot', False), username=chat_info.username, last_name=chat_info.last_name)
                     else:
                         logger.warning(f"Attempt to unblacklist non-user ID {target_id} (type: {chat_info.type}). Using ID directly.")
-                        target_user_obj = User(id=target_id, first_name=f"User {target_id}", is_bot=False)
+                        target_user_obj = User(id=target_id, first_name=f"{target_id}", is_bot=False)
                 except TelegramError: 
                     logger.warning(f"Couldn't fully verify user ID {target_id} for unblacklist. Using minimal User object.")
                     target_user_obj = User(id=target_id, first_name=f"User {target_id}", is_bot=False)
@@ -3016,7 +3016,7 @@ async def gban_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                 try:
                     target_user = await context.bot.get_chat(user_id)
                 except TelegramError:
-                    target_user = User(id=user_id, first_name=f"User {user_id}", is_bot=False)
+                    target_user = User(id=user_id, first_name=f"{user_id}", is_bot=False)
             except ValueError:
                 await update.message.reply_text("Mrow? Invalid User ID format.")
                 return
@@ -3043,7 +3043,6 @@ async def gban_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     
     user_display = target_user.mention_html()
     
-    ban_success_message = ""
     try:
         if chat.type != ChatType.PRIVATE:
             await context.bot.ban_chat_member(chat_id=chat.id, user_id=target_user.id)
@@ -3107,7 +3106,7 @@ async def ungban_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         user_display = full_target_user.mention_html()
         username_for_log = f"@{html.escape(full_target_user.username)}" if full_target_user.username else "N/A"
     except Exception:
-        user_display = f"User <code>{target_user.id}</code>"
+        user_display = f"<code>{target_user.id}</code>"
         username_for_log = "N/A"
 
     await update.message.reply_html(
