@@ -1844,7 +1844,6 @@ async def purge_messages_command(update: Update, context: ContextTypes.DEFAULT_T
         return
 
     if not await _can_user_perform_action(update, context, 'can_delete_messages', "Meeeow! You do not have permission to use this command."):
-        logger.warning(f"Unauthorized /purge attempt by user {user_who_purges.id} in chat {chat.id}.")
         return
 
     is_silent_purge = False
