@@ -18,7 +18,7 @@ import re
 import io
 import telegram
 from typing import List, Tuple
-from telegram import Update, User, Chat, constants, ChatPermissions
+from telegram import Update, User, Chat, constants, ChatPermissions, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import ChatType, ParseMode, ChatMemberStatus
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, ApplicationHandlerStop, JobQueue
 from telegram.error import TelegramError
@@ -648,10 +648,31 @@ HELP_TEXT = """
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
-    await update.message.reply_html(f"Meow {user.mention_html()}! I'm the Meow Bot. 🐾\nUse /help to see available commands!")
+    
+    if context.args and context.args[0] == 'help':
+        await update.message.reply_html(HELP_TEXT, disable_web_page_preview=True)
+    else:
+        await update.message.reply_html(f"Meow {user.mention_html()}! I'm the Meow Bot. 🐾\nUse /help to see available commands!")
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    await update.message.reply_html(HELP_TEXT, disable_web_page_preview=True)
+    chat = update.effective_chat
+    
+    if chat.type == ChatType.PRIVATE:
+        await update.message.reply_html(HELP_TEXT, disable_web_page_preview=True)
+        return
+
+    bot_username = context.bot.username
+    deep_link_url = f"https://t.me/{bot_username}?start=help"
+    
+    keyboard = InlineKeyboardMarkup(
+        [
+            [InlineKeyboardButton(text="📬 Get Help (PM)", url=deep_link_url)]
+        ]
+    )
+    
+    message_text = "Meeeow! 🐾 I've sent the help message to your private chat. Please click the button below to see it."
+    
+    await send_safe_reply(update, context, text=message_text, reply_markup=keyboard)
 
 async def github(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     github_link = "https://github.com/R0Xofficial/MyCatbot"
