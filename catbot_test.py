@@ -802,7 +802,6 @@ async def entity_info_command(update: Update, context: ContextTypes.DEFAULT_TYPE
             if resolved_user_from_db:
                 initial_user_obj_from_update = resolved_user_from_db
                 initial_entity_id_for_refresh = resolved_user_from_db.id
-                logger.info(f"User @{username_to_find} found in DB, ID: {initial_user_obj_from_update.id if initial_user_obj_from_update else 'N/A'}")
             else:
                 logger.info(f"Entity @{username_to_find} not in local user DB, trying Telegram API.")
                 try:
