@@ -2903,7 +2903,7 @@ async def unblacklist_user_command(update: Update, context: ContextTypes.DEFAULT
                         target_user_obj = User(id=target_id, first_name=f"{target_id}", is_bot=False)
                 except TelegramError: 
                     logger.warning(f"Couldn't fully verify user ID {target_id} for unblacklist. Using minimal User object.")
-                    target_user_obj = User(id=target_id, first_name=f"User {target_id}", is_bot=False)
+                    target_user_obj = User(id=target_id, first_name=f"{target_id}", is_bot=False)
             except ValueError:
                 await update.message.reply_text("Mrow? Invalid format. Use /unblacklist <ID/@username> or reply.")
                 return
