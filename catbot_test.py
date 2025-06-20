@@ -2873,118 +2873,110 @@ async def send_operational_log(context: ContextTypes.DEFAULT_TYPE, message: str,
 # --- Blacklist Commands ---
 async def blacklist_user_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
+    message = update.effective_message
+    if not message: return
+    
     if not is_privileged_user(user.id):
-        logger.warning(f"Unauthorized /blacklist attempt by user {user.id}.")
+        logger.warning(f"Unauthorized /blist attempt by user {user.id}.")
         return
 
-    target_user_obj: User | None = None
-    reason = "No reason provided."
-    target_input_str: str | None = None
-
-    if update.message.reply_to_message:
-        replied_user = update.message.reply_to_message.from_user
-        if replied_user:
-            target_user_obj = replied_user
+    target_user: User | None = None
+    reason: str = "No reason provided."
+    
+    if message.reply_to_message:
+        if message.reply_to_message.from_user:
+            target_user = message.reply_to_message.from_user
         else:
-            await update.message.reply_text("Mrow? Please reply to a user's message to blacklist them.")
+            await message.reply_text("Mrow? You must reply to a user's message.")
             return
         if context.args:
             reason = " ".join(context.args)
     elif context.args:
-        target_input_str = context.args[0]
-        
-        if target_input_str.startswith("@"):
-            username_to_find = target_input_str[1:]
-            target_user_obj = get_user_from_db_by_username(username_to_find)
-            if not target_user_obj:
-                logger.info(f"Blacklist target @{username_to_find} not in DB, trying API to confirm user.")
-                try: 
-                    chat_info = await context.bot.get_chat(target_input_str)
-                    if chat_info.type == ChatType.PRIVATE:
-                        target_user_obj = User(id=chat_info.id, first_name=chat_info.first_name or f"User? ({target_input_str})", is_bot=getattr(chat_info, 'is_bot', False), username=chat_info.username, last_name=chat_info.last_name)
-                        if target_user_obj: update_user_in_db(target_user_obj)
+        target_id_str = context.args[0]
+        if target_id_str.startswith('@'):
+            target_user = get_user_from_db_by_username(target_id_str)
+            if not target_user:
+                try:
+                    chat_info = await context.bot.get_chat(target_id_str)
+                    if chat_info.type == 'private':
+                        target_user = User(id=chat_info.id, first_name=chat_info.first_name, is_bot=False, username=chat_info.username, last_name=chat_info.last_name)
                     else:
-                        await update.message.reply_text(f"Mrow? @{username_to_find} resolved to a {chat_info.type}. Blacklist can only be applied to users.")
+                        await message.reply_text("Blacklist can only be applied to users.")
                         return
                 except TelegramError:
-                    await update.message.reply_text(f"Mrow? Could not find user @{html.escape(username_to_find)} via API. Try ID or reply.")
+                    await message.reply_text(f"Could not find user {html.escape(target_id_str)}.")
                     return
-                except Exception as e:
-                    logger.error(f"Unexpected error for @{username_to_find} in blacklist: {e}", exc_info=True)
-                    await update.message.reply_text("Mrow? An error occurred while trying to find the user.")
-                    return
-            if target_user_obj and len(context.args) > 1:
-                reason = " ".join(context.args[1:])
         else:
             try:
-                target_id = int(target_input_str)
-                try: 
-                    chat_info = await context.bot.get_chat(target_id)
-                    if chat_info.type == ChatType.PRIVATE:
-                        target_user_obj = User(id=chat_info.id, first_name=chat_info.first_name or f"User {target_id}", is_bot=getattr(chat_info, 'is_bot', False), username=chat_info.username, last_name=chat_info.last_name)
-                        if target_user_obj: update_user_in_db(target_user_obj)
+                user_id = int(target_id_str)
+                try:
+                    chat_info = await context.bot.get_chat(user_id)
+                    if chat_info.type == 'private':
+                        target_user = User(id=chat_info.id, first_name=chat_info.first_name, is_bot=False, username=chat_info.username, last_name=chat_info.last_name)
                     else:
-                         await update.message.reply_text(f"Mrow? ID {target_id} does not seem to be a user (type: {chat_info.type}). Blacklist can only be applied to users.")
-                         return
-                except TelegramError: 
-                    logger.warning(f"Couldn't fully verify user ID {target_id} for blacklist. Creating minimal User object.")
-                    target_user_obj = User(id=target_id, first_name=f"{target_id}", is_bot=False)
-                
-                if len(context.args) > 1:
-                    reason = " ".join(context.args[1:])
+                        await message.reply_text("Blacklist can only be applied to users, not channels or groups.")
+                        return
+                except TelegramError:
+                    target_user = User(id=user_id, first_name=f"{user_id}", is_bot=False)
             except ValueError:
-                await update.message.reply_text("Mrow? Invalid format. Use /blacklist <ID/@username> [reason] or reply.")
+                await message.reply_text("Invalid User ID format.")
                 return
+
+        if len(context.args) > 1:
+            reason = " ".join(context.args[1:])
     else:
-        await update.message.reply_text("Mrow? Specify a user ID/@username (or reply to a message) to blacklist.")
+        await message.reply_text("Usage: /blist <ID/@user/reply> [reason]")
+        return
+        
+    if not target_user:
+        await message.reply_text("Meow. Could not identify the user to blacklist.")
         return
 
-    if not target_user_obj:
-        await update.message.reply_text("Mrow? Could not identify the user to blacklist.")
+    if isinstance(target_user, Chat):
+        if target_user.type == 'private':
+            target_user = User(id=target_user.id, first_name=target_user.first_name, is_bot=False, username=target_user.username, last_name=target_user.last_name)
+        else:
+            await message.reply_text("Meow. Blacklist can only be applied to users.")
+            return
+
+    if target_user.id == OWNER_ID:
+        await message.reply_text("Meow! My Owner is sacred and cannot be blacklisted. 👑")
+        return
+    if target_user.id == context.bot.id:
+        await message.reply_text("Purrr... I can't blacklist myself, that would be silly!")
         return
     
-    if not isinstance(target_user_obj, User) or getattr(target_user_obj, 'type', ChatType.PRIVATE) != ChatType.PRIVATE :
-        await update.message.reply_text("Mrow? Blacklist can only be applied to individual users.")
+    if is_sudo_user(target_user.id):
+        if user.id == OWNER_ID:
+            await message.reply_html(
+                f"Meeeow! To blacklist the Sudo user {target_user.mention_html()}, "
+                f"you must first revoke their privileges using /delsudo."
+            )
+        else:
+            await message.reply_text("Mrow! Sudo users cannot blacklist each other.")
         return
 
-    if target_user_obj.id == OWNER_ID:
-        await update.message.reply_text("Meow! I can't blacklist my Owner! That's just silly. 😹")
-        return
-    if target_user_obj.id == context.bot.id:
-        await update.message.reply_text("Purr... I can't blacklist myself! That would be a cat-astrophe! 🙀")
-        return
-    if is_sudo_user(target_user_obj.id) and target_user_obj.id != OWNER_ID:
-        user_display = target_user_obj.mention_html() if target_user_obj.username else html.escape(target_user_obj.first_name or str(target_user_obj.id))
-        await update.message.reply_html(f"Meeeow! I cannot blacklist a Sudo user ({user_display}). Please remove their sudo access first using /delsudo if you wish to proceed.")
-        return
-    if target_user_obj.is_bot:
-        await update.message.reply_text("Meeeow, I don't usually blacklist other bots.")
+    if is_user_blacklisted(target_user.id):
+        await message.reply_html(f"ℹ️ User {target_user.mention_html()} is already on the blacklist.")
         return
 
-    if is_user_blacklisted(target_user_obj.id):
-        user_display = target_user_obj.mention_html() if target_user_obj.username else html.escape(target_user_obj.first_name or str(target_user_obj.id))
-        await update.message.reply_html(f"User {user_display} (<code>{target_user_obj.id}</code>) is already on the blacklist.")
-        return
-
-    if add_to_blacklist(target_user_obj.id, user.id, reason):
-        logger.info(f"Owner {user.id} blacklisted user {target_user_obj.id} (@{target_user_obj.username}). Reason: {reason}")
-        user_display = target_user_obj.mention_html() if target_user_obj.username else html.escape(target_user_obj.first_name or str(target_user_obj.id))
-        await update.message.reply_html(f"✅ User {user_display} (<code>{target_user_obj.id}</code>) has been added to the blacklist.\nReason: {html.escape(reason)}")
+    if add_to_blacklist(target_user.id, user.id, reason):
+        user_display = target_user.mention_html()
+        await message.reply_html(f"✅ User {user_display} has been added to the blacklist.\nReason: {html.escape(reason)}")
         
         try:
             current_time = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
-            pm_message = (f"<b>#BLACKLISTED</b>\n\n<b>User:</b> {user_display} (<code>{target_user_obj.id}</code>)\n<b>Username:</b> @{html.escape(target_user_obj.username) if target_user_obj.username else 'N/A'}\n<b>Reason:</b> {html.escape(reason)}\n<b>Admin:</b> {user.mention_html()}\n<b>Date:</b> <code>{current_time}</code>")
+            pm_message = (f"<b>#BLACKLISTED</b>\n\n<b>User:</b> {user_display} (<code>{target_user.id}</code>)\n<b>Username:</b> @{html.escape(target_user.username) if target_user.username else 'N/A'}\n<b>Reason:</b> {html.escape(reason)}\n<b>Admin:</b> {user.mention_html()}\n<b>Date:</b> <code>{current_time}</code>")
             await send_operational_log(context, pm_message)
         except Exception as e:
             logger.error(f"Error preparing/sending #BLACKLISTED operational log: {e}", exc_info=True)
     else:
-        await update.message.reply_text("Mrow? Failed to add user to the blacklist. Check logs.")
-
+        await message.reply_text("Mrow? Failed to add user to the blacklist. Check logs.")
 
 async def unblacklist_user_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
     if not is_privileged_user(user.id):
-        logger.warning(f"Unauthorized /unblacklist attempt by user {user.id}.")
+        logger.warning(f"Unauthorized /unblist attempt by user {user.id}.")
         return
 
     target_user_obj: User | None = None
@@ -3006,7 +2998,7 @@ async def unblacklist_user_command(update: Update, context: ContextTypes.DEFAULT
                 try: 
                     chat_info = await context.bot.get_chat(target_input_str)
                     if chat_info.type == ChatType.PRIVATE:
-                        target_user_obj = User(id=chat_info.id, first_name=chat_info.first_name or f"User? ({target_input_str})", is_bot=getattr(chat_info, 'is_bot', False), username=chat_info.username, last_name=chat_info.last_name)
+                        target_user_obj = User(id=chat_info.id, first_name=chat_info.first_name or f"({target_input_str})", is_bot=getattr(chat_info, 'is_bot', False), username=chat_info.username, last_name=chat_info.last_name)
                     else:
                         await update.message.reply_text(f"Mrow? @{username_to_find} resolved to a {chat_info.type}. Unblacklist can only be applied to users.")
                         return
@@ -3023,7 +3015,7 @@ async def unblacklist_user_command(update: Update, context: ContextTypes.DEFAULT
                 try: 
                     chat_info = await context.bot.get_chat(target_id)
                     if chat_info.type == ChatType.PRIVATE:
-                        target_user_obj = User(id=chat_info.id, first_name=chat_info.first_name or f"User {target_id}", is_bot=getattr(chat_info, 'is_bot', False), username=chat_info.username, last_name=chat_info.last_name)
+                        target_user_obj = User(id=chat_info.id, first_name=chat_info.first_name or f"{target_id}", is_bot=getattr(chat_info, 'is_bot', False), username=chat_info.username, last_name=chat_info.last_name)
                     else:
                         logger.warning(f"Attempt to unblacklist non-user ID {target_id} (type: {chat_info.type}). Using ID directly.")
                         target_user_obj = User(id=target_id, first_name=f"{target_id}", is_bot=False)
@@ -3031,7 +3023,7 @@ async def unblacklist_user_command(update: Update, context: ContextTypes.DEFAULT
                     logger.warning(f"Couldn't fully verify user ID {target_id} for unblacklist. Using minimal User object.")
                     target_user_obj = User(id=target_id, first_name=f"User {target_id}", is_bot=False)
             except ValueError:
-                await update.message.reply_text("Mrow? Invalid format. Use /unblacklist <ID/@username> or reply.")
+                await update.message.reply_text("Mrow? Invalid format. Use /unblist <ID/@username> or reply.")
                 return
     else:
         await update.message.reply_text("Mrow? Specify a user ID/@username (or reply) to unblacklist.")
@@ -3051,13 +3043,13 @@ async def unblacklist_user_command(update: Update, context: ContextTypes.DEFAULT
 
     if not is_user_blacklisted(target_user_obj.id):
         user_display = target_user_obj.mention_html() if target_user_obj.username else html.escape(target_user_obj.first_name or str(target_user_obj.id))
-        await update.message.reply_html(f"User {user_display} (<code>{target_user_obj.id}</code>) is not on the blacklist.")
+        await update.message.reply_html(f"ℹ️ User {user_display} is not on the blacklist.")
         return
 
     if remove_from_blacklist(target_user_obj.id):
         logger.info(f"Owner {user.id} unblacklisted user {target_user_obj.id} (@{target_user_obj.username}).")
         user_display = target_user_obj.mention_html() if target_user_obj.username else html.escape(target_user_obj.first_name or str(target_user_obj.id))
-        await update.message.reply_html(f"✅ User {user_display} (<code>{target_user_obj.id}</code>) has been removed from the blacklist.")
+        await update.message.reply_html(f"✅ User {user_display} has been removed from the blacklist.")
         
         try:
             current_time = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
