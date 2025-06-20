@@ -606,6 +606,7 @@ HELP_TEXT = """
 /help - Shows this help message. ❓
 /github - Get the link to my source code! 💻
 /owner - Info about my designated human! ❤️
+/sudocmds - List sudo commands. 👷‍♂️
 
 <b>User Commands:</b>
 /info &lt;ID/@user/reply&gt; - Get info about a user. 👤
@@ -679,7 +680,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             await update.message.reply_html(HELP_TEXT, disable_web_page_preview=True)
             return
         
-        if context.args[0] == 'scmds':
+        if context.args[0] == 'sudocmds':
             if not is_privileged_user(user.id):
                 await update.message.reply_text("Mrow? You are not authorized to see these commands.")
                 return
@@ -3776,7 +3777,7 @@ def main() -> None:
     application.add_handler(CommandHandler("ungban", ungban_command))
     application.add_handler(CommandHandler("enforcegban", enforce_gban_command))
     application.add_handler(CommandHandler("listsudo", list_sudo_users_command))
-    application.add_handler(CommandHandler("scmds", sudo_commands_command))
+    application.add_handler(CommandHandler("sudocmds", sudo_commands_command))
     application.add_handler(CommandHandler("addsudo", add_sudo_command))
     application.add_handler(CommandHandler("delsudo", del_sudo_command))
 
