@@ -649,33 +649,49 @@ HELP_TEXT = """
 /hug &lt;@user/reply&gt; - Offer a comforting hug! 🤗
 """
 
+SUDO_COMMANDS_TEXT = """
+<b>Sudo Commands:</b>
+/status - Show bot status.
+/cinfo &lt;@user/reply&gt; - Get detailed info about the current or specified chat.
+/say &lt;@user/reply&gt; [Your text] - Send message as bot.
+/blist &lt;@user/reply&gt; [Reason] - Add user to blacklist.
+/unblist &lt;@user/reply&gt; - Remove user from blacklist.
+/gban &lt;@user/reply&gt; [Reason] - Ban user globally.
+/ungban &lt;@user/reply&gt; - Unban user globally.
+"""
+
+OWNER_COMMANDS_TEXT = """
+<b>Owner Commands:</b>
+/leave [Optional chat ID] - Make the bot leave a chat.
+/speedtest - Perform an internet speed test.
+/listsudo - List all users with sudo privileges.
+/addsudo &lt;@user/reply&gt - Grants SUDO (bot admin) permissions to a user.
+/delsudo &lt;@user/reply&gt - Revokes SUDO (bot admin) permissions from a user.
+"""
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
     
-    if context.args and context.args[0] == 'help':
-        await update.message.reply_html(HELP_TEXT, disable_web_page_preview=True)
-    else:
-        await update.message.reply_html(f"Meow {user.mention_html()}! I'm the Meow Bot. 🐾\nUse /help to see available commands!")
+    welcome_message = f"Meow {user.mention_html()}! I'm the Meow Bot. 🐾\nUse /help to see available commands!"
+    
+    if context.args:
+        if context.args[0] == 'help':
+            await update.message.reply_html(HELP_TEXT, disable_web_page_preview=True)
+            return
+        
+        if context.args[0] == 'scmds':
+            if not is_privileged_user(user.id):
+                await update.message.reply_text("Mrow? You are not authorized to see these commands.")
+                return
 
-async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    chat = update.effective_chat
-    
-    if chat.type == ChatType.PRIVATE:
-        await update.message.reply_html(HELP_TEXT, disable_web_page_preview=True)
-        return
-
-    bot_username = context.bot.username
-    deep_link_url = f"https://t.me/{bot_username}?start=help"
-    
-    keyboard = InlineKeyboardMarkup(
-        [
-            [InlineKeyboardButton(text="📬 Get Help (PM)", url=deep_link_url)]
-        ]
-    )
-    
-    message_text = "Meeeow! 🐾 I've sent the help message to your private chat. Please click the button below to see it."
-    
-    await send_safe_reply(update, context, text=message_text, reply_markup=keyboard)
+            final_sudo_help = SUDO_COMMANDS_TEXT
+            if user.id == OWNER_ID:
+                final_sudo_help += "\n" + OWNER_COMMANDS_TEXT
+            
+            await update.message.reply_html(final_sudo_help, disable_web_page_preview=True)
+            return
+            
+    await update.message.reply_html(welcome_message)
 
 async def github(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     github_link = "https://github.com/R0Xofficial/MyCatbot"
@@ -3556,6 +3572,34 @@ async def del_sudo_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             logger.error(f"Error preparing/sending #SUDO_REMOVED operational log: {e}", exc_info=True)
     else:
         await update.message.reply_text("Mrow? Failed to remove user from sudo list. Check logs.")
+
+async def sudo_commands_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    user = update.effective_user
+    chat = update.effective_chat
+    
+    if not is_privileged_user(user.id):
+        logger.warning(f"Unauthorized /sudocmds attempt by user {user.id}. Silently ignoring.")
+        return
+
+    if chat.type == ChatType.PRIVATE:
+        final_sudo_help = SUDO_COMMANDS_TEXT
+        if user.id == OWNER_ID:
+            final_sudo_help += "\n" + OWNER_COMMANDS_TEXT
+        await update.message.reply_html(final_sudo_help, disable_web_page_preview=True)
+        return
+
+    bot_username = context.bot.username
+    deep_link_url = f"https://t.me/{bot_username}?start=sudocmds"
+    
+    keyboard = InlineKeyboardMarkup(
+        [
+            [InlineKeyboardButton(text="🛡️ Get Privileged Commands (PM)", url=deep_link_url)]
+        ]
+    )
+    
+    message_text = "Meeeow! 🐾 I've sent the list of privileged commands to your private chat. Please click the button below to see it."
+    
+    await send_safe_reply(update, context, text=message_text, reply_markup=keyboard)
         
 async def list_sudo_users_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
@@ -3712,6 +3756,7 @@ def main() -> None:
     application.add_handler(CommandHandler("ungban", ungban_command))
     application.add_handler(CommandHandler("enforcegban", enforce_gban_command))
     application.add_handler(CommandHandler("listsudo", list_sudo_users_command))
+    application.add_handler(CommandHandler("scmds", sudo_commands_command))
     application.add_handler(CommandHandler("addsudo", add_sudo_command))
     application.add_handler(CommandHandler("delsudo", del_sudo_command))
 
