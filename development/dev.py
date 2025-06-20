@@ -3181,10 +3181,10 @@ async def gban_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
         log_message = (
             f"<b>#GBANNED</b>\n"
-            f"<b>From Chat:</b> {chat_name_display} (<code>{chat.id}</code>)\n\n"
+            f"<b>Initiated From:</b> {chat_name_display} (<code>{chat.id}</code>)\n\n"
             f"<b>User:</b> {user_display} (<code>{target_user.id}</code>)\n"
             f"<b>Username:</b> {target_username}\n"
-            f"<b>Reason:</b> {reason_display}\n\n"
+            f"<b>Reason:</b> {reason_display}\n"
             f"<b>Admin:</b> {user_who_gbans.mention_html()}\n"
             f"<b>Date:</b> <code>{current_time}</code>"
         )
@@ -3260,10 +3260,10 @@ async def ungban_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
         log_message = (
             f"<b>#UNGBANNED</b>\n"
-            f"<b>From Chat:</b> {html.escape(chat_name)} (<code>{chat.id}</code>)\n\n"
+            f"<b>Initiated From:</b> {html.escape(chat_name)} (<code>{chat.id}</code>)\n\n"
             f"<b>User:</b> {user_display} (<code>{target_user.id}</code>)\n"
             f"<b>Username:</b> {username_for_log}\n\n"
-            f"<b>Admin:</b> {user_who_ungbans.mention_html()}\n"
+            f"<b>Admin:</b> {user_who_ungbans.mention_html()}"
             f"<b>Date:</b> <code>{current_time}</code>"
         )
         await send_operational_log(context, log_message)
