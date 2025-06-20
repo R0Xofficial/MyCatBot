@@ -617,7 +617,9 @@ HELP_TEXT = """
 
 <b>Management Commands:</b>
 /ban &lt;ID/@user/reply&gt; [Time] [Reason] - Ban user in chat. ⛔️
+/unban &lt;ID/@user/reply&gt; - Unban user in chat. 🔓
 /mute &lt;ID/@user/reply&gt; [Time] [Reason] - Mute user in chat. 🚫
+/unmute &lt;ID/@user/reply&gt; - Unmute user in chat. 🎙 
 <i>Note: [Time] is optional</i>
 /kick &lt;ID/@user/reply&gt; [Reason] - Kick user from chat. ⚠️
 /promote &lt;ID/@user/reply&gt; [Title] - Promote a user to administrator. 👷‍♂️
@@ -659,6 +661,8 @@ SUDO_COMMANDS_TEXT = """
 /unblist &lt;ID/@user/reply&gt; - Remove user from blacklist.
 /gban &lt;ID/@user/reply&gt; [Reason] - Ban user globally.
 /ungban &lt;ID/@user/reply&gt; - Unban user globally.
+
+<i>Note: Commands: /ban, /unban, /mute, /unmute, /kick, /pin, /unpin, /purge; can be used by sudo users even if they are not chat creator/administrator.</i>
 """
 
 OWNER_COMMANDS_TEXT = """
