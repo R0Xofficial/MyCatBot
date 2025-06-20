@@ -33,21 +33,21 @@ If you want run test bot version use command:
 
 **cd ~/catbot && . ./env.sh && python catbot_test.py**
 
-# Bot Commands:
+# Bot Commands:<br>
 /start - Shows the welcome message. ✨<br>
 /help - Shows this help message. ❓<br>
 /github - Get the link to my source code! 💻<br>
 /owner - Info about my designated human! ❤️<br>
 /sudocmds - List sudo commands. 👷‍♂️<br>
 
-# User Commands:
+# User Commands:<br>
 /info <ID/@user/reply> - Get info about a user. 👤<br>
 /chatstat - Get basic stats about the current chat. 📈<br>
 /kickme - Kick yourself from chat. 👋<br>
 /listadmins - Show the list of administrators in the current chat. 📃<br>
 Note: /admins works too
 
-# Management Commands:
+# Management Commands:<br>
 /ban <ID/@user/reply> [Time] [Reason] - Ban user in chat. ⛔️<br>
 /unban <ID/@user/reply> - Unban user in chat. 🔓<br>
 /mute <ID/@user/reply> [Time] [Reason] - Mute user in chat. 🚫<br>
@@ -62,11 +62,11 @@ Note: [Title] is optional<br>
 /purge <silent> - Deletes user messages up to the replied-to message. 🗑<br>
 /report <ID/@user/reply> [reason] - Report user. ⚠️<br>
 
-Security:
+# Security:<br>
 /enforcegban <yes/no> - Enable/disable Global Ban enforcement in this chat. 🛡️<br>
 (Chat Creator only)
 
-4FUN Commands:
+# 4FUN Commands:<br>
 /gif - Get a random cat GIF! 🖼️<br>
 /photo - Get a random cat photo! 📷<br>
 /meow - Get a random cat sound or phrase. 🔊<br>
@@ -83,7 +83,7 @@ Security:
 /bite <@user/reply> - Take a playful bite! 😬<br>
 /hug <@user/reply> - Offer a comforting hug! 🤗<br>
 
-# Sudo Commands:
+# Sudo Commands:<br>
 /status - Show bot status.<br>
 /cinfo [Optional chat ID] - Get detailed info about the current or specified chat.<br>
 /say [Optional chat ID] [Your text] - Send message as bot.<br>
@@ -94,7 +94,7 @@ Security:
 
 <i>Note: Commands: /ban, /unban, /mute, /unmute, /kick, /pin, /unpin, /purge; can be used by sudo users even if they are not chat creator/administrator.</i>
 
-# Owner Commands:
+# Owner Commands:<br>
 /leave [Optional chat ID] - Make the bot leave a chat.<br>
 /speedtest - Perform an internet speed test.<br>
 /listsudo - List all users with sudo privileges.<br>
