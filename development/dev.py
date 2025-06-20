@@ -3171,22 +3171,20 @@ async def gban_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         current_time = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
         target_username = f"@{html.escape(target_user.username)}" if target_user.username else "N/A"
         
-        reason_display = html.escape(reason)
+        chat_name_display = html.escape(chat.title or f"{user_who_gbans.first_name}")
+        
         if chat.type != ChatType.PRIVATE and chat.username:
             message_link = f"https://t.me/{chat.username}/{message.message_id}"
-            reason_display = f"<a href='{message_link}'>{html.escape(reason)}</a>"
+            chat_name_display = f"<a href='{message_link}'>{html.escape(chat.title)}</a>"
 
-        if chat.type == ChatType.PRIVATE:
-            chat_name = f"{user_who_gbans.first_name}"
-        else:
-            chat_name = chat.title or f"Group Chat {chat.id}"
+        reason_display = html.escape(reason)
 
         log_message = (
             f"<b>#GBANNED</b>\n"
-            f"<b>From Chat:</b> {html.escape(chat_name)} (<code>{chat.id}</code>)\n\n"
+            f"<b>From Chat:</b> {chat_name_display} (<code>{chat.id}</code>)\n\n"
             f"<b>User:</b> {user_display} (<code>{target_user.id}</code>)\n"
             f"<b>Username:</b> {target_username}\n"
-            f"<b>Reason:</b> {reason_display}\n"
+            f"<b>Reason:</b> {reason_display}\n\n"
             f"<b>Admin:</b> {user_who_gbans.mention_html()}\n"
             f"<b>Date:</b> <code>{current_time}</code>"
         )
@@ -3264,7 +3262,7 @@ async def ungban_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             f"<b>#UNGBANNED</b>\n"
             f"<b>From Chat:</b> {html.escape(chat_name)} (<code>{chat.id}</code>)\n\n"
             f"<b>User:</b> {user_display} (<code>{target_user.id}</code>)\n"
-            f"<b>Username:</b> {username_for_log}\n"
+            f"<b>Username:</b> {username_for_log}\n\n"
             f"<b>Admin:</b> {user_who_ungbans.mention_html()}\n"
             f"<b>Date:</b> <code>{current_time}</code>"
         )
