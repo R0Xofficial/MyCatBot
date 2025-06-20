@@ -1559,7 +1559,12 @@ async def promote_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         return
 
     if not target_user: await message.reply_text("Could not identify user to promote."); return
-    if target_user.is_bot: await message.reply_text("Meeeow! Please promote bots manually with specific rights."); return
+    
+    if target_user.id == context.bot.id:
+        await message.reply_text("Mrow? I'm a bot, I can't promote myself. 🤖")
+        return
+        
+    if target_user.is_bot: await message.reply_text("Meeeow! Bots are usually promoted with specific, limited rights. This command grants broad admin privileges, which might not be suitable for most bots. Please promote bots manually with care if needed."); return
 
     try:
         target_chat_member = await context.bot.get_chat_member(chat.id, target_user.id)
@@ -1658,6 +1663,10 @@ async def demote_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         return
 
     if not target_user: await message.reply_text("Could not identify user to demote."); return
+        
+    if target_user.id == context.bot.id:
+        await message.reply_text("I can't demote myself! That would be a logical paradox. 😼")
+        return
 
     try:
         target_chat_member = await context.bot.get_chat_member(chat.id, target_user.id)
@@ -1670,7 +1679,7 @@ async def demote_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             await message.reply_html(f"ℹ️ User {user_display} is not an administrator."); return
 
         if not target_chat_member.can_be_edited:
-            await message.reply_html(f"❌ I do not have sufficient rights to demote {user_display}. This usually means they were promoted by the creator or by another admin.")
+            await message.reply_html(f"❌ I do not have sufficient rights to demote {user_display}. This usually means they were promoted by the Creator or by another admin.")
             return
 
         await context.bot.promote_chat_member(
