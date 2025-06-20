@@ -3044,13 +3044,13 @@ async def unblacklist_user_command(update: Update, context: ContextTypes.DEFAULT
 
     if not is_user_blacklisted(target_user_obj.id):
         user_display = target_user_obj.mention_html() if target_user_obj.username else html.escape(target_user_obj.first_name or str(target_user_obj.id))
-        await update.message.reply_html(f"User {user_display} (<code>{target_user_obj.id}</code>) is not on the blacklist.")
+        await update.message.reply_html(f"ℹ️ User {user_display} is not on the blacklist.")
         return
 
     if remove_from_blacklist(target_user_obj.id):
         logger.info(f"Owner {user.id} unblacklisted user {target_user_obj.id} (@{target_user_obj.username}).")
         user_display = target_user_obj.mention_html() if target_user_obj.username else html.escape(target_user_obj.first_name or str(target_user_obj.id))
-        await update.message.reply_html(f"✅ User {user_display} (<code>{target_user_obj.id}</code>) has been removed from the blacklist.")
+        await update.message.reply_html(f"✅ User {user_display} has been removed from the blacklist.")
         
         try:
             current_time = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
