@@ -1670,7 +1670,7 @@ async def demote_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             await message.reply_html(f"ℹ️ User {user_display} is not an administrator."); return
 
         if not target_chat_member.can_be_edited:
-            await message.reply_html(f"❌ I do not have sufficient rights to demote {user_display}. This usually means they were promoted by the Creator or by another admin.")
+            await message.reply_html(f"❌ I do not have sufficient rights to demote {user_display}. This usually means they were promoted by the creator or by another admin.")
             return
 
         await context.bot.promote_chat_member(
