@@ -1504,25 +1504,24 @@ async def kickme_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
 async def promote_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     chat = update.effective_chat
+    message = update.effective_message
+    if not message: return
 
     if chat.type not in [ChatType.GROUP, ChatType.SUPERGROUP]:
-        await update.message.reply_text("Mrow? Users can only be promoted in groups and supergroups.")
+        await message.reply_text("Mrow? Users can only be promoted in groups and supergroups.")
         return
 
     try:
         bot_member = await context.bot.get_chat_member(chat.id, context.bot.id)
-        if not (bot_member.status == ChatMemberStatus.ADMINISTRATOR and getattr(bot_member, 'can_promote_members', False)):
-            await update.message.reply_text("Meeeow! I need to be an admin with rights to promote members in this chat. 😿")
+        if not (bot_member.status == "administrator" and getattr(bot_member, 'can_promote_members', False)):
+            await send_safe_reply(update, context, text="Meeeow! I need to be an admin with rights to promote members in this chat. 😿")
             return
-    except TelegramError as e:
-        logger.error(f"Error checking bot's own permissions in /promote for chat {chat.id}: {e}")
-        await update.message.reply_text("Mrow? Couldn't verify my own permissions in this chat.")
+    except TelegramError:
+        await send_safe_reply(update, context, text="Mrow? Couldn't verify my own permissions in this chat.")
         return
 
     if not await _can_user_perform_action(
-        update,
-        context,
-        'can_promote_members',
+        update, context, 'can_promote_members',
         "Meeeow! You need to be the chat creator or an admin with 'Promote Members' rights to use this command.",
         allow_bot_privileged_override=False
     ):
@@ -1531,192 +1530,168 @@ async def promote_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     target_user: User | None = None
     provided_custom_title: str | None = None
 
-    if update.message.reply_to_message:
-        target_user = update.message.reply_to_message.from_user
+    if message.reply_to_message and message.reply_to_message.from_user:
+        target_user = message.reply_to_message.from_user
         if context.args: provided_custom_title = " ".join(context.args)
     elif context.args:
         target_arg, parsed_provided_title = parse_promote_args(list(context.args))
-        if not target_arg: await update.message.reply_text("Usage: /promote <ID/@username/reply> [optional admin title]"); return
+        if not target_arg:
+            await message.reply_text("Usage: /promote <ID/@username/reply> [optional admin title]")
+            return
         provided_custom_title = parsed_provided_title
-        if target_arg.startswith("@"):
-            username_to_find = target_arg[1:]; target_user = get_user_from_db_by_username(username_to_find)
-            if not target_user:
-                try:
-                    chat_info = await context.bot.get_chat(target_arg)
-                    if chat_info.type == ChatType.PRIVATE: target_user = User(id=chat_info.id, first_name=chat_info.first_name or "",is_bot=getattr(chat_info, 'is_bot',False),username=chat_info.username, last_name=chat_info.last_name)
-                    else: await update.message.reply_text(f"Mrow? @{username_to_find} resolved to a {chat_info.type}, not a user."); return
-                except TelegramError: await update.message.reply_text(f"User @{html.escape(username_to_find)} not found via API."); return
-                except Exception as e_api: logger.error(f"API error for @{username_to_find} in promote: {e_api}"); await update.message.reply_text("Error finding user via API."); return
-            if not target_user: await update.message.reply_text(f"User @{html.escape(username_to_find)} not found."); return
-        else:
-            try:
-                target_id = int(target_arg)
-                try:
-                    chat_info = await context.bot.get_chat(target_id)
-                    if chat_info.type == ChatType.PRIVATE: target_user = User(id=chat_info.id, first_name=chat_info.first_name or f"User {target_id}", is_bot=getattr(chat_info, 'is_bot',False), username=chat_info.username, last_name=chat_info.last_name)
-                    else: await update.message.reply_text("Target ID does not seem to be a user."); return
-                except TelegramError: target_user = User(id=target_id, first_name=f"User {target_id}", is_bot=False)
-            except ValueError: await update.message.reply_text("Invalid user ID."); return
-    else: await update.message.reply_text("Usage: /promote <ID/@username/reply> [optional admin title]"); return
+        
+        try:
+            if target_arg.startswith("@"):
+                chat_info = await context.bot.get_chat(target_arg)
+            else:
+                chat_info = await context.bot.get_chat(int(target_arg))
+            
+            if chat_info.type == 'private':
+                 target_user = User(id=chat_info.id, first_name=chat_info.first_name, is_bot=False, username=chat_info.username, last_name=chat_info.last_name)
+            else:
+                await message.reply_text("Promotion can only be applied to users.")
+                return
+        except (ValueError, TelegramError):
+            await message.reply_text("Could not find that user.")
+            return
+    else:
+        await message.reply_text("Usage: /promote <ID/@username/reply> [optional admin title]")
+        return
 
-    if not target_user: await update.message.reply_text("Could not identify user to promote."); return
-    if not isinstance(target_user, User): await update.message.reply_text("Promotion can only be applied to users."); return
-    if target_user.id == context.bot.id: await update.message.reply_text("I can't promote myself, silly!"); return
-    if target_user.is_bot: await update.message.reply_text("Meeeow! Bots are usually promoted with specific, limited rights. This command grants broad admin privileges, which might not be suitable for most bots. Please promote bots manually with care if needed."); return
+    if not target_user: await message.reply_text("Could not identify user to promote."); return
+    if target_user.is_bot: await message.reply_text("Meeeow! Please promote bots manually with specific rights."); return
 
-    target_is_already_admin = False
-    target_is_creator = False
     try:
         target_chat_member = await context.bot.get_chat_member(chat.id, target_user.id)
+        user_display = target_user.mention_html()
+
         if target_chat_member.status == "creator":
-            target_is_creator = True
-        elif target_chat_member.status == "administrator":
-            target_is_already_admin = True
+            await message.reply_html(f"{user_display} is the chat Creator and already has ultimate power!")
+            return
+
+        if target_chat_member.status == "administrator":
+            promoter = target_chat_member.promoted_by
+            if promoter and promoter.id == context.bot.id:
+                if provided_custom_title:
+                    title_to_set = provided_custom_title[:16]
+                    await context.bot.set_chat_administrator_custom_title(chat.id, target_user.id, title_to_set)
+                    await message.reply_html(f"✅ User {user_display}'s title has been updated to '<i>{html.escape(title_to_set)}</i>'.")
+                else:
+                    await message.reply_html(f"ℹ️ User {user_display} is already an admin (promoted by me). Provide a title to change it.")
+            else:
+                promoter_name = "the Chat Creator" if not promoter else promoter.mention_html()
+                await message.reply_html(
+                    f"ℹ️ User {user_display} is already an administrator, but was promoted by {promoter_name}. "
+                    f"I cannot change their title."
+                )
+            return
+
     except TelegramError as e:
         if "user not found" not in str(e).lower():
             logger.warning(f"Could not get target's chat member status for /promote: {e}")
 
-    if target_is_creator:
-        await update.message.reply_text("The chat Creator already has all powers and cannot be 're-promoted' by this command!")
-        return
-
-    user_display_name = target_user.mention_html() if target_user.username else html.escape(target_user.first_name or str(target_user.id))
-
-    if target_is_already_admin:
-        if provided_custom_title:
-            title_to_set = "Admin"
-            title_warning_message: str | None = None
-            if len(provided_custom_title) > 16:
-                title_warning_message = f"Meeeow! The title '<i>{html.escape(provided_custom_title)}</i>' is too long (max 16 chars). Title not changed or set to default if they weren't admin before."
-            else:
-                title_to_set = provided_custom_title
-
-            try:
-                await context.bot.set_chat_administrator_custom_title(chat.id, target_user.id, title_to_set)
-                success_message = f"ℹ️ User {user_display_name} is already an administrator. Their title has been updated to '<i>{html.escape(title_to_set)}</i>'."
-                if title_warning_message: success_message += f"\n{title_warning_message}"
-                await update.message.reply_html(success_message)
-            except TelegramError as e:
-                await update.message.reply_text(f"User {user_display_name} is already an admin. Failed to update title: {html.escape(str(e))}")
-            return
-        else:
-            await update.message.reply_html(f"ℹ️ User {user_display_name} is already an administrator. No new title provided to update.")
-            return
-
     title_to_set = "Admin"
-    title_warning_message: str | None = None
     if provided_custom_title:
-        if len(provided_custom_title) > 16:
-            title_warning_message = f"Meeeow! The title '<i>{html.escape(provided_custom_title)}</i>' is too long (max 16 chars). Defaulting to 'Admin'."
-        else:
-            title_to_set = provided_custom_title
+        title_to_set = provided_custom_title[:16]
 
     try:
         await context.bot.promote_chat_member(
             chat_id=chat.id, user_id=target_user.id,
             can_manage_chat=True, can_delete_messages=True, can_manage_video_chats=True,
             can_restrict_members=True, can_change_info=True, can_invite_users=True,
-            can_pin_messages=True, can_manage_topics=(chat.is_forum if hasattr(chat, 'is_forum') else None),
-            can_promote_members=False, is_anonymous=False, can_post_messages=None, can_edit_messages=None,
-            can_delete_stories=False, can_edit_stories=False, can_post_stories=False
+            can_pin_messages=True, can_manage_topics=(chat.is_forum if hasattr(chat, 'is_forum') else None)
         )
         await context.bot.set_chat_administrator_custom_title(chat.id, target_user.id, title_to_set)
-
-        success_message = f"✅ User {user_display_name} (<code>{target_user.id}</code>) has been promoted to administrator with title '<i>{html.escape(title_to_set)}</i>'."
-        if title_warning_message: success_message += f"\n{title_warning_message}"
-        await update.message.reply_html(success_message)
-    except TelegramError as e: await update.message.reply_text(f"Failed to promote user: {html.escape(str(e))}")
-    except Exception as e: logger.error(f"Unexpected error in /promote: {e}", exc_info=True); await update.message.reply_text("An unexpected error occurred.")
+        
+        user_display = target_user.mention_html()
+        await message.reply_html(f"✅ User {user_display} has been promoted with the title '<i>{html.escape(title_to_set)}</i>'.")
+    except TelegramError as e:
+        await message.reply_text(f"Failed to promote user: {html.escape(str(e))}")
 
 async def demote_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     chat = update.effective_chat
-
+    message = update.effective_message
+    if not message: return
+    
     if chat.type not in [ChatType.GROUP, ChatType.SUPERGROUP]:
-        await update.message.reply_text("Mrow? Users can only be demoted in groups and supergroups.")
+        await message.reply_text("Mrow? Users can only be demoted in groups and supergroups.")
         return
 
     try:
         bot_member = await context.bot.get_chat_member(chat.id, context.bot.id)
-        if not (bot_member.status == ChatMemberStatus.ADMINISTRATOR and getattr(bot_member, 'can_promote_members', False)):
-            await update.message.reply_text("Meeeow! I need to be an admin with rights to manage admin privileges in this chat. 😿")
+        if not (bot_member.status == "administrator" and getattr(bot_member, 'can_promote_members', False)):
+            await send_safe_reply(update, context, text="Meeeow! I need to be an admin with rights to manage admin privileges in this chat. 😿")
             return
-    except TelegramError as e:
-        logger.error(f"Error checking bot's own permissions in /demote for chat {chat.id}: {e}")
-        await update.message.reply_text("Mrow? Couldn't verify my own permissions in this chat.")
+    except TelegramError:
+        await send_safe_reply(update, context, text="Mrow? Couldn't verify my own permissions in this chat.")
         return
 
     if not await _can_user_perform_action(
-        update,
-        context,
-        'can_promote_members',
+        update, context, 'can_promote_members',
         "Meeeow! You need to be the chat creator or an admin with 'Promote Members' rights to use this command.",
         allow_bot_privileged_override=False
     ):
         return
-
+    
     target_user: User | None = None
-    if update.message.reply_to_message:
-        target_user = update.message.reply_to_message.from_user
+
+    if message.reply_to_message and message.reply_to_message.from_user:
+        target_user = message.reply_to_message.from_user
     elif context.args:
         target_arg = context.args[0]
-        if target_arg.startswith("@"):
-            username_to_find = target_arg[1:]; target_user = get_user_from_db_by_username(username_to_find)
-            if not target_user:
-                try:
-                    chat_info = await context.bot.get_chat(target_arg)
-                    if chat_info.type == ChatType.PRIVATE or getattr(chat_info, 'is_bot', False): target_user = User(id=chat_info.id, first_name=chat_info.first_name or "",is_bot=getattr(chat_info, 'is_bot',False),username=chat_info.username, last_name=chat_info.last_name)
-                    else: await update.message.reply_text(f"Mrow? @{username_to_find} resolved to a {chat_info.type}, not a user/bot."); return
-                except TelegramError: await update.message.reply_text(f"User/Bot @{html.escape(username_to_find)} not found via API."); return
-                except Exception as e_api: logger.error(f"API error for @{username_to_find} in demote: {e_api}"); await update.message.reply_text("Error finding entity via API."); return
-            if not target_user: await update.message.reply_text(f"User/Bot @{html.escape(username_to_find)} not found."); return
-        else:
-            try:
-                target_id = int(target_arg)
-                try:
-                    chat_info = await context.bot.get_chat(target_id)
-                    if chat_info.type == ChatType.PRIVATE or getattr(chat_info, 'is_bot', False): target_user = User(id=chat_info.id, first_name=chat_info.first_name or f"Entity {target_id}", is_bot=getattr(chat_info, 'is_bot',False), username=chat_info.username, last_name=chat_info.last_name)
-                    else: await update.message.reply_text("Target ID does not seem to be a user/bot."); return
-                except TelegramError: target_user = User(id=target_id, first_name=f"Entity {target_id}", is_bot=False)
-            except ValueError: await update.message.reply_text("Invalid ID format."); return
-    else: await update.message.reply_text("Usage: /demote <ID/@username/reply>"); return
+        try:
+            if target_arg.startswith("@"):
+                chat_info = await context.bot.get_chat(target_arg)
+            else:
+                chat_info = await context.bot.get_chat(int(target_arg))
+            
+            if chat_info.type == 'private':
+                 target_user = User(id=chat_info.id, first_name=chat_info.first_name, is_bot=False, username=chat_info.username, last_name=chat_info.last_name)
+            else:
+                await message.reply_text("Demotion can only be applied to users.")
+                return
+        except (ValueError, TelegramError):
+            await message.reply_text("Could not find that user.")
+            return
+    else:
+        await message.reply_text("Usage: /demote <ID/@username/reply>")
+        return
 
-    if not target_user: await update.message.reply_text("Could not identify target to demote."); return
-    if not isinstance(target_user, User): await update.message.reply_text("Demotion can only be applied to users or bots represented as users."); return
-    if target_user.id == context.bot.id: await update.message.reply_text("I can't demote myself!"); return
+    if not target_user: await message.reply_text("Could not identify user to demote."); return
 
     try:
         target_chat_member = await context.bot.get_chat_member(chat.id, target_user.id)
-        if target_chat_member.status == "creator":
-            await update.message.reply_text("Meeeow! The chat Creator cannot be demoted! 👑")
-            return
-        if target_chat_member.status != "administrator":
-            user_display_not_admin = target_user.mention_html() if target_user.username else html.escape(target_user.first_name or str(target_user.id))
-            await update.message.reply_html(f"ℹ️ User {user_display_not_admin} is not an administrator in this chat (current status: {target_chat_member.status.capitalize()}). Nothing to demote.")
-            return
-    except TelegramError as e:
-        logger.warning(f"Could not get target's chat member status for /demote: {e}")
-        await update.message.reply_text(f"Mrow? Could not verify target's status in this chat: {html.escape(str(e))}")
-        return
+        user_display = target_user.mention_html()
 
-    try:
+        if target_chat_member.status == "creator":
+            await message.reply_html(f"👑 The chat Creator cannot be demoted!"); return
+        
+        if target_chat_member.status != "administrator":
+            await message.reply_html(f"ℹ️ User {user_display} is not an administrator."); return
+
+        if not target_chat_member.can_be_edited:
+            await message.reply_html(f"❌ I do not have sufficient rights to demote {user_display}. This usually means they were promoted by the Creator or a higher-ranking admin.")
+            return
+
+        promoter = target_chat_member.promoted_by
+        if promoter and promoter.id != context.bot.id:
+            await message.reply_html(f"❌ User {user_display} was promoted by another administrator. I cannot demote them.")
+            return
+
         await context.bot.promote_chat_member(
             chat_id=chat.id, user_id=target_user.id,
             is_anonymous=False, can_manage_chat=False, can_delete_messages=False,
             can_manage_video_chats=False, can_restrict_members=False, can_promote_members=False,
-            can_change_info=False, can_invite_users=False, can_pin_messages=False, can_manage_topics=False,
-            can_post_messages=None, can_edit_messages=None,
-            can_delete_stories=False, can_edit_stories=False, can_post_stories=False
+            can_change_info=False, can_invite_users=False, can_pin_messages=False, can_manage_topics=False
         )
-        try: await context.bot.set_chat_administrator_custom_title(chat.id, target_user.id, "")
-        except: pass
+        await message.reply_html(f"✅ User {user_display} has been demoted to a regular member.")
 
-        user_display_name = target_user.mention_html() if target_user.username else html.escape(target_user.first_name or str(target_user.id))
-        await update.message.reply_html(f"✅ User {user_display_name} (<code>{target_user.id}</code>) has been demoted to a regular member.")
     except TelegramError as e:
-        await update.message.reply_text(f"Failed to demote: {html.escape(str(e))}")
-    except Exception as e:
-        logger.error(f"Unexpected error in /demote: {e}", exc_info=True)
-        await update.message.reply_text("An unexpected error occurred.")
+        if "user not found" in str(e).lower():
+            await message.reply_text("User not found in this chat.")
+        else:
+            logger.error(f"Error during demotion: {e}")
+            await message.reply_text(f"Failed to demote user. Reason: {html.escape(str(e))}")
 
 async def pin_message_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     chat = update.effective_chat
