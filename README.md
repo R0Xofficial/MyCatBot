@@ -34,96 +34,69 @@ If you want run test bot version use command:
 **cd ~/catbot && . ./env.sh && python catbot_test.py**
 
 # Bot Commands:
-/start - Shows the welcome message. ✨
-
-/help - Shows this help message. ❓
-
-/github - Get the link to my source code! 💻
-
-/owner - Info about my designated human! ❤️
+/start - Shows the welcome message. ✨<br>
+/help - Shows this help message. ❓<br>
+/github - Get the link to my source code! 💻<br>
+/owner - Info about my designated human! ❤️<br>
+/sudocmds - List sudo commands. 👷‍♂️<br>
 
 # User Commands:
-/info [ID/reply/@user] - Get info about a user. 👤
-
-/chatstat - Get basic stats about the current chat. 📈
-
-/kickme - Kick yourself from chat. 👋
-
-/listadmins - Show the list of administrators in the current chat.
+/info <ID/@user/reply> - Get info about a user. 👤<br>
+/chatstat - Get basic stats about the current chat. 📈<br>
+/kickme - Kick yourself from chat. 👋<br>
+/listadmins - Show the list of administrators in the current chat. 📃<br>
 Note: /admins works too
 
 # Management Commands:
-/ban [ID/reply/@user] [Time] [Reason] - Ban user in chat. ⛔️
+/ban <ID/@user/reply> [Time] [Reason] - Ban user in chat. ⛔️<br>
+/unban <ID/@user/reply> - Unban user in chat. 🔓<br>
+/mute <ID/@user/reply> [Time] [Reason] - Mute user in chat. 🚫<br>
+/unmute <ID/@user/reply> - Unmute user in chat. 🎙 <br>
+Note: [Time] is optional<br>
+/kick <ID/@user/reply> [Reason] - Kick user from chat. ⚠️<br>
+/promote <ID/@user/reply> [Title] - Promote a user to administrator. 👷‍♂️<br>
+Note: [Title] is optional<br>
+/demote <ID/@user/reply> - Demote an administrator to a regular member. 🙍‍♂️<br>
+/pin <loud|notify> - Pin the replied message. 📌<br>
+/unpin - Unpin the replied message. 📍<br>
+/purge <silent> - Deletes user messages up to the replied-to message. 🗑<br>
+/report <ID/@user/reply> [reason] - Report user. ⚠️<br>
 
-/mute [ID/reply/@user] [Time] [Reason] - Mute user in chat. 🚫<br>
-Note: [Time] is optional
+Security:
+/enforcegban <yes/no> - Enable/disable Global Ban enforcement in this chat. 🛡️<br>
+(Chat Creator only)
 
-/kick [ID/reply/@user] [Reason] - Kick user from chat. ⚠️
+4FUN Commands:
+/gif - Get a random cat GIF! 🖼️<br>
+/photo - Get a random cat photo! 📷<br>
+/meow - Get a random cat sound or phrase. 🔊<br>
+/nap - What's on a cat's mind during naptime? 😴<br>
+/play - Random playful cat actions. 🧶<br>
+/treat - Demand treats! 🎁<br>
+/zoomies - Witness sudden bursts of cat energy! 💥<br>
+/judge - Get judged by a superior feline. 🧐<br>
+/fed - I just ate, thank you! 😋<br>
+/attack <@user/reply> - Launch a playful attack! ⚔️<br>
+/kill <@user/reply> - Metaphorically eliminate someone! 💀<br>
+/punch <@user/reply> - Deliver a textual punch! 👊<br>
+/slap <@user/reply> - Administer a swift slap! 👋<br>
+/bite <@user/reply> - Take a playful bite! 😬<br>
+/hug <@user/reply> - Offer a comforting hug! 🤗<br>
 
-/promote [ID/reply/@user] [admin_title] - Promote a user to administrator. 👷‍♂️<br>
-Note: [admin_title] is optional
+# Sudo Commands:
+/status - Show bot status.<br>
+/cinfo [Optional chat ID] - Get detailed info about the current or specified chat.<br>
+/say [Optional chat ID] [Your text] - Send message as bot.<br>
+/blist <ID/@user/reply> [Reason] - Add user to blacklist.<br>
+/unblist <ID/@user/reply> - Remove user from blacklist.<br>
+/gban <ID/@user/reply> [Reason] - Ban user globally.<br>
+/ungban <ID/@user/reply> - Unban user globally.<br><br>
 
-/demote [ID/reply/@user] - Demote an administrator to a regular member. 🙍‍♂️
-
-/pin [silent] - Pin the replied message. 📌
-
-/unpin - Unpin the replied message. 📍
-
-/purge [silent] - Deletes user messages up to the replied-to message.
-
-# 4FUN Commands:
-/gif - Get a random cat GIF! 🖼️
-
-/photo - Get a random cat photo! 📷
-
-/meow - Get a random cat sound or phrase. 🔊
-
-/nap - What's on a cat's mind during naptime? 😴
-
-/play - Random playful cat actions. 🧶
-
-/treat - Demand treats! 🎁
-
-/zoomies - Witness sudden bursts of cat energy! 💥
-
-/judge - Get judged by a superior feline. 🧐
-
-/fed - I just ate, thank you! 😋
-
-/attack [reply/@user] - Launch a playful attack! ⚔️
-
-/kill [reply/@user] - Metaphorically eliminate someone! 💀
-
-/punch [reply/@user] - Deliver a textual punch! 👊
-
-/slap [reply/@user] - Administer a swift slap! 👋
-
-/bite [reply/@user] - Take a playful bite! 😬
-
-/hug [reply/@user] - Offer a comforting hug! 🤗
-
-## (Note: Owner cannot be targeted by attack/kill/punch/slap/bite/hug)
-
-# SUDO commands:
-
-/status - Show bot status.
-
-/cinfo [optional_chat_ID] - Get detailed info about the current or specified chat. 
-
-/say [optional_chat_id] [your text] - Send message as bot.
-
-/blist [ID/reply/@user] [reason] - Add user to blacklist.
-
-/unblist [ID/reply/@user] - Remove user from blacklist.
+<i>Note: Commands: /ban, /unban, /mute, /unmute, /kick, /pin, /unpin, /purge; can be used by sudo users even if they are not chat creator/administrator.</i>
 
 # Owner Commands:
-
-/leave [optional_chat_id] - Make the bot leave a chat.
-
-/speedtest - Perform an internet speed test.
-
-/listsudo - List all users with sudo privileges.
-
-/addsudo [ID/reply/@user] - Grants SUDO (bot admin) permissions to a user.
-
-/delsudo [ID/reply/@user] - Revokes SUDO (bot admin) permissions from a user.
+/leave [Optional chat ID] - Make the bot leave a chat.<br>
+/speedtest - Perform an internet speed test.<br>
+/listsudo - List all users with sudo privileges.<br>
+/addsudo <ID/@user/reply> - Grants SUDO (bot admin) permissions to a user.<br>
+/delsudo <ID/@user/reply> - Revokes SUDO (bot admin) permissions from a user.<br>
