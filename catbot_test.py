@@ -654,10 +654,10 @@ SUDO_COMMANDS_TEXT = """
 /status - Show bot status.
 /cinfo [Optional chat ID] - Get detailed info about the current or specified chat.
 /say [Optional chat ID] [Your text] - Send message as bot.
-/blist &lt;@user/reply&gt; [Reason] - Add user to blacklist.
-/unblist &lt;@user/reply&gt; - Remove user from blacklist.
-/gban &lt;@user/reply&gt; [Reason] - Ban user globally.
-/ungban &lt;@user/reply&gt; - Unban user globally.
+/blist &lt;ID/@user/reply&gt; [Reason] - Add user to blacklist.
+/unblist &lt;ID/@user/reply&gt; - Remove user from blacklist.
+/gban &lt;ID/@user/reply&gt; [Reason] - Ban user globally.
+/ungban &lt;ID/@user/reply&gt; - Unban user globally.
 """
 
 OWNER_COMMANDS_TEXT = """
@@ -665,8 +665,8 @@ OWNER_COMMANDS_TEXT = """
 /leave [Optional chat ID] - Make the bot leave a chat.
 /speedtest - Perform an internet speed test.
 /listsudo - List all users with sudo privileges.
-/addsudo &lt;@user/reply&gt - Grants SUDO (bot admin) permissions to a user.
-/delsudo &lt;@user/reply&gt - Revokes SUDO (bot admin) permissions from a user.
+/addsudo &lt;ID/@user/reply&gt; - Grants SUDO (bot admin) permissions to a user.
+/delsudo &lt;ID/@user/reply&gt; - Revokes SUDO (bot admin) permissions from a user.
 """
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
