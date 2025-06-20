@@ -3262,8 +3262,8 @@ async def ungban_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             f"<b>#UNGBANNED</b>\n"
             f"<b>Initiated From:</b> {html.escape(chat_name)} (<code>{chat.id}</code>)\n\n"
             f"<b>User:</b> {user_display} (<code>{target_user.id}</code>)\n"
-            f"<b>Username:</b> {username_for_log}\n\n"
-            f"<b>Admin:</b> {user_who_ungbans.mention_html()}"
+            f"<b>Username:</b> {username_for_log}\n"
+            f"<b>Admin:</b> {user_who_ungbans.mention_html()}\n"
             f"<b>Date:</b> <code>{current_time}</code>"
         )
         await send_operational_log(context, log_message)
