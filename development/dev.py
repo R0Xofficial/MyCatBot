@@ -654,7 +654,7 @@ SUDO_COMMANDS_TEXT = """
 <b>Sudo Commands:</b>
 /status - Show bot status.
 /cinfo &lt;@user/reply&gt; - Get detailed info about the current or specified chat.
-/say &lt;@user/reply&gt; [Your text] - Send message as bot.
+/say [Optional chat ID] [Your text] - Send message as bot.
 /blist &lt;@user/reply&gt; [Reason] - Add user to blacklist.
 /unblist &lt;@user/reply&gt; - Remove user from blacklist.
 /gban &lt;@user/reply&gt; [Reason] - Ban user globally.
