@@ -693,6 +693,26 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             
     await update.message.reply_html(welcome_message)
 
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    chat = update.effective_chat
+    
+    if chat.type == ChatType.PRIVATE:
+        await update.message.reply_html(HELP_TEXT, disable_web_page_preview=True)
+        return
+
+    bot_username = context.bot.username
+    deep_link_url = f"https://t.me/{bot_username}?start=help"
+    
+    keyboard = InlineKeyboardMarkup(
+        [
+            [InlineKeyboardButton(text="📬 Get Help (PM)", url=deep_link_url)]
+        ]
+    )
+    
+    message_text = "Meeeow! 🐾 I've sent the help message to your private chat. Please click the button below to see it."
+    
+    await send_safe_reply(update, context, text=message_text, reply_markup=keyboard)
+
 async def github(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     github_link = "https://github.com/R0Xofficial/MyCatbot"
     await update.message.reply_text(f"Meeeow! I'm open source! 💻 Here is my code: {github_link}", disable_web_page_preview=True)
