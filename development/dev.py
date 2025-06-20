@@ -1570,19 +1570,19 @@ async def promote_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             return
 
         if target_chat_member.status == "administrator":
-            promoter = target_chat_member.promoted_by
-            if promoter and promoter.id == context.bot.id:
+            if target_chat_member.can_be_edited:
                 if provided_custom_title:
                     title_to_set = provided_custom_title[:16]
-                    await context.bot.set_chat_administrator_custom_title(chat.id, target_user.id, title_to_set)
-                    await message.reply_html(f"✅ User {user_display}'s title has been updated to '<i>{html.escape(title_to_set)}</i>'.")
+                    try:
+                        await context.bot.set_chat_administrator_custom_title(chat.id, target_user.id, title_to_set)
+                        await message.reply_html(f"✅ User {user_display}'s title has been updated to '<i>{html.escape(title_to_set)}</i>'.")
+                    except TelegramError as e:
+                        await message.reply_html(f"❌ Failed to update title for {user_display}. Reason: {html.escape(str(e))}")
                 else:
                     await message.reply_html(f"ℹ️ User {user_display} is already an admin (promoted by me). Provide a title to change it.")
             else:
-                promoter_name = "the Chat Creator" if not promoter else promoter.mention_html()
                 await message.reply_html(
-                    f"ℹ️ User {user_display} is already an administrator, but was promoted by {promoter_name}. "
-                    f"I cannot change their title."
+                    f"ℹ️ User {user_display} is already an administrator, but I do not have sufficient rights to modify their title."
                 )
             return
 
@@ -1670,12 +1670,7 @@ async def demote_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             await message.reply_html(f"ℹ️ User {user_display} is not an administrator."); return
 
         if not target_chat_member.can_be_edited:
-            await message.reply_html(f"❌ I do not have sufficient rights to demote {user_display}. This usually means they were promoted by the Creator or a higher-ranking admin.")
-            return
-
-        promoter = target_chat_member.promoted_by
-        if promoter and promoter.id != context.bot.id:
-            await message.reply_html(f"❌ User {user_display} was promoted by another administrator. I cannot demote them.")
+            await message.reply_html(f"❌ I do not have sufficient rights to demote {user_display}. This usually means they were promoted by the Creator or by another admin.")
             return
 
         await context.bot.promote_chat_member(
@@ -1692,7 +1687,7 @@ async def demote_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         else:
             logger.error(f"Error during demotion: {e}")
             await message.reply_text(f"Failed to demote user. Reason: {html.escape(str(e))}")
-
+            
 async def pin_message_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     chat = update.effective_chat
     user_who_pins = update.effective_user
