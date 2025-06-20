@@ -652,7 +652,7 @@ HELP_TEXT = """
 SUDO_COMMANDS_TEXT = """
 <b>Sudo Commands:</b>
 /status - Show bot status.
-/cinfo &lt;@user/reply&gt; - Get detailed info about the current or specified chat.
+/cinfo [Optional chat ID] - Get detailed info about the current or specified chat.
 /say [Optional chat ID] [Your text] - Send message as bot.
 /blist &lt;@user/reply&gt; [Reason] - Add user to blacklist.
 /unblist &lt;@user/reply&gt; - Remove user from blacklist.
