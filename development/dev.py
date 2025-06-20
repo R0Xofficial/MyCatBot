@@ -682,7 +682,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         
         if context.args[0] == 'sudocmds':
             if not is_privileged_user(user.id):
-                await update.message.reply_text("Mrow? You are not authorized to see these commands.")
                 return
 
             final_sudo_help = SUDO_COMMANDS_TEXT
@@ -3599,7 +3598,7 @@ async def sudo_commands_command(update: Update, context: ContextTypes.DEFAULT_TY
     chat = update.effective_chat
     
     if not is_privileged_user(user.id):
-        logger.warning(f"Unauthorized /sudocmds attempt by user {user.id}. Silently ignoring.")
+        logger.warning(f"Unauthorized /sudocmds attempt by user {user.id}.")
         return
 
     if chat.type == ChatType.PRIVATE:
