@@ -3444,17 +3444,17 @@ async def add_sudo_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
                     if chat_info.type == 'private':
                         target_user = User(id=chat_info.id, first_name=chat_info.first_name, is_bot=False, username=chat_info.username, last_name=chat_info.last_name)
                     else:
-                        await update.message.reply_text("Sudo can only be granted to users, not channels or groups.")
+                        await update.message.reply_text("Mrow? Sudo can only be granted to users, not channels or groups.")
                         return
             else:
                 chat_info = await context.bot.get_chat(int(target_id_str))
                 if chat_info.type == 'private':
                     target_user = User(id=chat_info.id, first_name=chat_info.first_name, is_bot=False, username=chat_info.username, last_name=chat_info.last_name)
                 else:
-                    await update.message.reply_text("Sudo can only be granted to users, not channels or groups.")
+                    await update.message.reply_text("Mrow? Sudo can only be granted to users, not channels or groups.")
                     return
         except (ValueError, TelegramError):
-            await update.message.reply_text("Could not find that user.")
+            await update.message.reply_text("Meow. Could not find that user.")
             return
     else:
         await update.message.reply_text("Usage: /addsudo <ID/@username/reply>")
@@ -3465,7 +3465,7 @@ async def add_sudo_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         return
     
     if not isinstance(target_user, User):
-        await update.message.reply_text("Internal error: Target is not a valid User object.")
+        await update.message.reply_text("😿 Internal error: Target is not a valid User object.")
         return
 
     if target_user.id == OWNER_ID:
@@ -3479,7 +3479,7 @@ async def add_sudo_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         return
     if is_sudo_user(target_user.id):
         user_display = target_user.mention_html()
-        await update.message.reply_html(f"User {user_display} already has sudo powers.")
+        await update.message.reply_html(f"Meow! User {user_display} already has sudo powers.")
         return
 
     if add_sudo_user(target_user.id, user.id):
@@ -3531,7 +3531,7 @@ async def del_sudo_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             else:
                 target_user = User(id=int(target_id_str), first_name=f"User {target_id_str}", is_bot=False)
         except (ValueError, IndexError):
-            await update.message.reply_text("Invalid User ID or format.")
+            await update.message.reply_text("Meow. Invalid User ID or format.")
             return
     else:
         await update.message.reply_text("Usage: /delsudo <ID/@username/reply>")
@@ -3542,7 +3542,7 @@ async def del_sudo_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         return
 
     if not isinstance(target_user, User):
-        await update.message.reply_text("Internal error: Target is not a valid User object.")
+        await update.message.reply_text("😿 Internal error: Target is not a valid User object.")
         return
 
     if target_user.id == OWNER_ID:
@@ -3555,7 +3555,7 @@ async def del_sudo_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             user_display = full_user.mention_html()
         except:
             user_display = f"User <code>{target_user.id}</code>"
-        await update.message.reply_html(f"User {user_display} does not have sudo powers.")
+        await update.message.reply_html(f"Meow! User {user_display} does not have sudo powers.")
         return
 
     if remove_sudo_user(target_user.id):
